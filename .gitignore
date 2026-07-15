@@ -8,3 +8,5 @@ __pycache__/
 .contractmate/
 frontend/node_modules/
 frontend/tsconfig.tsbuildinfo
+contractmate_mvp_architecture.md
+dummy_contracts/

@@ -14,7 +14,7 @@ const releases = [
     changes: [
       "AI-assisted clause analysis with evidence-grounded risk findings and recommended next actions.",
       "Contract list, detail, original-document preview, and review status filters in one workspace.",
-      "Responsive landing experience with a scroll-linked Motion navigation system."
+      "Responsive navigation that keeps the workspace easy to reach across desktop and mobile."
     ]
   },
   {
@@ -26,7 +26,7 @@ const releases = [
     tags: ["Improved", "Ingestion"],
     changes: [
       "Inbound email delivery for forwarding contract attachments directly into a workspace.",
-      "Sarvam OCR processing for scanned PDFs and image-based contract documents.",
+      "Readable text extraction for scanned PDFs and image-based contract documents.",
       "Version-aware document records that keep active signing requests pinned to a specific revision."
     ]
   },

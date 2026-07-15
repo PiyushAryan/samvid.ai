@@ -1,8 +1,28 @@
-import { render, screen, within } from "@testing-library/react";
-import { expect, test } from "vitest";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { expect, test, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ContractTable, ReviewTab, Timeline } from "./App";
+import { LandingPage } from "./Home";
 import type { ContractListItem, ContractReview, SigningRequest } from "./types";
+
+test("landing simulator switches between customer workflow previews", async () => {
+  vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+
+  render(
+    <MemoryRouter>
+      <LandingPage />
+    </MemoryRouter>
+  );
+
+  expect(screen.getByRole("heading", { name: "Every contract your business touches." })).toBeInTheDocument();
+  expect(screen.getByText("Re: Acme vendor agreement")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("tab", { name: "Review" }));
+  expect(await screen.findByText("Review complete")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("tab", { name: "Signature" }));
+  expect(await screen.findByText("Follow-up scheduled")).toBeInTheDocument();
+});
 
 test("contract listing renders signing counters and risk counts", () => {
   render(

@@ -1,44 +1,74 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { motion, useReducedMotion, useScroll, useSpring, useTransform } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion, useScroll, useSpring, useTransform } from "motion/react";
 import {
   FileText,
   Mail,
   Layers,
-  Lock,
-  ShieldAlert,
   Clock,
   ArrowRight,
   Sparkles,
-  UploadCloud,
   Check,
-  RotateCcw,
   Cpu,
   History,
-  Terminal,
   AlertTriangle,
-  ChevronRight,
-  ExternalLink
+  Search
 } from "lucide-react";
 import "./home.css";
 
-type TabType = "review" | "email" | "timeline";
+type PreviewStepId = "intake" | "review" | "track";
 const MotionLink = motion.create(Link);
+const previewSteps: Array<{ id: PreviewStepId; number: string; label: string; title: string; copy: string }> = [
+  {
+    id: "intake",
+    number: "01",
+    label: "Inbox",
+    title: "One E-mail replaces five tools",
+    copy: "Forward any deal. It comes back reviewed, flagged, and ready to sign."
+  },
+  {
+    id: "review",
+    number: "02",
+    label: "Review",
+    title: "Catches what you would miss",
+    copy: "Risky clauses and version changes, explained in plain language."
+  },
+  {
+    id: "track",
+    number: "03",
+    label: "Signature",
+    title: "Follow-ups on autopilot",
+    copy: "Track opens, schedule nudges, and keep every signer moving."
+  }
+];
+
+const previewDotTopByStep: Record<PreviewStepId, string> = {
+  intake: "7%",
+  review: "52%",
+  track: "94%"
+};
 
 export function LandingPage() {
-  const [activeTab, setActiveTab] = useState<TabType>("review");
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [activePreviewStep, setActivePreviewStep] = useState<PreviewStepId>("intake");
   const [isPastHero, setIsPastHero] = useState(false);
   const [navShift, setNavShift] = useState(0);
   const [edgeShift, setEdgeShift] = useState(0);
   const heroRef = useRef<HTMLElement>(null);
+  const demoScrollRef = useRef<HTMLDivElement>(null);
+  const previewManualOverrideUntilRef = useRef(0);
   const navRef = useRef<HTMLElement>(null);
   const navCtaRef = useRef<HTMLDivElement>(null);
   const prefersReducedMotion = useReducedMotion();
   const { scrollY } = useScroll();
+  const { scrollYProgress: demoScrollProgress } = useScroll({
+    target: demoScrollRef,
+    offset: ["start start", "end end"]
+  });
   const navX = useTransform(scrollY, [0, 320], [0, navShift]);
   const brandX = useTransform(scrollY, [0, 320], [0, -edgeShift]);
   const ctaX = useTransform(scrollY, [0, 320], [0, edgeShift]);
+  const smoothDemoProgress = useSpring(demoScrollProgress, { stiffness: 170, damping: 30, mass: 0.32 });
+  const demoRailDotTop = useTransform(smoothDemoProgress, [0, 1], ["7%", "94%"]);
   const smoothNavX = useSpring(navX, { stiffness: 180, damping: 28, mass: 0.35 });
   const smoothBrandX = useSpring(brandX, { stiffness: 180, damping: 28, mass: 0.35 });
   const smoothCtaX = useSpring(ctaX, { stiffness: 180, damping: 28, mass: 0.35 });
@@ -62,7 +92,7 @@ export function LandingPage() {
     const measureNavShift = () => {
       const nav = navRef.current;
       const cta = navCtaRef.current;
-      const isCompact = window.matchMedia("(max-width: 860px)").matches;
+      const isCompact = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 860px)").matches;
       const nextEdgeShift = isCompact ? 0 : 18;
       setEdgeShift(nextEdgeShift);
 
@@ -81,125 +111,34 @@ export function LandingPage() {
     return () => window.removeEventListener("resize", measureNavShift);
   }, []);
 
-  // Tab 1: AI Review simulation states
-  const [aiProgress, setAiProgress] = useState(0);
-  const [aiStep, setAiStep] = useState(0); // 0: Idle, 1: Uploading, 2: OCR, 3: OpenAI analysis, 4: Done
-
-  // Tab 2: Email simulation states
-  const [consoleLogs, setConsoleLogs] = useState<Array<{ text: string; type: "input" | "success" | "warning" | "muted" }>>([]);
-  const [emailStep, setEmailStep] = useState(0);
-
-  // Tab 3: Timeline simulation states
-  const [timelineStep, setTimelineStep] = useState(0);
-
-  // Handle AI Review Simulation loop
   useEffect(() => {
-    if (activeTab !== "review" || !isPlaying) return;
+    if (prefersReducedMotion) return;
 
-    setAiStep(1);
-    setAiProgress(0);
+    const unsubscribe = demoScrollProgress.on("change", (latest) => {
+      if (Date.now() < previewManualOverrideUntilRef.current) return;
+      const nextStep: PreviewStepId = latest < 0.34 ? "intake" : latest < 0.67 ? "review" : "track";
+      setActivePreviewStep((previous) => (previous === nextStep ? previous : nextStep));
+    });
 
-    const uploadInterval = setInterval(() => {
-      setAiProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(uploadInterval);
-          setAiStep(2);
-          return 100;
-        }
-        return prev + 5;
+    return unsubscribe;
+  }, [demoScrollProgress, prefersReducedMotion]);
+
+  const activePreviewIndex = previewSteps.findIndex((step) => step.id === activePreviewStep);
+  const activePreviewLabel = String(activePreviewIndex + 1).padStart(2, "0");
+  const handlePreviewStepSelect = (stepId: PreviewStepId) => {
+    previewManualOverrideUntilRef.current = Date.now() + 1800;
+    setActivePreviewStep(stepId);
+
+    if (!prefersReducedMotion && demoScrollRef.current) {
+      const stepIndex = previewSteps.findIndex((step) => step.id === stepId);
+      const track = demoScrollRef.current;
+      const trackTop = track.getBoundingClientRect().top + window.scrollY;
+      const scrollRange = Math.max(0, track.offsetHeight - window.innerHeight);
+      window.scrollTo({
+        top: trackTop + scrollRange * (stepIndex / (previewSteps.length - 1)),
+        behavior: "smooth"
       });
-    }, 100);
-
-    return () => clearInterval(uploadInterval);
-  }, [activeTab, isPlaying, aiStep === 0]);
-
-  useEffect(() => {
-    if (activeTab !== "review" || !isPlaying) return;
-
-    let timer: any;
-    if (aiStep === 2) {
-      // OCR step
-      timer = setTimeout(() => {
-        setAiStep(3);
-      }, 1500);
-    } else if (aiStep === 3) {
-      // AI analysis step
-      timer = setTimeout(() => {
-        setAiStep(4);
-      }, 2000);
     }
-
-    return () => clearTimeout(timer);
-  }, [aiStep, activeTab, isPlaying]);
-
-  // Handle Email Simulation loop
-  const emailLogs = [
-    { text: "[09:41:02] Inbound email detected on Resend SMTP server...", type: "muted" as const },
-    { text: "[09:41:03] Sender validated: legal@acmedynamics.com", type: "success" as const },
-    { text: "[09:41:03] Extracting attachment: 'intervue_services_agreement.pdf' (14.4 KB)", type: "input" as const },
-    { text: "[09:41:04] Dispatching webhook email.received (ID: wh_resend_9b821a)", type: "muted" as const },
-    { text: "[09:41:05] Triggering Sarvam OCR engine (extracting scanned layers)...", type: "input" as const },
-    { text: "[09:41:07] Running contract intelligence engine (OpenAI structured output)...", type: "input" as const },
-    { text: "[09:41:08] Extraction completed successfully:", type: "success" as const },
-    { text: "  ↳ Parties: Asha Corp (Provider) & Acme Dynamics (Client)", type: "success" as const },
-    { text: "  ↳ Found 1 high-severity risk: Unlimited Indemnification (Page 14)", type: "warning" as const },
-    { text: "[09:41:09] Saving audit-trail & initial signing status (pending)", type: "muted" as const },
-    { text: "[09:41:10] Resending review scorecard to legal@acmedynamics.com...", type: "input" as const },
-    { text: "[09:41:11] Email webhook pipeline execution complete.", type: "success" as const }
-  ];
-
-  useEffect(() => {
-    if (activeTab !== "email" || !isPlaying) return;
-
-    setConsoleLogs([]);
-    setEmailStep(0);
-
-    const interval = setInterval(() => {
-      setEmailStep((prev) => {
-        if (prev >= emailLogs.length - 1) {
-          clearInterval(interval);
-          return prev;
-        }
-        return prev + 1;
-      });
-    }, 800);
-
-    return () => clearInterval(interval);
-  }, [activeTab, isPlaying]);
-
-  useEffect(() => {
-    if (activeTab === "email" && isPlaying) {
-      setConsoleLogs(emailLogs.slice(0, emailStep + 1));
-    }
-  }, [emailStep, activeTab, isPlaying]);
-
-  // Handle Timeline simulation loop
-  useEffect(() => {
-    if (activeTab !== "timeline" || !isPlaying) return;
-
-    setTimelineStep(0);
-    const interval = setInterval(() => {
-      setTimelineStep((prev) => {
-        if (prev >= 3) {
-          clearInterval(interval);
-          return 3;
-        }
-        return prev + 1;
-      });
-    }, 1500);
-
-    return () => clearInterval(interval);
-  }, [activeTab, isPlaying]);
-
-  const restartSimulation = () => {
-    setIsPlaying(false);
-    setTimeout(() => {
-      setAiStep(0);
-      setEmailStep(0);
-      setTimelineStep(0);
-      setConsoleLogs([]);
-      setIsPlaying(true);
-    }, 50);
   };
 
   return (
@@ -225,8 +164,8 @@ export function LandingPage() {
             className="landing-nav-links"
             style={{ x: prefersReducedMotion ? 0 : smoothNavX }}
           >
+            <a href="#workflow" className="landing-nav-link">How it works</a>
             <Link to="/changelog" className="landing-nav-link">Changelog</Link>
-            <a href="#features" className="landing-nav-link">Features</a>
           </motion.nav>
           <motion.div
             ref={navCtaRef}
@@ -236,7 +175,7 @@ export function LandingPage() {
             <Link to="/contracts" className="btn-lp-secondary">
               Sign up
             </Link>
-            <a href="#demo" className="btn-lp-primary">Book a Demo</a>
+            <a href="#workflow" className="btn-lp-primary">Book a Demo</a>
           </motion.div>
         </header>
 
@@ -244,32 +183,22 @@ export function LandingPage() {
         <section ref={heroRef} className="hero-section">
           <div className="hero-content-wrapper">
             <div className="hero-badge">
-              AI TEAMMATE FOR LEGAL & PROCUREMENT
+              BUILT FOR LEGAL & PROCUREMENT TEAMS
             </div>
             <h1 className="hero-heading">
+              <span className="hero-heading-lead">One teammate to keep every contract</span>
               <span className="hero-heading-dial">
                 <span className="hero-dial-word">review. </span>
-                <span className="hero-dial-word">sign. </span>
-                <span className="hero-dial-word hero-heading-highlight">verify. </span>
+                <span className="hero-dial-word">track. </span>
+                <span className="hero-dial-word hero-heading-highlight">remember. </span>
               </span>
             </h1>
             <p className="hero-subheading">
-              Review contracts, flag risks, track approvals, and coordinate next steps directly from{" "}
-              <span className="hero-channel-flip" aria-label="Gmail and Slack">
-                <span className="hero-channel-flip-track" aria-hidden="true">
-                  <span className="hero-channel-face hero-channel-front">
-                    <img src="/gmail.webp" alt="Gmail" />
-                  </span>
-                  <span className="hero-channel-face hero-channel-back">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/d/d5/Slack_icon_2019.svg" alt="Slack" />
-                  </span>
-                </span>
-              </span>{" "}
-              with an AI teammate built for faster contract execution.
+              Forward a contract or upload it. Samvid reads every page, explains the risk, keeps every version organized, and records each signing handoff.
             </p>
             <div className="hero-actions">
-              <a href="#features" className="btn-lp-secondary">
-                Book a Demo
+              <a href="#workflow" className="btn-lp-secondary">
+                See how it works
               </a>
               <Link to="/contracts" className="btn-lp-primary">
                 Open Workspace <ArrowRight size={15} />
@@ -282,322 +211,319 @@ export function LandingPage() {
           </div>
         </section>
 
-        {/* Interactive Workspace Simulator
-        <section id="demo" className="demo-section" aria-label="Interactive workspace demo">
-          <div className="simulator-container">
-            <div className="simulator-header">
-              <div className="simulator-dots">
-                <div className="simulator-dot"></div>
-                <div className="simulator-dot"></div>
-                <div className="simulator-dot"></div>
-              </div>
-              <div className="simulator-tabs">
-                <button
-                  className={`simulator-tab ${activeTab === "review" ? "active" : ""}`}
-                  onClick={() => { setActiveTab("review"); restartSimulation(); }}
-                >
-                  <Sparkles size={14} /> AI Review
-                </button>
-                <button
-                  className={`simulator-tab ${activeTab === "email" ? "active" : ""}`}
-                  onClick={() => { setActiveTab("email"); restartSimulation(); }}
-                >
-                  <Mail size={14} /> Email Webhook
-                </button>
-                <button
-                  className={`simulator-tab ${activeTab === "timeline" ? "active" : ""}`}
-                  onClick={() => { setActiveTab("timeline"); restartSimulation(); }}
-                >
-                  <History size={14} /> Signer Timeline
-                </button>
-              </div>
-              <button 
-                onClick={restartSimulation}
-                className="btn-lp-secondary" 
-                style={{ padding: "4px 8px", minHeight: "28px", fontSize: "11px" }}
-                title="Restart simulation"
-              >
-                <RotateCcw size={12} /> Reset
-              </button>
+        <section className="problem-section" aria-labelledby="problem-title">
+          <div className="problem-heading">
+            <div className="section-kicker">The problem</div>
+            <h2 id="problem-title">The contract moves. The context gets left behind.</h2>
+            <p>Email, documents, approvals, and follow-ups live in separate places. Your team becomes the manual layer holding every handoff together.</p>
+          </div>
+          <div className="problem-grid">
+            <div className="problem-item">
+              <Mail size={18} />
+              <span>01 / Inbox</span>
+              <h3>The request starts in a thread.</h3>
+              <p>Attachments, instructions, and decisions split across replies and forwards.</p>
             </div>
-
-            <div className="simulator-body">
-           
-              {activeTab === "review" && (
-                <div className="ai-sim-grid">
-                  <div className="ai-sim-sidebar">
-                    <div className="ai-sim-doc-info">
-                      <div className="doc-name">
-                        <FileText size={15} className="text-teal" style={{ color: "#14b8a6" }} />
-                        vendor_agreement.pdf
-                      </div>
-                      <div className="doc-meta">PDF · 12 Pages · 244 KB</div>
-                    </div>
-                    <div className="ai-sim-pipeline">
-                      <div className={`pipeline-step ${aiStep >= 1 ? (aiStep === 1 ? "active" : "completed") : ""}`}>
-                        <div className="step-indicator">
-                          {aiStep > 1 ? <Check size={10} /> : "1"}
-                        </div>
-                        <span>Upload File</span>
-                      </div>
-                      {aiStep === 1 && (
-                        <div className="ai-sim-progress-track">
-                          <div className="ai-sim-progress-bar" style={{ width: `${aiProgress}%` }}></div>
-                        </div>
-                      )}
-
-                      <div className={`pipeline-step ${aiStep >= 2 ? (aiStep === 2 ? "active" : "completed") : ""}`}>
-                        <div className="step-indicator">
-                          {aiStep > 2 ? <Check size={10} /> : "2"}
-                        </div>
-                        <span>Sarvam OCR Scan</span>
-                      </div>
-
-                      <div className={`pipeline-step ${aiStep >= 3 ? (aiStep === 3 ? "active" : "completed") : ""}`}>
-                        <div className="step-indicator">
-                          {aiStep > 3 ? <Check size={10} /> : "3"}
-                        </div>
-                        <span>OpenAI Term Extraction</span>
-                      </div>
-
-                      <div className={`pipeline-step ${aiStep >= 4 ? "completed" : ""}`}>
-                        <div className="step-indicator">
-                          {aiStep >= 4 ? <Check size={10} /> : "4"}
-                        </div>
-                        <span>Risk Scorecard Ready</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="ai-sim-output-container">
-                    {aiStep < 4 ? (
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--lp-text-secondary)", gap: "12px" }}>
-                        <Cpu className="spin" size={24} style={{ animation: "spin 2s linear infinite", color: "#14b8a6" }} />
-                        <span style={{ fontFamily: "var(--lp-font-mono)", fontSize: "12px" }}>
-                          {aiStep === 1 && "Uploading document..."}
-                          {aiStep === 2 && "Sarvam OCR engine processing pages..."}
-                          {aiStep === 3 && "Analyzing contract clauses with OpenAI..."}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="ai-sim-output">
-                        <div className="sim-output-header">
-                          <div className="sim-output-title">Review Scorecard</div>
-                          <span className="sim-badge" style={{ color: "#34d399", background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)" }}>Review Ready</span>
-                        </div>
-                        
-                        <div className="sim-summary-grid">
-                          <div className="sim-summary-card">
-                            <div className="sim-summary-label">Contract Type</div>
-                            <div className="sim-summary-value">Vendor Agreement</div>
-                          </div>
-                          <div className="sim-summary-card">
-                            <div className="sim-summary-label">Primary Party</div>
-                            <div className="sim-summary-value">Acme Dynamics</div>
-                          </div>
-                          <div className="sim-summary-card">
-                            <div className="sim-summary-label">Counterparty</div>
-                            <div className="sim-summary-value">Asha Corp</div>
-                          </div>
-                        </div>
-
-                        <div className="sim-risk-item">
-                          <div className="sim-risk-header">
-                            <div className="sim-risk-title">Unlimited Indemnification Clause</div>
-                            <span className="sim-badge red">Critical</span>
-                          </div>
-                          <div className="sim-risk-desc">
-                            The provider indemnifies the customer without any liability cap. This creates asymmetric operational exposure.
-                          </div>
-                          <blockquote className="sim-risk-quote">
-                            Page 14: "...Provider shall defend, indemnify, and hold harmless Customer... from any and all damages without limitation."
-                          </blockquote>
-                        </div>
-
-                        <div className="sim-risk-item">
-                          <div className="sim-risk-header">
-                            <div className="sim-risk-title">Automatic 12-Month Renewal</div>
-                            <span className="sim-badge amber">Medium</span>
-                          </div>
-                          <div className="sim-risk-desc">
-                            The agreement automatically renews for successive 12-month periods unless written notice is given 90 days prior.
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              // Tab 2: Email Webhook Simulator 
-              {activeTab === "email" && (
-                <div className="email-sim-layout">
-                  <div className="email-flow-visual">
-                    <div className={`flow-node ${emailStep >= 0 ? "active" : ""}`}>
-                      <div className="flow-icon-circle"><Mail size={18} /></div>
-                      <span className="flow-node-title">Inbound Email</span>
-                      <span className="flow-node-desc">contracts@oldimeluub...</span>
-                    </div>
-
-                    <div className="flow-connector"></div>
-
-                    <div className={`flow-node ${emailStep >= 3 ? "active" : ""}`}>
-                      <div className="flow-icon-circle"><Terminal size={18} /></div>
-                      <span className="flow-node-title">Webhook Adapter</span>
-                      <span className="flow-node-desc">Resend HTTP Event</span>
-                    </div>
-
-                    <div className="flow-connector"></div>
-
-                    <div className={`flow-node ${emailStep >= 6 ? "active" : ""}`}>
-                      <div className="flow-icon-circle"><Sparkles size={18} /></div>
-                      <span className="flow-node-title">Samvid Core</span>
-                      <span className="flow-node-desc">OCR + AI Pipeline</span>
-                    </div>
-                  </div>
-
-                  <div className="email-sim-console">
-                    {consoleLogs.map((log, i) => (
-                      <div key={i} className={`console-line ${log.type}`}>
-                        {log.text}
-                      </div>
-                    ))}
-                    {isPlaying && emailStep < emailLogs.length - 1 && (
-                      <div className="console-line input" style={{ display: "inline-block", width: "8px", height: "12px", background: "var(--lp-text-primary)", marginLeft: "2px", animation: "blink 1s step-end infinite" }}></div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              // Tab 3: Signer Timeline Simulator 
-              {activeTab === "timeline" && (
-                <div className="timeline-sim-layout">
-                  <div className="timeline-signer-card">
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", fontWeight: "600", color: "var(--lp-text-primary)", borderBottom: "1px solid var(--lp-border)", paddingBottom: "8px" }}>
-                      <span>Signer Status</span>
-                      <span style={{ fontFamily: "var(--lp-font-mono)", color: "var(--lp-teal)" }}>Version v1.2</span>
-                    </div>
-                    <div className="timeline-signer-row">
-                      <div className="signer-info-sim">
-                        <span className="signer-name-sim">Asha Nair</span>
-                        <span className="signer-email-sim">asha@ashacorp.com</span>
-                      </div>
-                      <span className="sim-badge" style={{ color: "#34d399", background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)" }}>Signed</span>
-                    </div>
-                    <div className="timeline-signer-row">
-                      <div className="signer-info-sim">
-                        <span className="signer-name-sim">Bob Davidson</span>
-                        <span className="signer-email-sim">bob@acmedynamics.com</span>
-                      </div>
-                      <span className="sim-badge" style={{ color: "#fbbf24", background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.2)" }}>Viewed</span>
-                    </div>
-                    <div className="timeline-signer-row">
-                      <div className="signer-info-sim">
-                        <span className="signer-name-sim">Charlie Patel</span>
-                        <span className="signer-email-sim">charlie@acmedynamics.com</span>
-                      </div>
-                      <span className="sim-badge" style={{ color: "var(--lp-text-muted)", background: "rgba(255,255,255,0.02)", border: "1px solid var(--lp-border)" }}>Pending</span>
-                    </div>
-                  </div>
-
-                  <div className="timeline-flow-col">
-                    <div className={`timeline-event-sim ${timelineStep >= 0 ? "active" : ""}`}>
-                      <div className="timeline-event-dot"></div>
-                      <div className="event-actor">
-                        <span>Signing Request Initialized</span>
-                        <span style={{ fontSize: "10px", color: "var(--lp-text-muted)", fontWeight: "normal" }}>Yesterday · 05:40 PM</span>
-                      </div>
-                      <div className="event-details">Request created by admin@samvid.ai, pinned to version v1.2.</div>
-                    </div>
-
-                    <div className={`timeline-event-sim ${timelineStep >= 1 ? "active" : ""}`}>
-                      <div className="timeline-event-dot"></div>
-                      <div className="event-actor">
-                        <span>Asha Nair viewed contract</span>
-                        <span style={{ fontSize: "10px", color: "var(--lp-text-muted)", fontWeight: "normal" }}>Today · 09:12 AM</span>
-                      </div>
-                      <div className="event-details">IP address logged: 198.51.100.42.</div>
-                    </div>
-
-                    <div className={`timeline-event-sim ${timelineStep >= 2 ? "active" : ""}`}>
-                      <div className="timeline-event-dot"></div>
-                      <div className="event-actor">
-                        <span>Asha Nair signed contract</span>
-                        <span style={{ fontSize: "10px", color: "var(--lp-text-muted)", fontWeight: "normal" }}>Today · 09:30 AM</span>
-                      </div>
-                      <div className="event-details">Status transitioned to 'Signed'. Immutable audit record logged.</div>
-                      <div className="event-note">"Approved via legal committee check"</div>
-                    </div>
-
-                    <div className={`timeline-event-sim ${timelineStep >= 3 ? "active" : ""}`}>
-                      <div className="timeline-event-dot"></div>
-                      <div className="event-actor">
-                        <span>Bob Davidson viewed contract</span>
-                        <span style={{ fontSize: "10px", color: "var(--lp-text-muted)", fontWeight: "normal" }}>Today · 09:41 AM</span>
-                      </div>
-                      <div className="event-details">IP address logged: 198.51.100.77. Status changed to 'Viewed'.</div>
-                    </div>
-                  </div>
-                </div>
-              )}
+            <div className="problem-item">
+              <FileText size={18} />
+              <span>02 / Document</span>
+              <h3>The risk stays inside the file.</h3>
+              <p>Important terms wait for someone to read, explain, and route them manually.</p>
+            </div>
+            <div className="problem-item">
+              <Clock size={18} />
+              <span>03 / Follow-up</span>
+              <h3>Progress depends on chasing.</h3>
+              <p>Approvals and signer updates stall when nobody owns the next reminder.</p>
+            </div>
+            <div className="problem-item">
+              <Layers size={18} />
+              <span>04 / Archive</span>
+              <h3>The final answer is hard to find.</h3>
+              <p>Versions, renewal dates, and past decisions disappear into shared folders.</p>
             </div>
           </div>
-        </section> */}
+          <p className="problem-resolution">Samvid gives those disconnected steps one operating layer, from first document to final status.</p>
+        </section>
+
+        {/* Interactive Workspace Simulator */}
+        <section id="demo" className="demo-section" aria-label="Interactive workspace demo">
+          <div className="demo-heading">
+            <div>
+              <div className="section-kicker">Interactive product preview</div>
+              <h2>Every contract your business touches.</h2>
+            </div>
+            <p>From email thread to signature, without leaving your inbox.</p>
+          </div>
+
+          <div ref={demoScrollRef} className="demo-scroll-track">
+            <div className="demo-scroll-sticky">
+              <div className="demo-showcase">
+                <div className="demo-stage-stack" role="tablist" aria-label="Contract workflow stages">
+                  <div className="demo-stage-rail" aria-hidden="true">
+                    <svg viewBox="0 0 28 560" preserveAspectRatio="none">
+                      <path
+                        className="demo-stage-rail-base"
+                        d="M14 8 V170 l10 14 v62 l-10 14 v100 l10 14 v62 l-10 14 V552"
+                      />
+                      <motion.path
+                        className="demo-stage-rail-progress"
+                        d="M14 8 V170 l10 14 v62 l-10 14 v100 l10 14 v62 l-10 14 V552"
+                        style={{ pathLength: prefersReducedMotion ? (activePreviewIndex + 1) / previewSteps.length : smoothDemoProgress }}
+                      />
+                    </svg>
+                    <motion.span
+                      className="demo-stage-rail-dot"
+                      style={{ top: prefersReducedMotion ? previewDotTopByStep[activePreviewStep] : demoRailDotTop }}
+                    />
+                  </div>
+                  {previewSteps.map((step) => (
+                    <button
+                      id={`preview-tab-${step.id}`}
+                      key={step.id}
+                      type="button"
+                      role="tab"
+                      aria-label={step.label}
+                      aria-selected={activePreviewStep === step.id}
+                      className={`demo-step-card ${activePreviewStep === step.id ? "active" : ""}`}
+                      onClick={() => handlePreviewStepSelect(step.id)}
+                    >
+                      <span className="demo-step-meta"><span>{step.number}</span> {step.label}</span>
+                      <strong>{step.title}</strong>
+                      <span className="demo-step-copy">{step.copy}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="simulator-container">
+                  <div className="simulator-header">
+                    <span className="simulator-trace-label"><span className="simulator-live-dot" /> Samvid workspace</span>
+                    <span className="simulator-step-count">{activePreviewLabel} / 03</span>
+                  </div>
+
+                  <div
+                    className="simulator-body demo-panel-body"
+                    role="tabpanel"
+                    aria-labelledby={`preview-tab-${activePreviewStep}`}
+                  >
+                    <AnimatePresence mode="wait">
+                      {activePreviewStep === "intake" && (
+                        <motion.div
+                          key="intake"
+                          className="demo-trace-panel"
+                          initial={{ opacity: 0, x: 18, scale: 0.99 }}
+                          animate={{ opacity: 1, x: 0, scale: 1 }}
+                          exit={{ opacity: 0, x: -14, scale: 0.99 }}
+                          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                        >
+                          <div className="demo-panel-headline">
+                            <span>Email thread · Vendor MSA</span>
+                            <span className="success">Samvid copied</span>
+                          </div>
+                          <div className="preview-email-card">
+                            <div className="preview-email-meta">
+                              <span className="preview-avatar">PN</span>
+                              <div>
+                                <strong>Priya Nair</strong>
+                                <span>to Alex, procurement@acme.com, samvid.ai</span>
+                              </div>
+                              <time>09:41 AM</time>
+                            </div>
+                            <h4>Re: Acme vendor agreement</h4>
+                            <p>Can we get this reviewed and ready to send today? Please check renewal, indemnity, and the latest scope changes.</p>
+                          </div>
+                          <motion.div
+                            className="preview-attachment-card"
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.12, duration: 0.24 }}
+                          >
+                            <span className="preview-file-icon"><FileText size={17} /></span>
+                            <div>
+                              <strong>vendor_agreement_v3.pdf</strong>
+                              <span>12 pages · Original thread attached</span>
+                            </div>
+                            <span className="preview-status-pill processing">Reviewing</span>
+                          </motion.div>
+                          <div className="preview-samvid-reply">
+                            <span className="preview-avatar brand">S</span>
+                            <div>
+                              <strong>Samvid</strong>
+                              <p>Got it. I am reading the whole document and comparing it with the previous version.</p>
+                            </div>
+                          </div>
+                          <div className="demo-message-composer">
+                            <span>One email address works the whole thread.</span>
+                            <button type="button" aria-label="Continue to review" onClick={() => handlePreviewStepSelect("review")}><ArrowRight size={14} /></button>
+                          </div>
+                        </motion.div>
+                      )}
+
+                      {activePreviewStep === "review" && (
+                        <motion.div
+                          key="review"
+                          className="demo-trace-panel"
+                          initial={{ opacity: 0, x: 18, scale: 0.99 }}
+                          animate={{ opacity: 1, x: 0, scale: 1 }}
+                          exit={{ opacity: 0, x: -14, scale: 0.99 }}
+                          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                        >
+                          <div className="demo-panel-headline">
+                            <span>Review · vendor_agreement_v3.pdf</span>
+                            <span className="danger">3 flags</span>
+                          </div>
+                          <div className="preview-review-summary">
+                            <div>
+                              <span className="preview-eyebrow">Review complete</span>
+                              <h4>Catches what you would miss. Shows you what changed.</h4>
+                            </div>
+                            <span className="preview-review-score">3<span>flags</span></span>
+                          </div>
+                          <div className="preview-risk-list">
+                            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
+                              <span className="preview-risk-level critical">Critical</span>
+                              <div>
+                                <strong>Uncapped indemnity</strong>
+                                <p>You could be responsible for unlimited third-party claims.</p>
+                              </div>
+                              <span className="preview-page-link">p.14</span>
+                            </motion.div>
+                            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}>
+                              <span className="preview-risk-level medium">Review</span>
+                              <div>
+                                <strong>Automatic 12-month renewal</strong>
+                                <p>Notice is required 90 days before the renewal date.</p>
+                              </div>
+                              <span className="preview-page-link">p.8</span>
+                            </motion.div>
+                            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+                              <span className="preview-risk-level changed">Changed</span>
+                              <div>
+                                <strong>Scope expanded in v3</strong>
+                                <p>Support obligations were added without a fee adjustment.</p>
+                              </div>
+                              <span className="preview-page-link">Compare</span>
+                            </motion.div>
+                          </div>
+                          <div className="preview-review-actions">
+                            <button type="button" className="secondary"><Sparkles size={14} /> Ask about a clause</button>
+                            <button type="button" className="primary" onClick={() => handlePreviewStepSelect("track")}>Send for signature <ArrowRight size={14} /></button>
+                          </div>
+                        </motion.div>
+                      )}
+
+                      {activePreviewStep === "track" && (
+                        <motion.div
+                          key="track"
+                          className="demo-trace-panel"
+                          initial={{ opacity: 0, x: 18, scale: 0.99 }}
+                          animate={{ opacity: 1, x: 0, scale: 1 }}
+                          exit={{ opacity: 0, x: -14, scale: 0.99 }}
+                          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                        >
+                          <div className="demo-panel-headline">
+                            <span>Contract board</span>
+                            <span className="success">Live</span>
+                          </div>
+                          <div className="preview-board-progress" aria-label="Contract signing progress">
+                            <span className="complete"><Check size={12} /> Ready to send</span>
+                            <span className="active"><Clock size={12} /> Out for signature</span>
+                            <span>Signed</span>
+                          </div>
+                          <div className="preview-contract-board-card">
+                            <div className="preview-board-card-head">
+                              <span className="preview-file-icon"><FileText size={17} /></span>
+                              <div><strong>Acme vendor agreement</strong><span>Version 3 · Sent today, 09:02 AM</span></div>
+                              <span className="preview-status-pill sent">Out for signature</span>
+                            </div>
+                            <div className="preview-signer-list">
+                              <div><span className="preview-person-dot signed">AN</span><div><strong>Asha Nair</strong><span>Signed at 09:30 AM</span></div><Check size={15} /></div>
+                              <div><span className="preview-person-dot viewed">BD</span><div><strong>Bob Davidson</strong><span>Opened 24 minutes ago</span></div><span className="preview-status-copy viewed">Opened</span></div>
+                              <div><span className="preview-person-dot">CP</span><div><strong>Charlie Patel</strong><span>No activity yet</span></div><span className="preview-status-copy">Pending</span></div>
+                            </div>
+                          </div>
+                          <motion.div
+                            className="preview-nudge-card"
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.15, duration: 0.24 }}
+                          >
+                            <Mail size={16} />
+                            <div><strong>Follow-up scheduled</strong><span>Charlie gets a nudge in 2 hours if there is no activity.</span></div>
+                            <span className="preview-status-pill scheduled">Automatic</span>
+                          </motion.div>
+                          <div className="preview-renewal-watch"><Clock size={14} /><span>Renewal watch</span><strong>Notice due 15 Sep 2026</strong></div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* Core Capabilities Section */}
         <section id="features" className="features-section">
           <div className="section-header">
-            <h2 className="section-title">Contract intelligence engineered for speed.</h2>
-            <p className="section-desc">Samvid reduces review delays and aligns stakeholders without the heavy overhead of legacy contract lifecycle managers.</p>
+            <div className="section-kicker">What Samvid does</div>
+            <h2 className="section-title">The contract work that should not depend on memory.</h2>
+            <p className="section-desc">Samvid turns incoming documents into clear decisions, attributable actions, and a record your team can return to.</p>
           </div>
 
           <div className="features-grid">
-            <div className="feature-card">
+            <div className="feature-card feature-card-anchor">
               <div className="feature-icon-wrapper">
                 <Sparkles size={18} />
               </div>
-              <h3 className="feature-title">AI-Powered Clause Analysis</h3>
-              <p className="feature-desc">Leverages structured OpenAI contract intelligence output to extract parties, parameters, renewal terms, and critical next steps instantly.</p>
+              <h3 className="feature-title">Every risk, tied to evidence</h3>
+              <p className="feature-desc">See liability, indemnity, renewal, governing-law, and scope concerns in plain language with the exact supporting text and page.</p>
+              <div className="feature-signal">Page-linked findings</div>
             </div>
 
-            <div className="feature-card">
+            <div className="feature-card feature-card-support">
               <div className="feature-icon-wrapper">
                 <Cpu size={18} />
               </div>
-              <h3 className="feature-title">Advanced Sarvam OCR</h3>
-              <p className="feature-desc">No more manual transcriptions. Scanned contracts and images are automatically normalized using high-fidelity Sarvam OCR pipelines.</p>
+              <h3 className="feature-title">Scans become review-ready</h3>
+              <p className="feature-desc">Image-based and scanned contracts are converted into readable text before analysis, so older documents are not left out of the workflow.</p>
+              <div className="feature-signal">Scanned documents supported</div>
             </div>
 
-            <div className="feature-card">
+            <div className="feature-card feature-card-support">
               <div className="feature-icon-wrapper">
                 <Mail size={18} />
               </div>
-              <h3 className="feature-title">Inbound Email Pipeline</h3>
-              <p className="feature-desc">Directly route documents by forwarding them to your workspace address. Incoming contracts are parsed, scored, and filed automatically.</p>
+              <h3 className="feature-title">Forward it from your inbox</h3>
+              <p className="feature-desc">Send an attachment to your workspace address. Samvid validates, files, parses, and queues the contract without another upload ritual.</p>
+              <div className="feature-signal">Forward and review</div>
             </div>
 
-            <div className="feature-card">
+            <div className="feature-card feature-card-base">
               <div className="feature-icon-wrapper">
                 <History size={18} />
               </div>
-              <h3 className="feature-title">Immutable Audit Trails</h3>
-              <p className="feature-desc">Preserve every signer action, IP address log, status transition, and manual update in a secured, read-only event timeline.</p>
+              <h3 className="feature-title">A timeline nobody can rewrite</h3>
+              <p className="feature-desc">Signer status changes, actors, notes, timestamps, and IP context remain in an append-only history for clear operational accountability.</p>
+              <div className="feature-signal">Complete activity history</div>
             </div>
 
-            <div className="feature-card">
+            <div className="feature-card feature-card-base">
               <div className="feature-icon-wrapper">
                 <Layers size={18} />
               </div>
-              <h3 className="feature-title">Version Management</h3>
-              <p className="feature-desc">Upload revisions and track multiple iterations of a draft. Securely pin active signing requests to specific historical snapshots.</p>
+              <h3 className="feature-title">Know which version moved forward</h3>
+              <p className="feature-desc">Keep every revision together and pin each signing request to the document snapshot the team actually approved.</p>
+              <div className="feature-signal">Approved version linked</div>
             </div>
 
-            <div className="feature-card">
+            <div className="feature-card feature-card-base">
               <div className="feature-icon-wrapper">
-                <Lock size={18} />
+                <Clock size={18} />
               </div>
-              <h3 className="feature-title">Local-First Architecture</h3>
-              <p className="feature-desc">Designed with SQLite for light local setups and clean PostgreSQL integrations for enterprise-grade production infrastructure.</p>
+              <h3 className="feature-title">Never lose the next step</h3>
+              <p className="feature-desc">Keep renewal dates, notice windows, approval states, and signer follow-ups visible so important contract work does not quietly stall.</p>
+              <div className="feature-signal">Deadlines and next actions</div>
             </div>
           </div>
         </section>
@@ -619,32 +545,72 @@ export function LandingPage() {
         {/* Workflow Section */}
         <section id="workflow" className="workflow-section">
           <div className="section-header">
-            <h2 className="section-title">The Three-Stage Lifecycle</h2>
-            <p className="section-desc">How Samvid automates contract reviews and signing statuses from upload to archive.</p>
+            <div className="section-kicker">How it works</div>
+            <h2 className="section-title">One contract in. A decision-ready record out.</h2>
+            <p className="section-desc">Samvid keeps the document, the reasoning, and the next action connected through every stage.</p>
           </div>
 
           <div className="workflow-grid">
             <div className="workflow-col">
-              <div className="workflow-num">01 / INGEST</div>
-              <h3 className="workflow-title">Submit Contracts</h3>
+              <div className="workflow-num">01 / FORWARD</div>
+              <h3 className="workflow-title">Send the contract</h3>
               <p className="workflow-desc">
-                Drag-and-drop contracts (PDF, DOCX, TXT) via the browser console or simply forward them to your workspace email inbox for webhook ingestion.
+                Upload a PDF, DOCX, or TXT file, or forward the attachment from the email thread where the work already started.
               </p>
             </div>
             <div className="workflow-col">
-              <div className="workflow-num">02 / EXTRACT</div>
-              <h3 className="workflow-title">Identify Risks</h3>
+              <div className="workflow-num">02 / REVIEW</div>
+              <h3 className="workflow-title">Understand what matters</h3>
               <p className="workflow-desc">
-                The platform runs OCR processing and structured LLM extraction to identify liabilities, indemnities, governing law, and parties with evidence-grounded page links.
+                Samvid reads the full document, extracts the key terms, and explains each material risk with evidence you can verify.
               </p>
             </div>
             <div className="workflow-col">
               <div className="workflow-num">03 / TRACK</div>
-              <h3 className="workflow-title">Monitor Signatures</h3>
+              <h3 className="workflow-title">Keep the handoff moving</h3>
               <p className="workflow-desc">
-                Orchestrate review statuses and manually track signers' actions. Every status change creates a secure timeline event in your audit ledger.
+                Coordinate review and manually track signer progress while every status update becomes part of the audit history.
               </p>
             </div>
+            <div className="workflow-col">
+              <div className="workflow-num">04 / RECALL</div>
+              <h3 className="workflow-title">Return to the answer</h3>
+              <p className="workflow-desc">
+                Find the approved version, the important clause, the signer state, and the decision context without reopening old threads.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="memory-section" aria-labelledby="memory-title">
+          <div className="memory-copy">
+            <div className="section-kicker">Contract memory</div>
+            <h2 id="memory-title">Keep the next question answerable.</h2>
+            <p>Samvid keeps terms, risks, evidence, versions, and signer events connected to the contract record, so your team can return to the source instead of restarting the review.</p>
+            <Link to="/contracts" className="memory-link">
+              Explore the workspace <ArrowRight size={14} />
+            </Link>
+          </div>
+          <div className="memory-console" aria-label="Questions retained contract records can answer">
+            <div className="memory-console-heading">
+              <Search size={16} /> Questions your records keep answerable
+            </div>
+            <div className="memory-question">Which agreements renew in the next 90 days?</div>
+            <div className="memory-question">Where do we have uncapped liability?</div>
+            <div className="memory-question">Who is still waiting to sign?</div>
+            <div className="memory-question">What changed in the latest vendor draft?</div>
+          </div>
+        </section>
+
+        <section className="closing-cta">
+          <div>
+            <div className="section-kicker">Start with the next contract</div>
+            <h2>Give every handoff a record.</h2>
+            <p>Bring review, evidence, versions, and signer status into one workspace your team can trust.</p>
+          </div>
+          <div className="closing-cta-actions">
+            <a href="#workflow" className="btn-lp-secondary">See the workflow</a>
+            <Link to="/contracts" className="btn-lp-primary">Open workspace <ArrowRight size={15} /></Link>
           </div>
         </section>
 
@@ -652,28 +618,26 @@ export function LandingPage() {
         <section id="disclaimer" className="disclaimer-banner">
           <AlertTriangle className="disclaimer-icon" size={20} />
           <div className="disclaimer-text">
-            <strong>Signing Status Tracking Only:</strong> Samvid provides signature workflow coordination. It does not place visual signature fields directly onto documents, verify signer legal identity, generate digital signature certificates, or execute legally binding electronic signatures. A future integration with e-signature providers (e.g. DocuSign, Adobe Sign) is required for execution.
+            <strong>Signing status tracking only:</strong> Samvid coordinates and records the signing workflow. It does not place signature fields, verify legal identity, issue digital certificates, or execute legally binding electronic signatures.
           </div>
         </section>
 
         {/* Footer */}
         <footer className="landing-footer">
-          <div className="footer-logo-row">
-            <div className="landing-logo" style={{ width: "28px", height: "28px", fontSize: "13px" }}>S</div>
-            <span style={{ fontWeight: 700, fontSize: "15px", letterSpacing: 0 }}>Samvid</span>
-          </div>
-          <div className="footer-copy">
-            &copy; {new Date().getFullYear()} Samvid. All rights reserved. Built for modern legal and procurement workflows.
-          </div>
-          
-          <div className="tech-stack-label">Under the Hood</div>
-          <div className="tech-stack-tags">
-            <span className="tech-tag">React / TypeScript</span>
-            <span className="tech-tag">FastAPI</span>
-            <span className="tech-tag">OpenAI API</span>
-            <span className="tech-tag">Sarvam OCR</span>
-            <span className="tech-tag">Resend SMTP</span>
-            <span className="tech-tag">SQLite / PostgreSQL</span>
+          <h2 className="footer-punchline">
+            <span className="footer-punchline-pixel">Workspace</span> to fix your chaos with <span className="footer-punchline-brand">samvid.ai</span>
+          </h2>
+
+          <div className="footer-details">
+            <div className="footer-logo-row">
+              <div className="landing-logo" style={{ width: "28px", height: "28px", fontSize: "13px" }}>S</div>
+              <span style={{ fontWeight: 700, fontSize: "15px", letterSpacing: 0 }}>Samvid</span>
+            </div>
+            <div className="footer-copy">
+              &copy; {new Date().getFullYear()} Samvid. All rights reserved. Built for modern legal and procurement workflows.
+            </div>
+
+            <div className="tech-stack-label">Built with Chaos in <span className="tech-stack-location">Bengaluru</span></div>
           </div>
         </footer>
       </div>
