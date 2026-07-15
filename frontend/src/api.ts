@@ -1,0 +1,125 @@
+import type {
+  ContractDetail,
+  ContractListItem,
+  SignerDraft,
+  SignerStatus,
+  SigningRequest,
+  SigningRequestStatus
+} from "./types";
+
+export interface ApiErrorPayload {
+  code?: string;
+  message?: string;
+  detail?: unknown;
+}
+
+export class ApiError extends Error {
+  status: number;
+  payload: ApiErrorPayload;
+
+  constructor(status: number, payload: ApiErrorPayload) {
+    super(payload.message || `Request failed with ${status}`);
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
+async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    headers: init?.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
+    ...init
+  });
+  if (!response.ok) {
+    let payload: ApiErrorPayload = {};
+    try {
+      const parsed = await response.json();
+      payload = parsed.detail && typeof parsed.detail === "object" ? parsed.detail : { detail: parsed.detail };
+    } catch {
+      payload = { message: response.statusText };
+    }
+    throw new ApiError(response.status, payload);
+  }
+  return response.json() as Promise<T>;
+}
+
+export function listContracts(filters: { search?: string; reviewStatus?: string; signingStatus?: string }) {
+  const params = new URLSearchParams();
+  if (filters.search) params.set("search", filters.search);
+  if (filters.reviewStatus) params.set("review_status", filters.reviewStatus);
+  if (filters.signingStatus) params.set("signing_status", filters.signingStatus);
+  return request<ContractListItem[]>(`/api/contracts?${params.toString()}`);
+}
+
+export function getContract(contractId: string) {
+  return request<ContractDetail>(`/api/contracts/${contractId}`);
+}
+
+export function listSigningRequests(status?: SigningRequestStatus | "") {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  return request<SigningRequest[]>(`/api/signing-requests?${params.toString()}`);
+}
+
+export function createSigningRequest(contractId: string, signers: SignerDraft[]) {
+  return request<SigningRequest>(`/api/contracts/${contractId}/signing-requests`, {
+    method: "POST",
+    body: JSON.stringify({
+      signers: signers.map((signer, index) => ({
+        name: signer.name,
+        email: signer.email,
+        role: signer.role || null,
+        required: signer.required,
+        display_order: index
+      }))
+    })
+  });
+}
+
+export function addSigner(requestId: string, signer: SignerDraft) {
+  return request<SigningRequest>(`/api/signing-requests/${requestId}/signers`, {
+    method: "POST",
+    body: JSON.stringify({
+      name: signer.name,
+      email: signer.email,
+      role: signer.role || null,
+      required: signer.required
+    })
+  });
+}
+
+export function appendSignerEvent(signerId: string, status: SignerStatus, note: string | null) {
+  return request<SigningRequest>(`/api/signers/${signerId}/events`, {
+    method: "POST",
+    body: JSON.stringify({
+      id: crypto.randomUUID(),
+      status,
+      note: note || null
+    })
+  });
+}
+
+export function uploadContract(file: File, onProgress: (percent: number) => void): Promise<unknown> {
+  const form = new FormData();
+  form.append("file", file);
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/contracts");
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(JSON.parse(xhr.responseText || "{}"));
+        return;
+      }
+      try {
+        const parsed = JSON.parse(xhr.responseText);
+        reject(new ApiError(xhr.status, parsed.detail || parsed));
+      } catch {
+        reject(new ApiError(xhr.status, { message: xhr.statusText }));
+      }
+    };
+    xhr.onerror = () => reject(new ApiError(0, { message: "Upload failed." }));
+    xhr.send(form);
+  });
+}

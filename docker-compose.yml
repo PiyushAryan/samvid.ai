@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: contractmate
+      POSTGRES_USER: contractmate
+      POSTGRES_PASSWORD: contractmate
+    ports:
+      - "5432:5432"
+    volumes:
+      - contractmate-postgres:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    environment:
+      RABBITMQ_DEFAULT_USER: contractmate
+      RABBITMQ_DEFAULT_PASS: contractmate
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - contractmate-rabbitmq:/var/lib/rabbitmq
+
+volumes:
+  contractmate-postgres:
+  contractmate-rabbitmq:

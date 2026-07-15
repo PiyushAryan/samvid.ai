@@ -1,0 +1,43 @@
+[project]
+name = "contractmate"
+version = "0.1.0"
+description = "Email-native AI teammate for contract review and human-approved responses"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "agno>=1.0",
+    "openai>=2.0",
+    "pypdf>=5.0,<7",
+    "pydantic>=2.8,<3",
+    "psycopg[binary]>=3.2",
+    "sarvamai>=0.1.28,<0.2",
+    "resend>=2.33.0",
+]
+
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.111,<1",
+    "python-multipart>=0.0.9,<1",
+    "uvicorn[standard]>=0.30,<1",
+]
+integrations = [
+    "boto3>=1.34",
+    "pika>=1.3",
+]
+dev = [
+    "pytest>=8.2",
+]
+
+[project.scripts]
+contractmate = "contractmate.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

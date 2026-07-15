@@ -1,0 +1,5 @@
+This Vendor Agreement is made between Acme Ltd and Example Technologies.
+The effective date is 1 January 2026.
+The term is 12 months.
+This Agreement renews automatically unless terminated with 60 days notice.
+The Supplier's liability under this Agreement shall be unlimited.
