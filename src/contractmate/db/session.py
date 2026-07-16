@@ -46,10 +46,12 @@ def connect_postgres(database_url: str) -> Any:
 
 
 def is_postgres_url(database_url: str) -> bool:
-    return database_url.startswith("postgresql://") or database_url.startswith("postgresql+psycopg://")
+    return database_url.startswith(("postgres://", "postgresql://", "postgresql+psycopg://"))
 
 
 def normalize_postgres_url(database_url: str) -> str:
+    if database_url.startswith("postgres://"):
+        return database_url.replace("postgres://", "postgresql://", 1)
     return database_url.replace("postgresql+psycopg://", "postgresql://", 1)
 
 

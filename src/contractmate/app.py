@@ -1,24 +1,40 @@
+import base64
+import binascii
 import hmac
+import logging
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from contractmate.api.routes import create_api_router
+from contractmate.db.session import connect
 from contractmate.email.messages import InboundEmailMessage
 from contractmate.security.control_plane import authorize_control_plane_request
 from contractmate.services.email_ingestion import EmailIngestionService
 from contractmate.settings import Settings
 
+logger = logging.getLogger(__name__)
 
-def create_app():
+
+def create_app(settings: Settings | None = None):
     try:
         from fastapi import FastAPI, Header, HTTPException, Request
         from fastapi.middleware.cors import CORSMiddleware
-        from fastapi.responses import FileResponse
+        from fastapi.middleware.trustedhost import TrustedHostMiddleware
+        from fastapi.responses import FileResponse, JSONResponse
         from fastapi.staticfiles import StaticFiles
     except ModuleNotFoundError as exc:
         raise RuntimeError("Install the 'api' extra to run the HTTP app: uv sync --extra api") from exc
 
-    settings = Settings.from_env()
-    app = FastAPI(title="Samvid", version="0.1.0")
+    settings = settings or Settings.from_env()
+    settings.validate_runtime()
+    app = FastAPI(
+        title="Samvid",
+        version="0.1.0",
+        docs_url=None if settings.is_production else "/docs",
+        redoc_url=None if settings.is_production else "/redoc",
+        openapi_url=None if settings.is_production else "/openapi.json",
+    )
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.allowed_hosts))
     if settings.app_env.casefold() in {"development", "dev", "local"}:
         app.add_middleware(
             CORSMiddleware,
@@ -27,6 +43,27 @@ def create_app():
             allow_methods=["*"],
             allow_headers=["*"],
         )
+
+    @app.middleware("http")
+    async def production_boundary(request: Request, call_next):
+        public_paths = {"/health", "/ready", "/email/inbound", "/agentos/control-plane/status"}
+        if settings.is_production and request.url.path not in public_paths:
+            if not _basic_auth_is_valid(request.headers.get("authorization"), settings):
+                response = JSONResponse(
+                    status_code=401,
+                    content={"detail": "Authentication required"},
+                    headers={"WWW-Authenticate": 'Basic realm="Samvid", charset="UTF-8"'},
+                )
+                return _with_security_headers(response, settings=settings, request_path=request.url.path)
+            if request.method not in {"GET", "HEAD", "OPTIONS"}:
+                fetch_site = request.headers.get("sec-fetch-site")
+                if fetch_site and fetch_site not in {"same-origin", "none"}:
+                    response = JSONResponse(status_code=403, content={"detail": "Cross-site request rejected"})
+                    return _with_security_headers(response, settings=settings, request_path=request.url.path)
+
+        response = await call_next(request)
+        return _with_security_headers(response, settings=settings, request_path=request.url.path)
+
     app.include_router(create_api_router(settings))
 
     @app.get("/health")
@@ -35,7 +72,12 @@ def create_app():
 
     @app.get("/ready")
     def ready() -> dict:
-        return {"status": "ready", "env": settings.app_env}
+        try:
+            _check_runtime_dependencies(settings)
+        except Exception as exc:
+            logger.exception("Samvid readiness check failed")
+            raise HTTPException(status_code=503, detail="Service dependencies are not ready") from exc
+        return {"status": "ready", "service": "samvid"}
 
     @app.get("/agentos/control-plane/status")
     def control_plane_status(
@@ -72,8 +114,8 @@ def create_app():
         }
 
     @app.post("/email/inbound")
-    async def inbound_email(
-        request: Request,
+    def inbound_email(
+        message: InboundEmailMessage,
         x_contractmate_email_secret: str | None = Header(default=None),
     ) -> dict:
         if settings.inbound_email_secret and not hmac.compare_digest(
@@ -81,13 +123,15 @@ def create_app():
             x_contractmate_email_secret or "",
         ):
             raise HTTPException(status_code=401, detail="Invalid inbound email secret")
-        payload = await request.json()
-        message = InboundEmailMessage.model_validate(payload)
         result = EmailIngestionService.local(settings).process_inbound_email(
             message,
             send_response=settings.auto_send_review_email,
         )
         return result.model_dump(mode="json")
+
+    @app.get("/api/{full_path:path}", include_in_schema=False)
+    def unknown_api_route(full_path: str):
+        raise HTTPException(status_code=404, detail="API route not found")
 
     frontend_dist = Path("frontend/dist")
     if frontend_dist.exists():
@@ -104,3 +148,49 @@ def create_app():
             return FileResponse(frontend_dist / "index.html")
 
     return app
+
+
+def _basic_auth_is_valid(authorization_header: str | None, settings: Settings) -> bool:
+    if not authorization_header or not settings.app_access_password:
+        return False
+    scheme, _, encoded = authorization_header.partition(" ")
+    if scheme.casefold() != "basic" or not encoded:
+        return False
+    try:
+        decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError):
+        return False
+    username, separator, password = decoded.partition(":")
+    return bool(separator) and hmac.compare_digest(username, settings.app_access_username) and hmac.compare_digest(
+        password,
+        settings.app_access_password,
+    )
+
+
+def _with_security_headers(response, *, settings: Settings, request_path: str):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; "
+        "img-src 'self' data:; font-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "script-src 'self'; connect-src 'self'"
+    )
+    if settings.is_production:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    if request_path.startswith("/assets/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
+
+
+def _check_runtime_dependencies(settings: Settings) -> None:
+    connection = connect(settings.database_url)
+    try:
+        connection.execute("SELECT 1").fetchone()
+    finally:
+        connection.close()
+
+    for directory in (settings.local_storage_dir, settings.inbound_attachment_dir):
+        directory.mkdir(parents=True, exist_ok=True)
+        with NamedTemporaryFile(prefix=".samvid-ready-", dir=directory):
+            pass

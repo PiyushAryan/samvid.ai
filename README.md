@@ -118,3 +118,34 @@ Inbound email processing is autonomous by default: a received email attachment
 is reviewed and a response email is sent or dry-run printed. Binding legal
 actions such as signing, accepting terms or sending negotiation commitments
 still require an explicit approval workflow.
+
+Production deployment
+---------------------
+
+The production image builds the React application and serves it from the same
+FastAPI origin as `/api`. It runs as a non-root user and requires PostgreSQL,
+persistent document storage, model credentials, inbound-email authentication,
+and private-beta HTTP credentials before startup succeeds.
+
+The included `render.yaml` provisions:
+
+- A Docker web service in Singapore with `/ready` health checks.
+- Managed PostgreSQL with public database access disabled.
+- A persistent disk mounted at `/app/data` for contracts and inbound files.
+- Generated workspace, inbound-webhook, and Control Plane secrets.
+- Dashboard prompts for OpenAI, Sarvam, Resend, and sender-address secrets.
+
+Create the Blueprint from the repository in Render, review the paid service,
+database, and disk plans, then provide every variable marked `sync: false`.
+The generated `APP_ACCESS_PASSWORD` is the password for the private-beta browser
+prompt; the username defaults to `samvid`.
+
+Local production-image validation:
+
+```bash
+docker build -t samvid:local .
+docker run --rm -p 8000:8000 --env-file .env samvid:local
+```
+
+`APP_ENV=production` intentionally fails fast when required secrets, PostgreSQL,
+or absolute persistent-storage paths are missing.

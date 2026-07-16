@@ -1,5 +1,9 @@
+from io import BytesIO
 from pathlib import Path
 
+import pytest
+
+from contractmate.api.routes import _copy_upload_with_limit
 from contractmate.security.file_validation import validate_uploaded_file
 
 
@@ -22,3 +26,11 @@ def test_validate_uploaded_file_accepts_text(tmp_path: Path) -> None:
     assert result.ok
     assert result.mime_type == "text/plain"
     assert result.sha256
+
+
+def test_upload_copy_stops_at_configured_limit() -> None:
+    source = BytesIO(b"a" * 12)
+    destination = BytesIO()
+
+    with pytest.raises(ValueError, match="size limit"):
+        _copy_upload_with_limit(source, destination, max_bytes=10)

@@ -1,8 +1,8 @@
 import json
-import shutil
+from collections.abc import Iterator
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any
+from typing import Any, BinaryIO
 from uuid import uuid4
 
 from contractmate.db.repositories.contracts import ContractRepository
@@ -21,25 +21,19 @@ from contractmate.services.contract_processing import _ocr_backend_from_settings
 
 def create_api_router(settings: Settings):
     try:
-        from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+        from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
         from fastapi.responses import FileResponse
     except ModuleNotFoundError as exc:
         raise RuntimeError("Install the 'api' extra to run the HTTP app: uv sync --extra api") from exc
 
     router = APIRouter(prefix="/api")
-    connection: Any | None = None
 
-    def db() -> Any:
-        nonlocal connection
-        if connection is None:
-            connection = connect(settings.database_url)
-        return connection
-
-    def contract_repository() -> ContractRepository:
-        return ContractRepository(db())
-
-    def signing_repository() -> SigningRepository:
-        return SigningRepository(db())
+    def db_connection() -> Iterator[Any]:
+        connection = connect(settings.database_url)
+        try:
+            yield connection
+        finally:
+            connection.close()
 
     def actor_email() -> str:
         return settings.samvid_local_actor_email
@@ -55,9 +49,9 @@ def create_api_router(settings: Settings):
         search: str | None = Query(default=None),
         review_status: str | None = Query(default=None),
         signing_status: SigningRequestStatus | None = Query(default=None),
+        connection: Any = Depends(db_connection),
     ) -> list[dict[str, Any]]:
-        connection = db()
-        signing = signing_repository()
+        signing = SigningRepository(connection)
         rows = _list_contract_rows(connection, workspace_id=workspace_id(), search=search, review_status=review_status)
         summaries = signing.signing_summary_for_contracts(workspace_id=workspace_id(), contract_ids=[row["id"] for row in rows])
         response = [_contract_list_item(row, summaries.get(row["id"])) for row in rows]
@@ -66,16 +60,25 @@ def create_api_router(settings: Settings):
         return response
 
     @router.post("/contracts")
-    async def upload_contract(file: UploadFile = File(...)) -> dict[str, Any]:
+    def upload_contract(
+        file: UploadFile = File(...),
+        connection: Any = Depends(db_connection),
+    ) -> dict[str, Any]:
         suffix = Path(file.filename or "contract").suffix
         with NamedTemporaryFile(prefix="samvid-upload-", suffix=suffix, delete=False) as tmp:
             temp_path = Path(tmp.name)
-            shutil.copyfileobj(file.file, tmp)
+            try:
+                _copy_upload_with_limit(file.file, tmp, max_bytes=settings.max_file_size_mb * 1024 * 1024)
+            except ValueError as exc:
+                temp_path.unlink(missing_ok=True)
+                raise HTTPException(
+                    status_code=413,
+                    detail={"code": "file_too_large", "message": f"File exceeds {settings.max_file_size_mb} MB limit."},
+                ) from exc
         try:
-            connection = db()
             service = ContractProcessingService(
                 settings=settings,
-                repository=contract_repository(),
+                repository=ContractRepository(connection),
                 audit=AuditService(connection),
                 storage=LocalDocumentStorage(settings.local_storage_dir),
                 parser=PdfMuseDocumentParser(),
@@ -94,9 +97,8 @@ def create_api_router(settings: Settings):
             temp_path.unlink(missing_ok=True)
 
     @router.get("/contracts/{contract_id}")
-    def get_contract(contract_id: str) -> dict[str, Any]:
-        connection = db()
-        signing = signing_repository()
+    def get_contract(contract_id: str, connection: Any = Depends(db_connection)) -> dict[str, Any]:
+        signing = SigningRepository(connection)
         row = _get_contract_row(connection, workspace_id=workspace_id(), contract_id=contract_id)
         if row is None:
             raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Contract not found."})
@@ -120,8 +122,7 @@ def create_api_router(settings: Settings):
         }
 
     @router.get("/contracts/{contract_id}/document")
-    def get_document(contract_id: str):
-        connection = db()
+    def get_document(contract_id: str, connection: Any = Depends(db_connection)):
         row = _get_contract_row(connection, workspace_id=workspace_id(), contract_id=contract_id)
         if row is None or not row["s3_object_key"]:
             raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Document not found."})
@@ -140,9 +141,13 @@ def create_api_router(settings: Settings):
         )
 
     @router.post("/contracts/{contract_id}/signing-requests")
-    def create_signing_request(contract_id: str, payload: SigningRequestCreate) -> dict[str, Any]:
+    def create_signing_request(
+        contract_id: str,
+        payload: SigningRequestCreate,
+        connection: Any = Depends(db_connection),
+    ) -> dict[str, Any]:
         try:
-            signing = signing_repository()
+            signing = SigningRepository(connection)
             request = signing.create_request(
                 workspace_id=workspace_id(),
                 contract_id=contract_id,
@@ -155,24 +160,34 @@ def create_api_router(settings: Settings):
         return request.model_dump(mode="json")
 
     @router.get("/contracts/{contract_id}/signing-requests")
-    def list_contract_signing_requests(contract_id: str) -> list[dict[str, Any]]:
+    def list_contract_signing_requests(
+        contract_id: str,
+        connection: Any = Depends(db_connection),
+    ) -> list[dict[str, Any]]:
         try:
-            signing = signing_repository()
+            signing = SigningRepository(connection)
             requests = signing.list_contract_requests(workspace_id=workspace_id(), contract_id=contract_id)
         except SigningError as exc:
             raise _http_signing_error(exc) from exc
         return [request.model_dump(mode="json") for request in requests]
 
     @router.get("/signing-requests")
-    def list_signing_requests(status: SigningRequestStatus | None = Query(default=None)) -> list[dict[str, Any]]:
-        signing = signing_repository()
+    def list_signing_requests(
+        status: SigningRequestStatus | None = Query(default=None),
+        connection: Any = Depends(db_connection),
+    ) -> list[dict[str, Any]]:
+        signing = SigningRepository(connection)
         requests = signing.list_requests(workspace_id=workspace_id(), status=status)
         return [request.model_dump(mode="json") for request in requests]
 
     @router.post("/signing-requests/{request_id}/signers")
-    def add_signer(request_id: str, payload: SignerCreate) -> dict[str, Any]:
+    def add_signer(
+        request_id: str,
+        payload: SignerCreate,
+        connection: Any = Depends(db_connection),
+    ) -> dict[str, Any]:
         try:
-            signing = signing_repository()
+            signing = SigningRepository(connection)
             request = signing.add_signer(
                 workspace_id=workspace_id(),
                 request_id=request_id,
@@ -185,9 +200,13 @@ def create_api_router(settings: Settings):
         return request.model_dump(mode="json")
 
     @router.post("/signers/{signer_id}/events")
-    def append_signer_event(signer_id: str, payload: SignerStatusEventCreate) -> dict[str, Any]:
+    def append_signer_event(
+        signer_id: str,
+        payload: SignerStatusEventCreate,
+        connection: Any = Depends(db_connection),
+    ) -> dict[str, Any]:
         try:
-            signing = signing_repository()
+            signing = SigningRepository(connection)
             request = signing.append_event(
                 workspace_id=workspace_id(),
                 signer_id=signer_id,
@@ -200,6 +219,15 @@ def create_api_router(settings: Settings):
         return request.model_dump(mode="json")
 
     return router
+
+
+def _copy_upload_with_limit(source: BinaryIO, destination: BinaryIO, *, max_bytes: int) -> None:
+    copied = 0
+    while chunk := source.read(1024 * 1024):
+        copied += len(chunk)
+        if copied > max_bytes:
+            raise ValueError("upload exceeds configured size limit")
+        destination.write(chunk)
 
 
 def _list_contract_rows(connection: Any, *, workspace_id: str, search: str | None, review_status: str | None) -> list[Any]:
