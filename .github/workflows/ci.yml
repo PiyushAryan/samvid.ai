@@ -49,5 +49,44 @@ jobs:
         run: npm run build
         working-directory: frontend
 
-      - name: Build production image
+      - name: Build API production image
         run: docker build --tag samvid:ci .
+
+      - name: Build worker production image
+        run: docker build --file Dockerfile.worker --tag samvid-worker:ci .
+
+  publish-worker:
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set image name
+        run: echo "WORKER_IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/samvid-contract-worker" >> "$GITHUB_ENV"
+
+      - name: Sign in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+
+      - name: Build worker image
+        run: |
+          docker build \
+            --file Dockerfile.worker \
+            --build-arg REVISION="$GITHUB_SHA" \
+            --label "org.opencontainers.image.created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            --label "org.opencontainers.image.version=$GITHUB_SHA" \
+            --platform linux/amd64 \
+            --tag "$WORKER_IMAGE:$GITHUB_SHA" \
+            --tag "$WORKER_IMAGE:latest" \
+            .
+
+      - name: Publish worker image
+        run: |
+          docker push "$WORKER_IMAGE:$GITHUB_SHA"
+          docker push "$WORKER_IMAGE:latest"

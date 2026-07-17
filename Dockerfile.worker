@@ -16,6 +16,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --extra rabbitmq --no-editable
 
 FROM python:3.12.10-slim-bookworm AS runtime
+ARG SOURCE_REPOSITORY="https://github.com/PiyushAryan/samvid.ai"
+ARG REVISION=""
+LABEL org.opencontainers.image.source="${SOURCE_REPOSITORY}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.title="Samvid contract worker" \
+      org.opencontainers.image.description="Persistent RabbitMQ contract-processing worker for Samvid"
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1

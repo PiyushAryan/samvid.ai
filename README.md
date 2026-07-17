@@ -206,7 +206,22 @@ container cold starts.
 Run the persistent RabbitMQ consumer on an EC2 instance with Docker. The worker
 does not accept inbound traffic and does not need a public port or persistent
 volume; contract files remain in Vercel Blob and workflow state remains in Neon.
-On the EC2 host:
+GitHub Actions builds the `linux/amd64` image and publishes both immutable commit
+and `latest` tags to `ghcr.io/piyusharyan/samvid-contract-worker`.
+
+The GHCR package is private by default. Create a classic GitHub personal access
+token with only `read:packages`, then authenticate once on the EC2 host. Do not
+put this token in `.env.worker`:
+
+```bash
+read -s GHCR_TOKEN
+echo "$GHCR_TOKEN" | docker login ghcr.io -u PiyushAryan --password-stdin
+unset GHCR_TOKEN
+chmod 600 ~/.docker/config.json
+```
+
+Clone the repository for the compose definition and environment template, then
+pull the prebuilt image:
 
 ```bash
 git clone <repository-url> samvid
@@ -215,17 +230,29 @@ cp worker.env.example .env.worker
 # Fill .env.worker with production secrets, then restrict it.
 chmod 600 .env.worker
 docker compose -f docker-compose.worker.yml config
-docker compose -f docker-compose.worker.yml up -d --build
+docker compose -f docker-compose.worker.yml pull
+docker compose -f docker-compose.worker.yml up -d --no-build
 docker compose -f docker-compose.worker.yml ps
 docker compose -f docker-compose.worker.yml logs -f --tail=100
 ```
 
+For a reproducible deployment, pin a commit tag instead of `latest`:
+
+```bash
+export WORKER_IMAGE=ghcr.io/piyusharyan/samvid-contract-worker:<git-commit-sha>
+docker compose -f docker-compose.worker.yml pull
+docker compose -f docker-compose.worker.yml up -d --no-build
+```
+
+For later releases, pull the repository changes and repeat the `pull` and `up`
+commands. The publish workflow handles image builds; EC2 does not build images.
+
 The production worker is sized for a 2 vCPU, 2 GiB `t3.small`. The container is
 limited to 1.5 CPUs and 1.5 GiB RAM, leaving capacity for the host OS and Docker.
-Configure 2 GiB of swap to protect image builds from transient memory pressure,
-and monitor runtime usage with `docker stats`. Docker logs rotate at 10 MiB. The
-security group needs no application inbound rule; restrict SSH to an
-administrator IP and retain outbound access to Neon PostgreSQL, CloudAMQP over
+The configured 2 GiB swap remains a runtime safety margin but is no longer needed
+for image builds. Monitor runtime usage with `docker stats`. Docker logs rotate
+at 10 MiB. The security group needs no application inbound rule; restrict SSH to
+an administrator IP and retain outbound access to Neon PostgreSQL, CloudAMQP over
 TLS, Vercel Blob, OpenAI, Sarvam, and Resend.
 
 Keep the Vercel API on `CONTRACT_PROCESSING_MODE=sync` until the worker log says

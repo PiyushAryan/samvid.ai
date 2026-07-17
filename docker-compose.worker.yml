@@ -1,9 +1,7 @@
 services:
   contract-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
-    image: samvid-contract-worker:latest
+    image: ${WORKER_IMAGE:-ghcr.io/piyusharyan/samvid-contract-worker:latest}
+    pull_policy: always
     restart: unless-stopped
     init: true
     env_file:
