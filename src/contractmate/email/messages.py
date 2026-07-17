@@ -25,6 +25,9 @@ class InboundEmailMessage(BaseModel):
     subject: str = ""
     text: str = ""
     thread_id: str | None = None
+    response_address: str | None = None
+    original_message_id: str | None = None
+    references: str | None = None
     attachments: list[EmailAttachment] = Field(default_factory=list)
 
     @property
@@ -38,3 +41,5 @@ class OutboundEmailMessage(BaseModel):
     subject: str
     text: str
     html: str | None = None
+    in_reply_to: str | None = None
+    references: str | None = None

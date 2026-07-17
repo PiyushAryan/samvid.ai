@@ -8,9 +8,16 @@ from tempfile import NamedTemporaryFile
 
 from contractmate.api.routes import create_api_router
 from contractmate.db.session import connect, initialize_database
-from contractmate.email.messages import InboundEmailMessage
+from contractmate.email.resend_inbound import (
+    MalformedResendWebhook,
+    ResendInboundService,
+    ResendWebhookEvent,
+    parse_resend_webhook,
+    recipient_is_allowed,
+    verify_resend_webhook,
+    webhook_payload_hash,
+)
 from contractmate.security.control_plane import authorize_control_plane_request
-from contractmate.services.email_ingestion import EmailIngestionService
 from contractmate.settings import Settings
 from contractmate.tools.document_storage import document_storage_from_settings
 from contractmate.workers.queue import RabbitMQContractQueue
@@ -25,6 +32,7 @@ def create_app(settings: Settings | None = None):
         from fastapi.middleware.trustedhost import TrustedHostMiddleware
         from fastapi.responses import FileResponse, JSONResponse
         from fastapi.staticfiles import StaticFiles
+        from starlette.concurrency import run_in_threadpool
     except ModuleNotFoundError as exc:
         raise RuntimeError("Install the 'api' extra to run the HTTP app: uv sync --extra api") from exc
 
@@ -127,24 +135,51 @@ def create_app(settings: Settings | None = None):
         }
 
     @app.post("/email/inbound")
-    def inbound_email(
-        message: InboundEmailMessage,
-        x_contractmate_email_secret: str | None = Header(default=None),
-    ) -> dict:
-        if settings.inbound_email_secret and not hmac.compare_digest(
-            settings.inbound_email_secret,
-            x_contractmate_email_secret or "",
-        ):
-            raise HTTPException(status_code=401, detail="Invalid inbound email secret")
-        service = EmailIngestionService.local(settings)
+    async def inbound_email(request: Request) -> dict:
+        if not settings.resend_inbound_enabled:
+            raise HTTPException(status_code=503, detail="Inbound email receiving is disabled")
+
+        raw_payload = await request.body()
         try:
-            result = service.process_inbound_email(
-                message,
-                send_response=settings.auto_send_review_email,
+            verify_resend_webhook(
+                raw_payload,
+                event_id=request.headers.get("svix-id"),
+                timestamp=request.headers.get("svix-timestamp"),
+                signature=request.headers.get("svix-signature"),
+                webhook_secret=settings.resend_webhook_secret or "",
+            )
+        except MalformedResendWebhook as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=401, detail="Invalid Resend webhook signature") from exc
+
+        try:
+            event = parse_resend_webhook(raw_payload)
+        except MalformedResendWebhook as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        event_id = request.headers.get("svix-id") or ""
+        if event.type != "email.received":
+            return {"event_id": event_id, "status": "ignored", "reason": "unsupported_event"}
+        if not isinstance(event, ResendWebhookEvent):
+            raise HTTPException(status_code=400, detail="Malformed Resend email.received event")
+        if not recipient_is_allowed(event.data.to, settings.resend_inbound_recipients):
+            return {"event_id": event_id, "status": "ignored", "reason": "recipient_not_allowed"}
+
+        service = ResendInboundService.local(settings)
+        try:
+            result = await run_in_threadpool(
+                service.process,
+                event,
+                event_id=event_id,
+                payload_hash=webhook_payload_hash(raw_payload),
             )
             return result.model_dump(mode="json")
+        except Exception as exc:
+            logger.exception("Resend inbound event %s failed", event_id)
+            raise HTTPException(status_code=500, detail="Inbound email processing failed") from exc
         finally:
-            service.close()
+            await run_in_threadpool(service.close)
 
     @app.get("/api/{full_path:path}", include_in_schema=False)
     def unknown_api_route(full_path: str):

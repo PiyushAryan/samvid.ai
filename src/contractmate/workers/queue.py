@@ -24,11 +24,15 @@ class ContractReviewJob:
     workspace_id: str
     email_thread_id: str
     requested_by: str
+    response_address: str | None = None
+    original_subject: str | None = None
+    in_reply_to: str | None = None
+    references: str | None = None
     send_review_email: bool = False
     attempt: int = 1
 
     def to_message(self) -> dict:
-        return {
+        message = {
             "job_id": self.job_id,
             "contract_id": self.contract_id,
             "contract_version_id": self.contract_version_id,
@@ -38,6 +42,19 @@ class ContractReviewJob:
             "send_review_email": self.send_review_email,
             "attempt": self.attempt,
         }
+        message.update(
+            {
+                key: value
+                for key, value in {
+                    "response_address": self.response_address,
+                    "original_subject": self.original_subject,
+                    "in_reply_to": self.in_reply_to,
+                    "references": self.references,
+                }.items()
+                if value is not None
+            }
+        )
+        return message
 
     @classmethod
     def from_message(cls, message: dict) -> "ContractReviewJob":
@@ -48,6 +65,10 @@ class ContractReviewJob:
             workspace_id=str(message["workspace_id"]),
             email_thread_id=str(message["email_thread_id"]),
             requested_by=str(message["requested_by"]),
+            response_address=str(message["response_address"]) if message.get("response_address") else None,
+            original_subject=str(message["original_subject"]) if message.get("original_subject") else None,
+            in_reply_to=str(message["in_reply_to"]) if message.get("in_reply_to") else None,
+            references=str(message["references"]) if message.get("references") else None,
             send_review_email=bool(message.get("send_review_email", False)),
             attempt=int(message.get("attempt", 1)),
         )
@@ -85,6 +106,10 @@ class ContractQueue(Protocol):
         workspace_id: str,
         email_thread_id: str,
         requested_by: str,
+        response_address: str | None = None,
+        original_subject: str | None = None,
+        in_reply_to: str | None = None,
+        references: str | None = None,
         send_review_email: bool = False,
     ) -> ContractReviewJob:
         ...
@@ -102,6 +127,10 @@ class InMemoryContractQueue:
         workspace_id: str,
         email_thread_id: str,
         requested_by: str,
+        response_address: str | None = None,
+        original_subject: str | None = None,
+        in_reply_to: str | None = None,
+        references: str | None = None,
         send_review_email: bool = False,
     ) -> ContractReviewJob:
         job = ContractReviewJob(
@@ -111,6 +140,10 @@ class InMemoryContractQueue:
             workspace_id=workspace_id,
             email_thread_id=email_thread_id,
             requested_by=requested_by,
+            response_address=response_address,
+            original_subject=original_subject,
+            in_reply_to=in_reply_to,
+            references=references,
             send_review_email=send_review_email,
         )
         self._jobs.append(job)
@@ -164,6 +197,10 @@ class RabbitMQContractQueue:
         workspace_id: str,
         email_thread_id: str,
         requested_by: str,
+        response_address: str | None = None,
+        original_subject: str | None = None,
+        in_reply_to: str | None = None,
+        references: str | None = None,
         send_review_email: bool = False,
     ) -> ContractReviewJob:
         job = ContractReviewJob(
@@ -173,6 +210,10 @@ class RabbitMQContractQueue:
             workspace_id=workspace_id,
             email_thread_id=email_thread_id,
             requested_by=requested_by,
+            response_address=response_address,
+            original_subject=original_subject,
+            in_reply_to=in_reply_to,
+            references=references,
             send_review_email=send_review_email,
         )
         self.publish(job, routing_key=self.topology.review_routing_key)
@@ -296,6 +337,10 @@ class RabbitMQDelivery:
             workspace_id=self.job.workspace_id,
             email_thread_id=self.job.email_thread_id,
             requested_by=self.job.requested_by,
+            response_address=self.job.response_address,
+            original_subject=self.job.original_subject,
+            in_reply_to=self.job.in_reply_to,
+            references=self.job.references,
             send_review_email=self.job.send_review_email,
             attempt=self.job.attempt + 1,
         )

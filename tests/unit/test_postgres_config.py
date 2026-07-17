@@ -44,7 +44,6 @@ def test_production_settings_accept_vercel_blob_oidc(tmp_path) -> None:
     settings = Settings(
         app_env="production",
         app_access_password="private-beta-password",
-        inbound_email_secret="inbound-email-secret",
         database_url="postgresql://user:pass@database/samvid",
         document_storage_backend="vercel_blob",
         local_storage_dir=tmp_path / "unused-local-storage",

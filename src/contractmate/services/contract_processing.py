@@ -113,6 +113,10 @@ class ContractProcessingService:
         original_filename: str | None = None,
         stored_object_key: str | None = None,
         send_review_email: bool = False,
+        response_address: str | None = None,
+        original_subject: str | None = None,
+        in_reply_to: str | None = None,
+        references: str | None = None,
     ) -> ContractProcessingResult:
         ingested = self._ingest_local_file(
             file_path=file_path,
@@ -134,6 +138,10 @@ class ContractProcessingService:
                 workspace_id=ingested.workspace_id,
                 email_thread_id=ingested.email_thread_id,
                 requested_by=ingested.requested_by,
+                response_address=response_address,
+                original_subject=original_subject,
+                in_reply_to=in_reply_to,
+                references=references,
                 send_review_email=send_review_email,
             )
         except Exception as exc:

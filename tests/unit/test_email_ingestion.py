@@ -88,6 +88,10 @@ def test_email_ingestion_queues_review_and_defers_response(monkeypatch, tmp_path
     message = InboundEmailMessage(
         message_id="email-queued",
         from_address="sender@example.com",
+        response_address="replies@example.com",
+        subject="Please review",
+        original_message_id="<message@example.com>",
+        references="<earlier@example.com> <message@example.com>",
         attachments=[
             EmailAttachment(
                 filename="vendor-agreement.txt",
@@ -113,6 +117,10 @@ def test_email_ingestion_queues_review_and_defers_response(monkeypatch, tmp_path
     assert result.processed[0].status is WorkflowState.QUEUED
     assert job is not None
     assert job.send_review_email
+    assert job.response_address == "replies@example.com"
+    assert job.original_subject == "Please review"
+    assert job.in_reply_to == "<message@example.com>"
+    assert job.references == "<earlier@example.com> <message@example.com>"
 
 
 def _fake_contract_review(self, *, contract_id, parsed_document) -> ContractReview:

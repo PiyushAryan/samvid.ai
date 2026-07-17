@@ -93,9 +93,16 @@ class ContractWorker:
         text = render_review_email_text(result.review) if result.review else result.message
         EmailSender(self.settings).send(
             OutboundEmailMessage(
-                to_address=job.requested_by,
+                to_address=job.response_address or job.requested_by,
                 from_address=self.settings.email_from_address,
-                subject="Samvid contract review",
+                subject=_reply_subject(job.original_subject),
                 text=text,
+                in_reply_to=job.in_reply_to,
+                references=job.references,
             )
         )
+
+
+def _reply_subject(original_subject: str | None) -> str:
+    subject = (original_subject or "Contract review").strip()
+    return subject if subject.casefold().startswith("re:") else f"Re: {subject}"

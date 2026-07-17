@@ -61,6 +61,41 @@ def test_worker_stops_before_polling_when_shutdown_is_requested() -> None:
     assert queue.receive_count == 0
 
 
+def test_worker_sends_review_as_threaded_reply(monkeypatch) -> None:
+    sent = []
+    monkeypatch.setattr(
+        "contractmate.workers.contract_worker.EmailSender.send",
+        lambda _sender, message: sent.append(message),
+    )
+    worker = ContractWorker(settings=Settings(email_from_address="onboarding@resend.dev"), queue=_FakeQueue(None))
+    job = ContractReviewJob(
+        job_id="job-1",
+        contract_id="contract-1",
+        contract_version_id="version-1",
+        workspace_id="workspace-1",
+        email_thread_id="thread-1",
+        requested_by="sender@example.com",
+        response_address="replies@example.com",
+        original_subject="Please review",
+        in_reply_to="<message@example.com>",
+        references="<earlier@example.com> <message@example.com>",
+        send_review_email=True,
+    )
+    result = ContractProcessingResult(
+        contract_id="contract-1",
+        contract_version_id="version-1",
+        status=WorkflowState.REVIEW_READY,
+        message="Contract review is ready.",
+    )
+
+    worker._send_review_email(job, result)
+
+    assert sent[0].to_address == "replies@example.com"
+    assert sent[0].subject == "Re: Please review"
+    assert sent[0].in_reply_to == "<message@example.com>"
+    assert sent[0].references == "<earlier@example.com> <message@example.com>"
+
+
 def _job(*, attempt: int = 1) -> ContractReviewJob:
     return ContractReviewJob(
         job_id="job-1",

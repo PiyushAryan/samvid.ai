@@ -12,7 +12,9 @@ class Settings(BaseModel):
     app_access_username: str = "samvid"
     app_access_password: str | None = None
     allowed_hosts: tuple[str, ...] = ("localhost", "127.0.0.1", "testserver")
-    inbound_email_secret: str | None = None
+    resend_inbound_enabled: bool = False
+    resend_webhook_secret: str | None = None
+    resend_inbound_recipients: tuple[str, ...] = ()
     email_workspace_id: str = "email-workspace"
     email_from_address: str = "contractmate@example.com"
     resend_api_key: str | None = None
@@ -64,6 +66,17 @@ class Settings(BaseModel):
         return self.app_env.casefold() in {"production", "prod"}
 
     def validate_runtime(self) -> None:
+        inbound_errors: list[str] = []
+        if self.resend_inbound_enabled:
+            if not self.resend_api_key or self.resend_api_key == "re_xxxxxxxxx":
+                inbound_errors.append("RESEND_API_KEY is required when Resend inbound receiving is enabled")
+            if not self.resend_webhook_secret:
+                inbound_errors.append("RESEND_WEBHOOK_SECRET is required when Resend inbound receiving is enabled")
+            if not self.resend_inbound_recipients:
+                inbound_errors.append("RESEND_INBOUND_RECIPIENTS is required when Resend inbound receiving is enabled")
+        if inbound_errors:
+            raise ValueError("Invalid inbound email configuration: " + "; ".join(inbound_errors))
+
         if not self.is_production:
             return
 
@@ -76,8 +89,6 @@ class Settings(BaseModel):
             errors.append("DATABASE_URL_UNPOOLED must point to PostgreSQL")
         if not self.model_api_key:
             errors.append("OPENAI_API_KEY or MODEL_API_KEY is required")
-        if not self.inbound_email_secret or len(self.inbound_email_secret) < 16:
-            errors.append("INBOUND_EMAIL_SECRET must contain at least 16 characters")
         if not self.app_access_password or len(self.app_access_password) < 16:
             errors.append("APP_ACCESS_PASSWORD must contain at least 16 characters")
         if self.enable_ocr and not self.sarvam_api_key:
@@ -121,7 +132,9 @@ class Settings(BaseModel):
             app_access_username=os.getenv("APP_ACCESS_USERNAME", "samvid"),
             app_access_password=os.getenv("APP_ACCESS_PASSWORD") or None,
             allowed_hosts=csv_env("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver"),
-            inbound_email_secret=os.getenv("INBOUND_EMAIL_SECRET") or None,
+            resend_inbound_enabled=bool_env("RESEND_INBOUND_ENABLED", False),
+            resend_webhook_secret=os.getenv("RESEND_WEBHOOK_SECRET") or None,
+            resend_inbound_recipients=csv_env("RESEND_INBOUND_RECIPIENTS", ""),
             email_workspace_id=os.getenv("EMAIL_WORKSPACE_ID", "email-workspace"),
             email_from_address=os.getenv("EMAIL_FROM_ADDRESS", "contractmate@example.com"),
             resend_api_key=os.getenv("RESEND_API_KEY") or None,

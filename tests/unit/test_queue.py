@@ -30,6 +30,24 @@ def test_contract_review_job_round_trips_without_contract_text() -> None:
     }
 
 
+def test_contract_review_job_round_trips_optional_email_thread_metadata() -> None:
+    job = ContractReviewJob(
+        job_id="job-1",
+        contract_id="contract-1",
+        contract_version_id="version-1",
+        workspace_id="workspace-1",
+        email_thread_id="email-thread-1",
+        requested_by="sender@example.com",
+        response_address="replies@example.com",
+        original_subject="Please review",
+        in_reply_to="<message@example.com>",
+        references="<earlier@example.com> <message@example.com>",
+        send_review_email=True,
+    )
+
+    assert ContractReviewJob.from_message(job.to_message()) == job
+
+
 def test_queue_topology_uses_rabbitmq_settings() -> None:
     settings = Settings(
         rabbitmq_exchange="contract.events.test",

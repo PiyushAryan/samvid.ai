@@ -67,6 +67,10 @@ class EmailIngestionService:
                     self.processing_service.enqueue_local_file(
                         queue=self.queue,
                         send_review_email=send_response,
+                        response_address=message.response_address or message.from_address,
+                        original_subject=message.subject,
+                        in_reply_to=message.original_message_id,
+                        references=message.references,
                         **arguments,
                     )
                     if self.queue is not None
@@ -114,9 +118,16 @@ class EmailIngestionService:
                 body_parts.append(result.message)
         self.sender.send(
             OutboundEmailMessage(
-                to_address=message.from_address,
+                to_address=message.response_address or message.from_address,
                 from_address=self.settings.email_from_address,
-                subject=f"Samvid review: {message.subject or 'contract'}",
+                subject=_reply_subject(message.subject),
                 text="\n\n---\n\n".join(body_parts),
+                in_reply_to=message.original_message_id,
+                references=message.references,
             )
         )
+
+
+def _reply_subject(original_subject: str | None) -> str:
+    subject = (original_subject or "Contract review").strip()
+    return subject if subject.casefold().startswith("re:") else f"Re: {subject}"

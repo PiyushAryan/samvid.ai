@@ -30,7 +30,6 @@ def test_production_app_requires_basic_auth_and_sets_security_headers(monkeypatc
         app_access_username="samvid",
         app_access_password="private-beta-password",
         allowed_hosts=("testserver",),
-        inbound_email_secret="inbound-email-secret",
         database_url="postgresql://user:pass@database/samvid",
         local_storage_dir=tmp_path / "contracts",
         inbound_attachment_dir=tmp_path / "inbound",

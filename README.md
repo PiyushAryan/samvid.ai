@@ -21,25 +21,9 @@ uv sync --extra api --extra rabbitmq --extra dev
 uv run uvicorn contractmate.app:create_app --factory --reload --port 8000
 ```
 
-Example local inbound email payload:
-
-```json
-{
-  "message_id": "email-1",
-  "thread_id": "thread-1",
-  "from_address": "sender@example.com",
-  "to_addresses": ["contracts@example.com"],
-  "subject": "Please review this agreement",
-  "text": "Can you review the attached contract?",
-  "attachments": [
-    {
-      "filename": "vendor-agreement.txt",
-      "mime_type": "text/plain",
-      "local_path": "tests/fixtures/vendor-agreement.txt"
-    }
-  ]
-}
-```
+`POST /email/inbound` accepts signed Resend `email.received` events. It is not a
+general JSON upload endpoint. For local webhook testing, expose port 8000 through
+an HTTPS tunnel and temporarily point a Resend webhook at the tunnel URL.
 
 Local development defaults to PostgreSQL and filesystem storage under
 `.contractmate/`. Production integrations are isolated behind adapters for
@@ -57,7 +41,7 @@ Implemented MVP slice
 - Agno-backed structured extraction using OpenAIChat and typed output validation.
 - Evidence validator that removes unsupported risk findings.
 - Workflow state machine and durable local repository matching the planned entities.
-- Inbound email webhook parsing and SMTP/dry-run response delivery.
+- Signed Resend inbound retrieval, attachment filtering, idempotency and threaded replies.
 - Human approval records that permit one final decision per proposed action.
 - RabbitMQ job message contract and topology adapter for durable async processing.
 - Control Plane runtime status endpoint protected by `OS_SECURITY_KEY` or JWT.
@@ -85,6 +69,9 @@ SARVAM_OCR_TIMEOUT_SECONDS=600
 AUTO_SEND_REVIEW_EMAIL=true
 EMAIL_FROM_ADDRESS=onboarding@resend.dev
 RESEND_API_KEY=re_xxxxxxxxx
+RESEND_INBOUND_ENABLED=false
+RESEND_WEBHOOK_SECRET=
+RESEND_INBOUND_RECIPIENTS=contracts@oldimeluub.resend.app
 OS_SECURITY_KEY=
 JWT_VERIFICATION_KEY=
 ```
@@ -145,6 +132,29 @@ is reviewed and a response email is sent or dry-run printed. Binding legal
 actions such as signing, accepting terms or sending negotiation commitments
 still require an explicit approval workflow.
 
+Resend inbound receiving
+------------------------
+
+The managed inbox is `contracts@oldimeluub.resend.app`. In the Resend dashboard,
+create a webhook for only the `email.received` event with this endpoint:
+
+```text
+https://samvid-api.vercel.app/email/inbound
+```
+
+Copy the webhook signing secret into the backend project as
+`RESEND_WEBHOOK_SECRET`. The endpoint verifies the raw Svix signature before
+parsing JSON, accepts only `RESEND_INBOUND_RECIPIENTS`, retrieves the complete
+message and signed attachment URLs from Resend, and downloads at most five
+non-inline PDF, DOCX, or TXT files. Files over `MAX_FILE_SIZE_MB` and unsupported
+attachments are acknowledged and ignored. Transient Resend, storage, database,
+or RabbitMQ failures return HTTP 500 so Resend can retry.
+
+Completed deliveries are recorded in `inbound_email_events`. Failed deliveries
+can retry immediately, while processing leases can be reclaimed after ten
+minutes. The original Message-ID and References headers travel with the RabbitMQ
+job so the EC2 worker can send a threaded `Re:` response after review.
+
 Production deployment
 ---------------------
 
@@ -181,19 +191,33 @@ APP_BASE_URL=https://your-backend-project.vercel.app
 DATABASE_URL=<managed PostgreSQL connection string>
 DATABASE_URL_UNPOOLED=<direct Neon connection string>
 AUTO_INITIALIZE_DATABASE=false
-CONTRACT_PROCESSING_MODE=sync
+CONTRACT_PROCESSING_MODE=rabbitmq
+RABBITMQ_URL=<CloudAMQP amqps connection string>
+RABBITMQ_EXCHANGE=contract.events
+RABBITMQ_REVIEW_QUEUE=contract.review.q
+RABBITMQ_RETRY_QUEUE=contract.review.retry.q
+RABBITMQ_DLQ=contract.review.dlq
 DOCUMENT_STORAGE_BACKEND=vercel_blob
 INBOUND_ATTACHMENT_DIR=/tmp/samvid/inbound-email
-INBOUND_EMAIL_SECRET=<strong webhook secret>
 OPENAI_API_KEY=<secret>
 ENABLE_OCR=true
 SARVAM_API_KEY=<secret>
 SARVAM_OCR_TIMEOUT_SECONDS=240
 AUTO_SEND_REVIEW_EMAIL=true
-EMAIL_FROM_ADDRESS=contracts@your-domain.example
+EMAIL_FROM_ADDRESS=onboarding@resend.dev
 RESEND_API_KEY=<secret>
+RESEND_INBOUND_ENABLED=true
+RESEND_WEBHOOK_SECRET=<Resend webhook signing secret>
+RESEND_INBOUND_RECIPIENTS=contracts@oldimeluub.resend.app
 MAX_FILE_SIZE_MB=20
 ```
+
+`RESEND_WEBHOOK_SECRET` belongs only on the Vercel API. The worker needs
+`RESEND_API_KEY` and `EMAIL_FROM_ADDRESS` for outbound review replies, but it does
+not receive the webhook secret or inbound recipient allowlist. With
+`onboarding@resend.dev`, Resend permits test delivery only to the email address
+associated with the Resend account. Keep `AUTO_SEND_REVIEW_EMAIL=true` only for
+those tests until a sending domain is owned and verified.
 
 Connect the same private Blob store to each project so Vercel injects
 `BLOB_STORE_ID` and its short-lived OIDC credential. For a backend hosted outside
@@ -246,6 +270,19 @@ docker compose -f docker-compose.worker.yml up -d --no-build
 
 For later releases, pull the repository changes and repeat the `pull` and `up`
 commands. The publish workflow handles image builds; EC2 does not build images.
+
+For the inbound-email release, deploy in this order:
+
+1. Deploy the backend manually from the repository root with `vercel --prod`.
+2. Push the commit and wait for CI to publish the updated GHCR worker image.
+3. On EC2, pull and recreate the worker with the Compose commands above.
+4. Add `RESEND_INBOUND_ENABLED`, `RESEND_WEBHOOK_SECRET`, and `RESEND_INBOUND_RECIPIENTS` to the Vercel API and redeploy.
+5. Create the Resend webhook, then email a small supported contract from the Resend account address.
+
+Verify the webhook returns HTTP 200, CloudAMQP receives the review job, the EC2
+worker completes it, Neon contains the review, the workspace displays it, and
+the threaded reply arrives. Because this Vercel project is not connected to
+GitHub, environment or code changes require an explicit production deployment.
 
 The production worker is sized for a 2 vCPU, 2 GiB `t3.small`. The container is
 limited to 1.5 CPUs and 1.5 GiB RAM, leaving capacity for the host OS and Docker.
