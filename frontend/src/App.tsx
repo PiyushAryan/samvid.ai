@@ -41,7 +41,8 @@ import type {
 } from "./types";
 
 const signingStatuses: Array<SigningRequestStatus | ""> = ["", "not_started", "in_progress", "completed", "declined", "expired", "cancelled"];
-const reviewStatuses = ["", "received", "parsing", "analysing", "review_ready", "ocr_required", "parse_failed", "analysis_failed"];
+const reviewStatuses = ["", "received", "validating", "queued", "parsing", "analysing", "validating_evidence", "review_ready", "ocr_required", "parse_failed", "analysis_failed"];
+const activeReviewStatuses = new Set(["received", "validating", "queued", "parsing", "analysing", "validating_evidence"]);
 const signerStatuses: SignerStatus[] = ["pending", "sent", "viewed", "signed", "declined", "expired", "cancelled"];
 const terminalSignerStatuses: SignerStatus[] = ["signed", "declined", "expired", "cancelled"];
 
@@ -115,7 +116,9 @@ export function ContractsPage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const contractsQuery = useQuery({
     queryKey: ["contracts", search, reviewStatus, signingStatus],
-    queryFn: () => listContracts({ search, reviewStatus, signingStatus })
+    queryFn: () => listContracts({ search, reviewStatus, signingStatus }),
+    refetchInterval: (query) =>
+      query.state.data?.some((contract) => activeReviewStatuses.has(contract.review_status)) ? 3000 : false
   });
 
   return (
@@ -181,7 +184,9 @@ export function ContractDetailPage() {
   const contractQuery = useQuery({
     queryKey: ["contract", contractId],
     queryFn: () => getContract(contractId!),
-    enabled: Boolean(contractId)
+    enabled: Boolean(contractId),
+    refetchInterval: (query) =>
+      query.state.data && activeReviewStatuses.has(query.state.data.review_status) ? 3000 : false
   });
 
   return (

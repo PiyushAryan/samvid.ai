@@ -1,4 +1,4 @@
-export type ReviewStatus = "received" | "parsing" | "analysing" | "review_ready" | "ocr_required" | "parse_failed" | "rejected_file";
+export type ReviewStatus = "received" | "validating" | "queued" | "parsing" | "analysing" | "validating_evidence" | "review_ready" | "ocr_required" | "parse_failed" | "analysis_failed" | "rejected_file";
 
 export type SignerStatus = "pending" | "sent" | "viewed" | "signed" | "declined" | "expired" | "cancelled";
 

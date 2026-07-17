@@ -3,30 +3,41 @@ from collections.abc import Iterator
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any, BinaryIO
+from urllib.parse import quote
 from uuid import uuid4
 
 from contractmate.db.repositories.contracts import ContractRepository
 from contractmate.db.repositories.signing import SigningConflict, SigningError, SigningNotFound, SigningRepository
 from contractmate.db.session import connect
-from contractmate.schemas.contracts import ContractReview
+from contractmate.schemas.contracts import ContractBlobUpload, ContractReview
 from contractmate.schemas.signing import SignerCreate, SignerStatusEventCreate, SigningRequestCreate, SigningRequestStatus
 from contractmate.services.audit_service import AuditService
 from contractmate.services.contract_processing import ContractProcessingService
 from contractmate.services.review_service import ReviewService
 from contractmate.settings import Settings
-from contractmate.tools.document_storage import LocalDocumentStorage
+from contractmate.tools.document_storage import document_storage_from_settings
 from contractmate.parsers.pdfmuse_parser import PdfMuseDocumentParser
 from contractmate.services.contract_processing import _ocr_backend_from_settings
+from contractmate.workers.queue import RabbitMQContractQueue
+from contractmate.workflows.states import WorkflowState
+from vercel.blob.errors import BlobError
 
 
 def create_api_router(settings: Settings):
     try:
         from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-        from fastapi.responses import FileResponse
+        from fastapi.responses import JSONResponse, Response
     except ModuleNotFoundError as exc:
         raise RuntimeError("Install the 'api' extra to run the HTTP app: uv sync --extra api") from exc
 
     router = APIRouter(prefix="/api")
+    if settings.contract_processing_mode not in {"sync", "rabbitmq"}:
+        raise ValueError("CONTRACT_PROCESSING_MODE must be 'sync' or 'rabbitmq'.")
+    review_queue = (
+        RabbitMQContractQueue.from_settings(settings)
+        if settings.contract_processing_mode == "rabbitmq"
+        else None
+    )
 
     def db_connection() -> Iterator[Any]:
         connection = connect(settings.database_url)
@@ -80,18 +91,86 @@ def create_api_router(settings: Settings):
                 settings=settings,
                 repository=ContractRepository(connection),
                 audit=AuditService(connection),
-                storage=LocalDocumentStorage(settings.local_storage_dir),
+                storage=document_storage_from_settings(settings),
                 parser=PdfMuseDocumentParser(),
                 ocr_backend=_ocr_backend_from_settings(settings),
                 review_service=ReviewService.from_settings(settings),
             )
-            result = service.review_local_file(
-                file_path=temp_path,
-                workspace_id=workspace_id(),
-                email_thread_id=f"samvid-upload-{uuid4()}",
-                requested_by=actor_email(),
-                declared_mime_type=file.content_type,
+            arguments = {
+                "file_path": temp_path,
+                "workspace_id": workspace_id(),
+                "email_thread_id": f"samvid-upload-{uuid4()}",
+                "requested_by": actor_email(),
+                "declared_mime_type": file.content_type,
+            }
+            result = (
+                service.enqueue_local_file(queue=review_queue, **arguments)
+                if review_queue is not None
+                else service.review_local_file(**arguments)
             )
+            if result.status is WorkflowState.QUEUED:
+                return JSONResponse(status_code=202, content=result.model_dump(mode="json"))
+            return result.model_dump(mode="json")
+        finally:
+            temp_path.unlink(missing_ok=True)
+
+    @router.post("/contracts/from-blob")
+    def upload_contract_from_blob(
+        payload: ContractBlobUpload,
+        connection: Any = Depends(db_connection),
+    ) -> dict[str, Any]:
+        if settings.document_storage_backend != "vercel_blob":
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "blob_storage_disabled", "message": "Direct Blob uploads are not enabled."},
+            )
+
+        storage = document_storage_from_settings(settings)
+        try:
+            metadata = storage.stat_contract_file(payload.pathname)
+        except (BlobError, FileNotFoundError) as exc:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "blob_not_found", "message": "Uploaded document was not found."},
+            ) from exc
+        if metadata.size_bytes > settings.max_file_size_mb * 1024 * 1024:
+            raise HTTPException(
+                status_code=413,
+                detail={"code": "file_too_large", "message": f"File exceeds {settings.max_file_size_mb} MB limit."},
+            )
+
+        suffix = Path(payload.original_filename).suffix
+        with NamedTemporaryFile(prefix="samvid-blob-", suffix=suffix, delete=False) as tmp:
+            temp_path = Path(tmp.name)
+        try:
+            storage.download_contract_file(metadata.object_key, temp_path)
+            service = ContractProcessingService(
+                settings=settings,
+                repository=ContractRepository(connection),
+                audit=AuditService(connection),
+                storage=storage,
+                parser=PdfMuseDocumentParser(),
+                ocr_backend=_ocr_backend_from_settings(settings),
+                review_service=ReviewService.from_settings(settings),
+            )
+            arguments = {
+                "file_path": temp_path,
+                "workspace_id": workspace_id(),
+                "email_thread_id": f"samvid-upload-{uuid4()}",
+                "requested_by": actor_email(),
+                "declared_mime_type": metadata.content_type or payload.content_type,
+                "original_filename": payload.original_filename,
+                "stored_object_key": metadata.object_key,
+            }
+            result = (
+                service.enqueue_local_file(queue=review_queue, **arguments)
+                if review_queue is not None
+                else service.review_local_file(**arguments)
+            )
+            if not result.contract_id:
+                storage.delete_contract_file(metadata.object_key)
+            if result.status is WorkflowState.QUEUED:
+                return JSONResponse(status_code=202, content=result.model_dump(mode="json"))
             return result.model_dump(mode="json")
         finally:
             temp_path.unlink(missing_ok=True)
@@ -126,18 +205,19 @@ def create_api_router(settings: Settings):
         row = _get_contract_row(connection, workspace_id=workspace_id(), contract_id=contract_id)
         if row is None or not row["s3_object_key"]:
             raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Document not found."})
-        root = settings.local_storage_dir.resolve()
-        file_path = (root / row["s3_object_key"]).resolve()
-        if root not in file_path.parents and file_path != root:
-            raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Document not found."})
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Document not found."})
+        try:
+            content = document_storage_from_settings(settings).read_contract_file(row["s3_object_key"])
+        except (BlobError, FileNotFoundError) as exc:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "not_found", "message": "Document not found."},
+            ) from exc
         disposition = "inline" if row["mime_type"] == "application/pdf" else "attachment"
-        return FileResponse(
-            file_path,
+        filename = str(row["original_filename"] or "contract")
+        return Response(
+            content=content,
             media_type=row["mime_type"],
-            filename=row["original_filename"],
-            content_disposition_type=disposition,
+            headers={"Content-Disposition": f"{disposition}; filename*=UTF-8''{quote(filename)}"},
         )
 
     @router.post("/contracts/{contract_id}/signing-requests")

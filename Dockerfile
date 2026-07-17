@@ -15,10 +15,10 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --extra api --no-install-project
+    uv sync --frozen --no-dev --extra api --extra rabbitmq --no-install-project
 COPY src/ ./src/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev --extra api --no-editable
+    uv sync --locked --no-dev --extra api --extra rabbitmq --no-editable
 
 FROM python:3.12.10-slim-bookworm AS runtime
 ENV PATH="/app/.venv/bin:$PATH" \

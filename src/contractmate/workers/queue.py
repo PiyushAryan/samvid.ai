@@ -24,6 +24,7 @@ class ContractReviewJob:
     workspace_id: str
     email_thread_id: str
     requested_by: str
+    send_review_email: bool = False
     attempt: int = 1
 
     def to_message(self) -> dict:
@@ -34,6 +35,7 @@ class ContractReviewJob:
             "workspace_id": self.workspace_id,
             "email_thread_id": self.email_thread_id,
             "requested_by": self.requested_by,
+            "send_review_email": self.send_review_email,
             "attempt": self.attempt,
         }
 
@@ -46,6 +48,7 @@ class ContractReviewJob:
             workspace_id=str(message["workspace_id"]),
             email_thread_id=str(message["email_thread_id"]),
             requested_by=str(message["requested_by"]),
+            send_review_email=bool(message.get("send_review_email", False)),
             attempt=int(message.get("attempt", 1)),
         )
 
@@ -82,6 +85,7 @@ class ContractQueue(Protocol):
         workspace_id: str,
         email_thread_id: str,
         requested_by: str,
+        send_review_email: bool = False,
     ) -> ContractReviewJob:
         ...
 
@@ -98,6 +102,7 @@ class InMemoryContractQueue:
         workspace_id: str,
         email_thread_id: str,
         requested_by: str,
+        send_review_email: bool = False,
     ) -> ContractReviewJob:
         job = ContractReviewJob(
             job_id=str(uuid4()),
@@ -106,6 +111,7 @@ class InMemoryContractQueue:
             workspace_id=workspace_id,
             email_thread_id=email_thread_id,
             requested_by=requested_by,
+            send_review_email=send_review_email,
         )
         self._jobs.append(job)
         return job
@@ -124,9 +130,10 @@ class RabbitMQContractQueue:
     database transactions around job processing.
     """
 
-    def __init__(self, *, rabbitmq_url: str, topology: QueueTopology) -> None:
+    def __init__(self, *, rabbitmq_url: str, topology: QueueTopology, heartbeat_seconds: int = 600) -> None:
         self.rabbitmq_url = rabbitmq_url
         self.topology = topology
+        self.heartbeat_seconds = heartbeat_seconds
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "RabbitMQContractQueue":
@@ -135,6 +142,7 @@ class RabbitMQContractQueue:
         return cls(
             rabbitmq_url=settings.rabbitmq_url,
             topology=QueueTopology.from_settings(settings),
+            heartbeat_seconds=settings.rabbitmq_heartbeat_seconds,
         )
 
     def declare_topology(self) -> None:
@@ -145,6 +153,9 @@ class RabbitMQContractQueue:
         finally:
             connection.close()
 
+    def check_ready(self) -> None:
+        self.declare_topology()
+
     def enqueue(
         self,
         *,
@@ -153,6 +164,7 @@ class RabbitMQContractQueue:
         workspace_id: str,
         email_thread_id: str,
         requested_by: str,
+        send_review_email: bool = False,
     ) -> ContractReviewJob:
         job = ContractReviewJob(
             job_id=str(uuid4()),
@@ -161,6 +173,7 @@ class RabbitMQContractQueue:
             workspace_id=workspace_id,
             email_thread_id=email_thread_id,
             requested_by=requested_by,
+            send_review_email=send_review_email,
         )
         self.publish(job, routing_key=self.topology.review_routing_key)
         return job
@@ -202,7 +215,10 @@ class RabbitMQContractQueue:
 
     def _connection(self):
         pika = self._pika()
-        return pika.BlockingConnection(pika.URLParameters(self.rabbitmq_url))
+        parameters = pika.URLParameters(self.rabbitmq_url)
+        parameters.heartbeat = self.heartbeat_seconds
+        parameters.blocked_connection_timeout = 30
+        return pika.BlockingConnection(parameters)
 
     def _declare_topology(self, channel) -> None:
         channel.exchange_declare(exchange=self.topology.exchange, exchange_type="topic", durable=True)
@@ -280,6 +296,7 @@ class RabbitMQDelivery:
             workspace_id=self.job.workspace_id,
             email_thread_id=self.job.email_thread_id,
             requested_by=self.job.requested_by,
+            send_review_email=self.job.send_review_email,
             attempt=self.job.attempt + 1,
         )
         try:

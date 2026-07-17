@@ -10,6 +10,7 @@ def test_contract_review_job_round_trips_without_contract_text() -> None:
         workspace_id="workspace-1",
         email_thread_id="email-thread-1",
         requested_by="reviewer@example.com",
+        send_review_email=True,
         attempt=2,
     )
 
@@ -24,6 +25,7 @@ def test_contract_review_job_round_trips_without_contract_text() -> None:
         "workspace_id",
         "email_thread_id",
         "requested_by",
+        "send_review_email",
         "attempt",
     }
 

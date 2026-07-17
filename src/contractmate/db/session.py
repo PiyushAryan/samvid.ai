@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 from contractmate.db.models import POSTGRES_SCHEMA_SQL, SQLITE_SCHEMA_SQL
+
+_initialized_postgres_schemas: set[str] = set()
+_schema_lock = Lock()
 
 
 def sqlite_path_from_url(database_url: str) -> Path:
@@ -39,10 +43,27 @@ def connect_postgres(database_url: str) -> Any:
     except ModuleNotFoundError as exc:
         raise RuntimeError("Install psycopg to use PostgreSQL: uv sync") from exc
 
-    connection = psycopg.connect(normalize_postgres_url(database_url), row_factory=dict_row)
-    connection.execute(POSTGRES_SCHEMA_SQL)
-    connection.commit()
-    return connection
+    return psycopg.connect(normalize_postgres_url(database_url), row_factory=dict_row)
+
+
+def initialize_database(database_url: str, *, schema_database_url: str | None = None) -> None:
+    if not is_postgres_url(database_url):
+        connection = connect_sqlite(database_url)
+        connection.close()
+        return
+
+    migration_url = schema_database_url or database_url
+    normalized_url = normalize_postgres_url(migration_url)
+    with _schema_lock:
+        if normalized_url in _initialized_postgres_schemas:
+            return
+        connection = connect_postgres(migration_url)
+        try:
+            connection.execute(POSTGRES_SCHEMA_SQL)
+            connection.commit()
+        finally:
+            connection.close()
+        _initialized_postgres_schemas.add(normalized_url)
 
 
 def is_postgres_url(database_url: str) -> bool:

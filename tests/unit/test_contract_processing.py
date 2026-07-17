@@ -6,6 +6,7 @@ from contractmate.schemas.documents import DocumentPage, DocumentSpan, ParsedDoc
 from contractmate.schemas.contracts import ContractReview, ContractRisk, Evidence, RiskSeverity
 from contractmate.services.contract_processing import ContractProcessingService
 from contractmate.settings import Settings
+from contractmate.workers.queue import InMemoryContractQueue
 from contractmate.workflows.states import WorkflowState
 
 
@@ -90,6 +91,52 @@ def test_contract_processing_uses_sarvam_for_scanned_pdf(monkeypatch, tmp_path: 
         email_thread_id="email-thread-ocr",
         requested_by="reviewer@example.com",
     )
+
+    assert result.status is WorkflowState.REVIEW_READY
+    assert result.review is not None
+    assert result.review.risks[0].title == "Unlimited liability"
+
+
+def test_queued_contract_is_reviewed_from_durable_storage(monkeypatch, tmp_path: Path) -> None:
+    contract = tmp_path / "queued-vendor-agreement.txt"
+    contract.write_text(
+        "This Vendor Agreement is made between Acme Ltd and Example Technologies. "
+        "The Supplier's liability under this Agreement shall be unlimited.",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(AgnoContractReviewAgent, "create_contract_review", _fake_contract_review)
+    settings = Settings(
+        database_url=f"sqlite:///{tmp_path / 'contractmate.db'}",
+        local_storage_dir=tmp_path / "files",
+        model_provider="openai",
+        model_api_key="test-key",
+    )
+    queue = InMemoryContractQueue()
+    producer = ContractProcessingService.local(settings)
+    try:
+        queued = producer.enqueue_local_file(
+            queue=queue,
+            file_path=contract,
+            workspace_id="T1",
+            email_thread_id="email-thread-queued",
+            requested_by="reviewer@example.com",
+        )
+    finally:
+        producer.close()
+
+    job = queue.receive()
+    assert job is not None
+    assert queued.status is WorkflowState.QUEUED
+
+    consumer = ContractProcessingService.local(settings)
+    try:
+        result = consumer.review_stored_contract(
+            contract_id=job.contract_id,
+            contract_version_id=job.contract_version_id,
+            workspace_id=job.workspace_id,
+        )
+    finally:
+        consumer.close()
 
     assert result.status is WorkflowState.REVIEW_READY
     assert result.review is not None

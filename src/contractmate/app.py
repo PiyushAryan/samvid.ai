@@ -2,15 +2,18 @@ import base64
 import binascii
 import hmac
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 from contractmate.api.routes import create_api_router
-from contractmate.db.session import connect
+from contractmate.db.session import connect, initialize_database
 from contractmate.email.messages import InboundEmailMessage
 from contractmate.security.control_plane import authorize_control_plane_request
 from contractmate.services.email_ingestion import EmailIngestionService
 from contractmate.settings import Settings
+from contractmate.tools.document_storage import document_storage_from_settings
+from contractmate.workers.queue import RabbitMQContractQueue
 
 logger = logging.getLogger(__name__)
 
@@ -27,12 +30,20 @@ def create_app(settings: Settings | None = None):
 
     settings = settings or Settings.from_env()
     settings.validate_runtime()
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        if settings.auto_initialize_database:
+            initialize_database(settings.database_url, schema_database_url=settings.database_direct_url)
+        yield
+
     app = FastAPI(
         title="Samvid",
         version="0.1.0",
         docs_url=None if settings.is_production else "/docs",
         redoc_url=None if settings.is_production else "/redoc",
         openapi_url=None if settings.is_production else "/openapi.json",
+        lifespan=lifespan,
     )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.allowed_hosts))
     if settings.app_env.casefold() in {"development", "dev", "local"}:
@@ -104,12 +115,14 @@ def create_app(settings: Settings | None = None):
                 "scopes": sorted(principal.scopes),
             },
             "rabbitmq": {
+                "enabled": settings.contract_processing_mode == "rabbitmq",
                 "exchange": settings.rabbitmq_exchange,
                 "review_queue": settings.rabbitmq_review_queue,
                 "retry_queue": settings.rabbitmq_retry_queue,
                 "dlq": settings.rabbitmq_dlq,
                 "retry_ttl_ms": settings.rabbitmq_retry_ttl_ms,
                 "max_attempts": settings.rabbitmq_max_attempts,
+                "heartbeat_seconds": settings.rabbitmq_heartbeat_seconds,
             },
         }
 
@@ -123,11 +136,15 @@ def create_app(settings: Settings | None = None):
             x_contractmate_email_secret or "",
         ):
             raise HTTPException(status_code=401, detail="Invalid inbound email secret")
-        result = EmailIngestionService.local(settings).process_inbound_email(
-            message,
-            send_response=settings.auto_send_review_email,
-        )
-        return result.model_dump(mode="json")
+        service = EmailIngestionService.local(settings)
+        try:
+            result = service.process_inbound_email(
+                message,
+                send_response=settings.auto_send_review_email,
+            )
+            return result.model_dump(mode="json")
+        finally:
+            service.close()
 
     @app.get("/api/{full_path:path}", include_in_schema=False)
     def unknown_api_route(full_path: str):
@@ -190,7 +207,9 @@ def _check_runtime_dependencies(settings: Settings) -> None:
     finally:
         connection.close()
 
-    for directory in (settings.local_storage_dir, settings.inbound_attachment_dir):
-        directory.mkdir(parents=True, exist_ok=True)
-        with NamedTemporaryFile(prefix=".samvid-ready-", dir=directory):
-            pass
+    document_storage_from_settings(settings).check_ready()
+    if settings.contract_processing_mode == "rabbitmq":
+        RabbitMQContractQueue.from_settings(settings).check_ready()
+    settings.inbound_attachment_dir.mkdir(parents=True, exist_ok=True)
+    with NamedTemporaryFile(prefix=".samvid-ready-", dir=settings.inbound_attachment_dir):
+        pass

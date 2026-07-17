@@ -8,6 +8,7 @@ from contractmate.email.interface import EmailSender
 from contractmate.email.messages import OutboundEmailMessage
 from contractmate.services.contract_processing import ContractProcessingService
 from contractmate.settings import Settings
+from contractmate.workers.contract_worker import ContractWorker
 
 
 def main() -> None:
@@ -22,6 +23,9 @@ def main() -> None:
 
     test_email = subcommands.add_parser("send-test-email", help="Send a Resend configuration test")
     test_email.add_argument("--to", required=True, help="Recipient email address")
+
+    worker = subcommands.add_parser("worker", help="Run the RabbitMQ contract review worker")
+    worker.add_argument("--poll-interval", type=float, default=1.0, help="Seconds to wait when the queue is empty")
 
     args = parser.parse_args()
     if args.command == "review":
@@ -49,6 +53,12 @@ def main() -> None:
             )
         )
         print(f"Test email sent to {args.to}")
+        return
+
+    if args.command == "worker":
+        settings = Settings.from_env()
+        settings.validate_runtime()
+        ContractWorker.from_settings(settings).run_forever(poll_interval_seconds=max(args.poll_interval, 0.1))
         return
 
     parser.print_help()

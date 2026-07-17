@@ -1,3 +1,5 @@
+import { upload } from "@vercel/blob/client";
+
 import type {
   ContractDetail,
   ContractListItem,
@@ -99,6 +101,10 @@ export function appendSignerEvent(signerId: string, status: SignerStatus, note: 
 }
 
 export function uploadContract(file: File, onProgress: (percent: number) => void): Promise<unknown> {
+  if (import.meta.env.PROD) {
+    return uploadContractThroughBlob(file, onProgress);
+  }
+
   const form = new FormData();
   form.append("file", file);
   return new Promise((resolve, reject) => {
@@ -122,4 +128,26 @@ export function uploadContract(file: File, onProgress: (percent: number) => void
     xhr.onerror = () => reject(new ApiError(0, { message: "Upload failed." }));
     xhr.send(form);
   });
+}
+
+async function uploadContractThroughBlob(file: File, onProgress: (percent: number) => void): Promise<unknown> {
+  const safeFilename = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+  const blob = await upload(`contracts/${crypto.randomUUID()}/${safeFilename}`, file, {
+    access: "private",
+    handleUploadUrl: "/api/blob-upload",
+    contentType: file.type || undefined,
+    multipart: file.size > 5 * 1024 * 1024,
+    onUploadProgress: ({ percentage }) => onProgress(Math.min(90, Math.round(percentage * 0.9)))
+  });
+  onProgress(92);
+  const result = await request<unknown>("/api/contracts/from-blob", {
+    method: "POST",
+    body: JSON.stringify({
+      pathname: blob.pathname,
+      original_filename: file.name,
+      content_type: file.type || blob.contentType || null
+    })
+  });
+  onProgress(100);
+  return result;
 }

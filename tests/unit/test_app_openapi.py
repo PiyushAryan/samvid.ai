@@ -64,3 +64,56 @@ def test_ready_checks_database_and_storage(tmp_path) -> None:
     assert response.json() == {"status": "ready", "service": "samvid"}
     assert settings.local_storage_dir.is_dir()
     assert settings.inbound_attachment_dir.is_dir()
+
+
+def test_app_can_skip_database_initialization(monkeypatch) -> None:
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    import contractmate.app as app_module
+    from contractmate.settings import Settings
+
+    def fail_if_called(*_args, **_kwargs) -> None:
+        raise AssertionError("database initialization should be skipped")
+
+    monkeypatch.setattr(app_module, "initialize_database", fail_if_called)
+    settings = Settings(auto_initialize_database=False)
+
+    response = TestClient(app_module.create_app(settings)).get("/health")
+
+    assert response.status_code == 200
+
+
+def test_rabbitmq_mode_upload_persists_and_returns_queued(monkeypatch, tmp_path) -> None:
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from contractmate.app import create_app
+    from contractmate.settings import Settings
+    from contractmate.workers.queue import InMemoryContractQueue, RabbitMQContractQueue
+
+    queue = InMemoryContractQueue()
+    monkeypatch.setattr(
+        RabbitMQContractQueue,
+        "from_settings",
+        classmethod(lambda _cls, _settings: queue),
+    )
+    settings = Settings(
+        database_url=f"sqlite:///{tmp_path / 'samvid.db'}",
+        local_storage_dir=tmp_path / "contracts",
+        inbound_attachment_dir=tmp_path / "inbound",
+        model_api_key="model-key",
+        rabbitmq_url="amqp://guest:guest@localhost:5672/%2F",
+        contract_processing_mode="rabbitmq",
+    )
+
+    response = TestClient(create_app(settings)).post(
+        "/api/contracts",
+        files={"file": ("vendor.txt", b"Vendor agreement text", "text/plain")},
+    )
+
+    assert response.status_code == 202
+    assert response.json()["status"] == "queued"
+    job = queue.receive()
+    assert job is not None
+    assert job.contract_id == response.json()["contract_id"]

@@ -8,6 +8,7 @@ def test_settings_default_database_is_postgres() -> None:
     settings = Settings()
 
     assert settings.database_url.startswith("postgresql://")
+    assert settings.auto_initialize_database is True
     assert settings.model_provider == "openai"
     assert settings.model_id == "gpt-5-mini"
 
@@ -37,3 +38,29 @@ def test_production_settings_fail_fast_when_secrets_are_missing(tmp_path) -> Non
 
     with pytest.raises(ValueError, match="APP_ACCESS_PASSWORD"):
         settings.validate_runtime()
+
+
+def test_production_settings_accept_vercel_blob_oidc(tmp_path) -> None:
+    settings = Settings(
+        app_env="production",
+        app_access_password="private-beta-password",
+        inbound_email_secret="inbound-email-secret",
+        database_url="postgresql://user:pass@database/samvid",
+        document_storage_backend="vercel_blob",
+        local_storage_dir=tmp_path / "unused-local-storage",
+        inbound_attachment_dir=tmp_path / "inbound",
+        blob_store_id="store_contracts",
+        vercel_oidc_token="oidc-token",
+        model_api_key="model-key",
+        auto_send_review_email=False,
+    )
+
+    settings.validate_runtime()
+
+
+def test_auto_initialize_database_can_be_disabled_from_env(monkeypatch) -> None:
+    monkeypatch.setenv("AUTO_INITIALIZE_DATABASE", "false")
+
+    settings = Settings.from_env()
+
+    assert settings.auto_initialize_database is False

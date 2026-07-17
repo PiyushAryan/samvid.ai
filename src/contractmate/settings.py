@@ -22,8 +22,14 @@ class Settings(BaseModel):
     smtp_password: str | None = None
     smtp_use_tls: bool = True
     database_url: str = "postgresql://contractmate:contractmate@localhost:5432/contractmate"
+    database_direct_url: str | None = None
+    auto_initialize_database: bool = True
+    document_storage_backend: str = "local"
     local_storage_dir: Path = Path(".contractmate/files")
     inbound_attachment_dir: Path = Path(".contractmate/inbound-email")
+    blob_read_write_token: str | None = None
+    blob_store_id: str | None = None
+    vercel_oidc_token: str | None = None
     s3_bucket: str | None = None
     aws_region: str = "us-east-1"
     rabbitmq_url: str | None = None
@@ -33,6 +39,8 @@ class Settings(BaseModel):
     rabbitmq_dlq: str = "contract.review.dlq"
     rabbitmq_retry_ttl_ms: int = Field(default=60_000, ge=1)
     rabbitmq_max_attempts: int = Field(default=3, ge=1)
+    rabbitmq_heartbeat_seconds: int = Field(default=600, ge=0)
+    contract_processing_mode: str = "sync"
     model_provider: str = "openai"
     model_id: str = "gpt-5-mini"
     model_api_key: str | None = None
@@ -62,6 +70,10 @@ class Settings(BaseModel):
         errors: list[str] = []
         if not self.database_url.startswith(("postgres://", "postgresql://", "postgresql+psycopg://")):
             errors.append("DATABASE_URL must point to PostgreSQL")
+        if self.database_direct_url and not self.database_direct_url.startswith(
+            ("postgres://", "postgresql://", "postgresql+psycopg://")
+        ):
+            errors.append("DATABASE_URL_UNPOOLED must point to PostgreSQL")
         if not self.model_api_key:
             errors.append("OPENAI_API_KEY or MODEL_API_KEY is required")
         if not self.inbound_email_secret or len(self.inbound_email_secret) < 16:
@@ -72,10 +84,20 @@ class Settings(BaseModel):
             errors.append("SARVAM_API_KEY is required when OCR is enabled")
         if self.auto_send_review_email and not (self.resend_api_key or self.smtp_host):
             errors.append("RESEND_API_KEY or SMTP_HOST is required when automatic email delivery is enabled")
-        if not self.local_storage_dir.is_absolute():
-            errors.append("LOCAL_STORAGE_DIR must be an absolute persistent path")
+        if self.document_storage_backend not in {"local", "vercel_blob"}:
+            errors.append("DOCUMENT_STORAGE_BACKEND must be 'local' or 'vercel_blob'")
+        if self.document_storage_backend == "local" and not self.local_storage_dir.is_absolute():
+            errors.append("LOCAL_STORAGE_DIR must be an absolute persistent path when local storage is enabled")
+        if self.document_storage_backend == "vercel_blob" and not (
+            self.blob_read_write_token or (self.blob_store_id and self.vercel_oidc_token)
+        ):
+            errors.append("Vercel Blob requires BLOB_READ_WRITE_TOKEN or Vercel OIDC credentials")
+        if self.contract_processing_mode not in {"sync", "rabbitmq"}:
+            errors.append("CONTRACT_PROCESSING_MODE must be 'sync' or 'rabbitmq'")
+        if self.contract_processing_mode == "rabbitmq" and not self.rabbitmq_url:
+            errors.append("RABBITMQ_URL is required when CONTRACT_PROCESSING_MODE=rabbitmq")
         if not self.inbound_attachment_dir.is_absolute():
-            errors.append("INBOUND_ATTACHMENT_DIR must be an absolute persistent path")
+            errors.append("INBOUND_ATTACHMENT_DIR must be an absolute writable path")
         if errors:
             raise ValueError("Invalid production configuration: " + "; ".join(errors))
 
@@ -109,8 +131,14 @@ class Settings(BaseModel):
             smtp_password=os.getenv("SMTP_PASSWORD") or None,
             smtp_use_tls=bool_env("SMTP_USE_TLS", True),
             database_url=os.getenv("DATABASE_URL", "postgresql://contractmate:contractmate@localhost:5432/contractmate"),
+            database_direct_url=os.getenv("DATABASE_URL_UNPOOLED") or None,
+            auto_initialize_database=bool_env("AUTO_INITIALIZE_DATABASE", True),
+            document_storage_backend=os.getenv("DOCUMENT_STORAGE_BACKEND", "local").casefold(),
             local_storage_dir=Path(os.getenv("LOCAL_STORAGE_DIR", ".contractmate/files")),
             inbound_attachment_dir=Path(os.getenv("INBOUND_ATTACHMENT_DIR", ".contractmate/inbound-email")),
+            blob_read_write_token=os.getenv("BLOB_READ_WRITE_TOKEN") or None,
+            blob_store_id=os.getenv("BLOB_STORE_ID") or None,
+            vercel_oidc_token=os.getenv("VERCEL_OIDC_TOKEN") or None,
             s3_bucket=os.getenv("S3_BUCKET") or None,
             aws_region=os.getenv("AWS_REGION", "us-east-1"),
             rabbitmq_url=os.getenv("RABBITMQ_URL") or None,
@@ -120,6 +148,8 @@ class Settings(BaseModel):
             rabbitmq_dlq=os.getenv("RABBITMQ_DLQ", "contract.review.dlq"),
             rabbitmq_retry_ttl_ms=int(os.getenv("RABBITMQ_RETRY_TTL_MS", "60000")),
             rabbitmq_max_attempts=int(os.getenv("RABBITMQ_MAX_ATTEMPTS", "3")),
+            rabbitmq_heartbeat_seconds=int(os.getenv("RABBITMQ_HEARTBEAT_SECONDS", "600")),
+            contract_processing_mode=os.getenv("CONTRACT_PROCESSING_MODE", "sync").casefold(),
             model_provider=os.getenv("MODEL_PROVIDER", "openai"),
             model_id=os.getenv("MODEL_ID", "gpt-5-mini"),
             model_api_key=os.getenv("MODEL_API_KEY") or os.getenv("OPENAI_API_KEY") or None,

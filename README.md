@@ -17,7 +17,7 @@ uv run contractmate review tests/fixtures/vendor-agreement.txt
 Run the HTTP app for inbound email webhooks:
 
 ```bash
-uv sync --extra api --extra dev
+uv sync --extra api --extra rabbitmq --extra dev
 uv run uvicorn contractmate.app:create_app --factory --reload --port 8000
 ```
 
@@ -73,6 +73,7 @@ commit secrets.
 DATABASE_URL=postgresql://contractmate:contractmate@localhost:5432/contractmate
 LOCAL_STORAGE_DIR=.contractmate/files
 RABBITMQ_URL=amqp://contractmate:contractmate@localhost:5672/%2F
+CONTRACT_PROCESSING_MODE=sync
 MODEL_PROVIDER=openai
 MODEL_ID=gpt-5-mini
 OPENAI_API_KEY=
@@ -108,6 +109,31 @@ docker compose up -d postgres rabbitmq
 RabbitMQ management UI runs on `http://localhost:15672` with the local
 development credentials in `docker-compose.yml`.
 
+Asynchronous contract review
+----------------------------
+
+RabbitMQ processing is opt-in. Start PostgreSQL and RabbitMQ, switch the API to
+queue mode, and run the persistent consumer in a separate process:
+
+```bash
+docker compose up -d postgres rabbitmq
+CONTRACT_PROCESSING_MODE=rabbitmq uv run contractmate worker
+```
+
+With `CONTRACT_PROCESSING_MODE=rabbitmq`, browser uploads and inbound email
+attachments are validated and stored before a durable identifier-only job is
+published. The worker downloads that exact stored version, verifies its SHA-256,
+runs parsing, OCR and Agno review, persists the result, and acknowledges the job.
+Failures are retried through the TTL retry queue and move to the DLQ after
+`RABBITMQ_MAX_ATTEMPTS`. `RABBITMQ_HEARTBEAT_SECONDS` should exceed the longest
+expected OCR/model call. Email reviews are sent by the worker after completion.
+
+The API and worker must share `DATABASE_URL`, document-storage credentials,
+OpenAI/Sarvam/Resend settings, and RabbitMQ topology settings. Vercel Functions
+must not be used as the persistent consumer; deploy the worker on a service that
+runs long-lived processes. Keep `CONTRACT_PROCESSING_MODE=sync` until both the
+managed RabbitMQ broker and worker deployment are healthy.
+
 The review path uses Agno with OpenAIChat. Set `OPENAI_API_KEY` in `.env`.
 Scanned PDFs use Sarvam Vision before review. Set `SARVAM_API_KEY`, and choose
 the document's primary BCP-47 language with `SARVAM_OCR_LANGUAGE` (English is
@@ -122,23 +148,60 @@ still require an explicit approval workflow.
 Production deployment
 ---------------------
 
-The production image builds the React application and serves it from the same
-FastAPI origin as `/api`. It runs as a non-root user and requires PostgreSQL,
-persistent document storage, model credentials, inbound-email authentication,
-and private-beta HTTP credentials before startup succeeds.
+Production uses two Vercel projects from this repository:
 
-The included `render.yaml` provisions:
+- The frontend project has `frontend/` as its Root Directory. Routing Middleware
+  keeps the landing page public, protects `/contracts`, and proxies `/api` to the
+  backend through `API_ORIGIN`.
+- The backend project uses the repository root. `Dockerfile.vercel` packages the
+  FastAPI service as an OCI function that listens on Vercel's `PORT`.
+- A private Vercel Blob store is connected to both projects. Browser uploads go
+  directly to Blob, so contracts up to `MAX_FILE_SIZE_MB` do not pass through
+  Vercel's Function request-body limit.
+- PostgreSQL must be supplied through `DATABASE_URL`; Neon or Supabase can be
+  connected through the Vercel Marketplace.
 
-- A Docker web service in Singapore with `/ready` health checks.
-- Managed PostgreSQL with public database access disabled.
-- A persistent disk mounted at `/app/data` for contracts and inbound files.
-- Generated workspace, inbound-webhook, and Control Plane secrets.
-- Dashboard prompts for OpenAI, Sarvam, Resend, and sender-address secrets.
+Set these frontend project variables:
 
-Create the Blueprint from the repository in Render, review the paid service,
-database, and disk plans, then provide every variable marked `sync: false`.
-The generated `APP_ACCESS_PASSWORD` is the password for the private-beta browser
-prompt; the username defaults to `samvid`.
+```text
+API_ORIGIN=https://your-backend-project.vercel.app
+APP_ACCESS_USERNAME=samvid
+APP_ACCESS_PASSWORD=<same strong password as the backend>
+MAX_FILE_SIZE_MB=20
+```
+
+Set these backend project variables, marking credentials as secrets:
+
+```text
+APP_ENV=production
+ALLOWED_HOSTS=*.vercel.app,api.samvid.ai
+APP_ACCESS_USERNAME=samvid
+APP_ACCESS_PASSWORD=<strong shared password>
+APP_BASE_URL=https://your-backend-project.vercel.app
+DATABASE_URL=<managed PostgreSQL connection string>
+DATABASE_URL_UNPOOLED=<direct Neon connection string>
+AUTO_INITIALIZE_DATABASE=false
+CONTRACT_PROCESSING_MODE=sync
+DOCUMENT_STORAGE_BACKEND=vercel_blob
+INBOUND_ATTACHMENT_DIR=/tmp/samvid/inbound-email
+INBOUND_EMAIL_SECRET=<strong webhook secret>
+OPENAI_API_KEY=<secret>
+ENABLE_OCR=true
+SARVAM_API_KEY=<secret>
+SARVAM_OCR_TIMEOUT_SECONDS=240
+AUTO_SEND_REVIEW_EMAIL=true
+EMAIL_FROM_ADDRESS=contracts@your-domain.example
+RESEND_API_KEY=<secret>
+MAX_FILE_SIZE_MB=20
+```
+
+Connect the same private Blob store to each project so Vercel injects
+`BLOB_STORE_ID` and its short-lived OIDC credential. For a backend hosted outside
+Vercel, use `BLOB_READ_WRITE_TOKEN` instead.
+
+Initialize the production schema once with `AUTO_INITIALIZE_DATABASE=true`, then
+set it to `false` for the deployed service. This keeps schema DDL out of Vercel
+container cold starts.
 
 Local production-image validation:
 
@@ -148,4 +211,4 @@ docker run --rm -p 8000:8000 --env-file .env samvid:local
 ```
 
 `APP_ENV=production` intentionally fails fast when required secrets, PostgreSQL,
-or absolute persistent-storage paths are missing.
+private document storage, or writable scratch storage are missing.

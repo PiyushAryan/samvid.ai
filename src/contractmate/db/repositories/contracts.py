@@ -77,6 +77,24 @@ class ContractRepository:
                 (status.value, contract_id),
             )
 
+    def get_contract_version(self, *, contract_id: str, contract_version_id: str) -> Any | None:
+        return self.connection.execute(
+            self._sql(
+                """
+                SELECT
+                    cv.*,
+                    c.workspace_id,
+                    c.email_thread_id,
+                    c.created_by,
+                    c.title
+                FROM contract_versions cv
+                JOIN contracts c ON c.id = cv.contract_id
+                WHERE c.id = ? AND cv.id = ?
+                """
+            ),
+            (contract_id, contract_version_id),
+        ).fetchone()
+
     def save_parsed_document(self, *, contract_version_id: str, parsed_document: ParsedDocument) -> str:
         parsed_id = str(uuid4())
         warnings = [warning for page in parsed_document.pages for warning in page.warnings]

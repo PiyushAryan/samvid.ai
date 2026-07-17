@@ -12,6 +12,7 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "sarvamai>=0.1.28,<0.2",
     "resend>=2.33.0",
+    "vercel>=0.5,<1",
 ]
 
 [build-system]
@@ -26,6 +27,12 @@ api = [
     "fastapi>=0.111,<1",
     "python-multipart>=0.0.9,<1",
     "uvicorn[standard]>=0.30,<1",
+]
+rabbitmq = [
+    "pika>=1.3",
+]
+s3 = [
+    "boto3>=1.34",
 ]
 integrations = [
     "boto3>=1.34",

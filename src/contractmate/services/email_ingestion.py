@@ -11,6 +11,8 @@ from contractmate.email.messages import InboundEmailMessage, OutboundEmailMessag
 from contractmate.email.rendering import render_review_email_text
 from contractmate.services.contract_processing import ContractProcessingResult, ContractProcessingService
 from contractmate.settings import Settings
+from contractmate.workers.queue import ContractQueue, RabbitMQContractQueue
+from contractmate.workflows.states import WorkflowState
 
 
 class EmailIngestionResult(BaseModel):
@@ -26,17 +28,25 @@ class EmailIngestionService:
         settings: Settings,
         processing_service: ContractProcessingService,
         sender: EmailSender,
+        queue: ContractQueue | None = None,
     ) -> None:
         self.settings = settings
         self.processing_service = processing_service
         self.sender = sender
+        self.queue = queue
 
     @classmethod
     def local(cls, settings: Settings) -> "EmailIngestionService":
+        queue = (
+            RabbitMQContractQueue.from_settings(settings)
+            if settings.contract_processing_mode == "rabbitmq"
+            else None
+        )
         return cls(
             settings=settings,
             processing_service=ContractProcessingService.local(settings),
             sender=EmailSender(settings),
+            queue=queue,
         )
 
     def process_inbound_email(self, message: InboundEmailMessage, *, send_response: bool = True) -> EmailIngestionResult:
@@ -44,20 +54,39 @@ class EmailIngestionService:
         ignored: list[str] = []
         for attachment in message.attachments:
             attachment_path = self._materialize_attachment(message, attachment.filename, attachment.content_base64, attachment.local_path)
-            result = self.processing_service.review_local_file(
-                file_path=attachment_path,
-                workspace_id=self.settings.email_workspace_id,
-                email_thread_id=message.email_thread_id,
-                requested_by=str(message.from_address),
-                declared_mime_type=attachment.mime_type,
-            )
+            try:
+                arguments = {
+                    "file_path": attachment_path,
+                    "workspace_id": self.settings.email_workspace_id,
+                    "email_thread_id": message.email_thread_id,
+                    "requested_by": str(message.from_address),
+                    "declared_mime_type": attachment.mime_type,
+                    "original_filename": attachment.filename,
+                }
+                result = (
+                    self.processing_service.enqueue_local_file(
+                        queue=self.queue,
+                        send_review_email=send_response,
+                        **arguments,
+                    )
+                    if self.queue is not None
+                    else self.processing_service.review_local_file(**arguments)
+                )
+            finally:
+                if attachment.local_path is None:
+                    attachment_path.unlink(missing_ok=True)
             processed.append(result)
             if not result.contract_id:
                 ignored.append(attachment.filename)
 
         if send_response and processed:
-            self._send_review_response(message, processed)
+            immediate_results = [result for result in processed if result.status is not WorkflowState.QUEUED]
+            if immediate_results:
+                self._send_review_response(message, immediate_results)
         return EmailIngestionResult(message_id=message.message_id, processed=processed, ignored_attachments=ignored)
+
+    def close(self) -> None:
+        self.processing_service.close()
 
     def _materialize_attachment(
         self,

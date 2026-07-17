@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class RiskSeverity(str, Enum):
@@ -56,3 +56,17 @@ class ContractReview(BaseModel):
             if not risk.evidence.exact_text.strip():
                 raise ValueError(f"Risk {risk.title!r} is missing evidence text")
         return self
+
+
+class ContractBlobUpload(BaseModel):
+    pathname: str = Field(min_length=12, max_length=1024, pattern=r"^contracts/")
+    original_filename: str = Field(min_length=1, max_length=255)
+    content_type: str | None = Field(default=None, max_length=255)
+
+    @field_validator("original_filename")
+    @classmethod
+    def validate_filename(cls, value: str) -> str:
+        filename = value.strip()
+        if not filename or "/" in filename or "\\" in filename or filename in {".", ".."}:
+            raise ValueError("original_filename must be a plain filename")
+        return filename

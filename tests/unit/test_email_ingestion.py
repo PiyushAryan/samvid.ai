@@ -5,7 +5,9 @@ from contractmate.agents.agno_contract_reviewer import AgnoContractReviewAgent
 from contractmate.email.messages import EmailAttachment, InboundEmailMessage
 from contractmate.schemas.contracts import ContractReview, ContractRisk, Evidence, RiskSeverity
 from contractmate.services.email_ingestion import EmailIngestionService
+from contractmate.services.contract_processing import ContractProcessingService
 from contractmate.settings import Settings
+from contractmate.workers.queue import InMemoryContractQueue
 from contractmate.workflows.states import WorkflowState
 
 
@@ -73,6 +75,44 @@ def test_email_ingestion_reports_rejected_attachment_reason(tmp_path: Path) -> N
     assert len(result.processed) == 1
     assert result.processed[0].status is WorkflowState.REJECTED_FILE
     assert result.processed[0].message == "Uploaded file was not found."
+
+
+def test_email_ingestion_queues_review_and_defers_response(monkeypatch, tmp_path: Path) -> None:
+    content = "Vendor Agreement with enough readable contract text for asynchronous review processing."
+    settings = Settings(
+        database_url=f"sqlite:///{tmp_path / 'contractmate.db'}",
+        local_storage_dir=tmp_path / "files",
+        inbound_attachment_dir=tmp_path / "inbound",
+        model_api_key="test-key",
+    )
+    message = InboundEmailMessage(
+        message_id="email-queued",
+        from_address="sender@example.com",
+        attachments=[
+            EmailAttachment(
+                filename="vendor-agreement.txt",
+                mime_type="text/plain",
+                content_base64=base64.b64encode(content.encode("utf-8")).decode("ascii"),
+            )
+        ],
+    )
+    queue = InMemoryContractQueue()
+    sender = type("Sender", (), {"send": lambda self, message: (_ for _ in ()).throw(AssertionError("response must be deferred"))})()
+    service = EmailIngestionService(
+        settings=settings,
+        processing_service=ContractProcessingService.local(settings),
+        sender=sender,
+        queue=queue,
+    )
+    try:
+        result = service.process_inbound_email(message, send_response=True)
+    finally:
+        service.close()
+
+    job = queue.receive()
+    assert result.processed[0].status is WorkflowState.QUEUED
+    assert job is not None
+    assert job.send_review_email
 
 
 def _fake_contract_review(self, *, contract_id, parsed_document) -> ContractReview:
