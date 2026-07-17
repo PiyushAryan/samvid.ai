@@ -203,6 +203,37 @@ Initialize the production schema once with `AUTO_INITIALIZE_DATABASE=true`, then
 set it to `false` for the deployed service. This keeps schema DDL out of Vercel
 container cold starts.
 
+Run the persistent RabbitMQ consumer on an EC2 instance with Docker. The worker
+does not accept inbound traffic and does not need a public port or persistent
+volume; contract files remain in Vercel Blob and workflow state remains in Neon.
+On the EC2 host:
+
+```bash
+git clone <repository-url> samvid
+cd samvid
+cp worker.env.example .env.worker
+# Fill .env.worker with production secrets, then restrict it.
+chmod 600 .env.worker
+docker compose -f docker-compose.worker.yml config
+docker compose -f docker-compose.worker.yml up -d --build
+docker compose -f docker-compose.worker.yml ps
+docker compose -f docker-compose.worker.yml logs -f --tail=100
+```
+
+The production worker is sized for a 2 vCPU, 2 GiB `t3.small`. The container is
+limited to 1.5 CPUs and 1.5 GiB RAM, leaving capacity for the host OS and Docker.
+Configure 2 GiB of swap to protect image builds from transient memory pressure,
+and monitor runtime usage with `docker stats`. Docker logs rotate at 10 MiB. The
+security group needs no application inbound rule; restrict SSH to an
+administrator IP and retain outbound access to Neon PostgreSQL, CloudAMQP over
+TLS, Vercel Blob, OpenAI, Sarvam, and Resend.
+
+Keep the Vercel API on `CONTRACT_PROCESSING_MODE=sync` until the worker log says
+it is polling `contract.review.q`. Then configure the same `RABBITMQ_URL` and
+queue names on Vercel, set `CONTRACT_PROCESSING_MODE=rabbitmq`, redeploy the API,
+and submit a small test contract. Roll back by returning the Vercel setting to
+`sync`.
+
 Local production-image validation:
 
 ```bash

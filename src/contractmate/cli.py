@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
+import os
+import signal
+from threading import Event
 from pathlib import Path
 
 from contractmate.email.interface import EmailSender
@@ -56,9 +60,24 @@ def main() -> None:
         return
 
     if args.command == "worker":
+        logging.basicConfig(
+            level=os.getenv("LOG_LEVEL", "INFO").upper(),
+            format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        )
         settings = Settings.from_env()
         settings.validate_runtime()
-        ContractWorker.from_settings(settings).run_forever(poll_interval_seconds=max(args.poll_interval, 0.1))
+        stop_event = Event()
+
+        def request_stop(signum: int, _frame: object) -> None:
+            logging.getLogger(__name__).info("Received signal %s; stopping after the current job", signum)
+            stop_event.set()
+
+        signal.signal(signal.SIGINT, request_stop)
+        signal.signal(signal.SIGTERM, request_stop)
+        ContractWorker.from_settings(settings).run_forever(
+            poll_interval_seconds=max(args.poll_interval, 0.1),
+            stop_requested=stop_event.is_set,
+        )
         return
 
     parser.print_help()

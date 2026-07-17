@@ -51,6 +51,16 @@ def test_worker_retries_when_processing_service_cannot_start() -> None:
     assert not delivery.acked
 
 
+def test_worker_stops_before_polling_when_shutdown_is_requested() -> None:
+    queue = _FakeQueue(None)
+    worker = ContractWorker(settings=Settings(), queue=queue)
+
+    worker.run_forever(stop_requested=lambda: True)
+
+    assert queue.topology_declared
+    assert queue.receive_count == 0
+
+
 def _job(*, attempt: int = 1) -> ContractReviewJob:
     return ContractReviewJob(
         job_id="job-1",
@@ -67,9 +77,15 @@ class _FakeQueue:
     def __init__(self, delivery, *, max_attempts: int = 3) -> None:
         self.delivery = delivery
         self.topology = QueueTopology(max_attempts=max_attempts)
+        self.topology_declared = False
+        self.receive_count = 0
+
+    def declare_topology(self) -> None:
+        self.topology_declared = True
 
     def receive(self, *, prefetch_count: int = 1):
         assert prefetch_count == 1
+        self.receive_count += 1
         delivery, self.delivery = self.delivery, None
         return delivery
 

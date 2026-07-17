@@ -1,0 +1,20 @@
+services:
+  contract-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    image: samvid-contract-worker:latest
+    restart: unless-stopped
+    init: true
+    env_file:
+      - ${WORKER_ENV_FILE:-.env.worker}
+    mem_limit: 1536m
+    cpus: 1.5
+    stop_grace_period: 5m
+    tmpfs:
+      - /tmp:size=384m,mode=1777
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

@@ -33,10 +33,15 @@ class ContractWorker:
             raise ValueError("Set CONTRACT_PROCESSING_MODE=rabbitmq before starting the contract worker.")
         return cls(settings=settings, queue=RabbitMQContractQueue.from_settings(settings))
 
-    def run_forever(self, *, poll_interval_seconds: float = 1.0) -> None:
+    def run_forever(
+        self,
+        *,
+        poll_interval_seconds: float = 1.0,
+        stop_requested: Callable[[], bool] = lambda: False,
+    ) -> None:
         self.queue.declare_topology()
         logger.info("Contract review worker is polling queue %s", self.queue.topology.review_queue)
-        while True:
+        while not stop_requested():
             try:
                 processed = self.run_once()
             except KeyboardInterrupt:
@@ -47,6 +52,7 @@ class ContractWorker:
                 continue
             if not processed:
                 time.sleep(poll_interval_seconds)
+        logger.info("Contract review worker stopped")
 
     def run_once(self) -> bool:
         delivery = self.queue.receive(prefetch_count=1)
