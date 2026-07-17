@@ -13,12 +13,17 @@ def test_app_generates_openapi_schema() -> None:
     assert "/email/inbound" in schema["paths"]
 
 
-def test_production_app_requires_basic_auth_and_sets_security_headers(tmp_path) -> None:
+def test_production_app_requires_basic_auth_and_sets_security_headers(monkeypatch, tmp_path) -> None:
     pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient
 
     from contractmate.app import create_app
     from contractmate.settings import Settings
+
+    frontend_dist = tmp_path / "frontend" / "dist"
+    frontend_dist.mkdir(parents=True)
+    (frontend_dist / "index.html").write_text("<main>Samvid</main>", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
 
     settings = Settings(
         app_env="production",
