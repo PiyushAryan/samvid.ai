@@ -131,6 +131,7 @@ def test_inbound_service_downloads_supported_files_and_preserves_reply_metadata(
     assert ingestion.process_count == 1
     assert ingestion.message.response_address == "legal-replies@example.com"
     assert ingestion.message.from_address == "sender@example.com"
+    assert ingestion.message.from_name == "Contract Sender"
     assert ingestion.message.original_message_id == "<original@example.com>"
     assert ingestion.message.references == "<earlier@example.com> <original@example.com>"
     assert ingestion.message.attachments[0].filename == "vendor.txt"

@@ -191,7 +191,7 @@ class ResendInboundService:
                     ignored_attachments=ignored,
                 )
 
-            sender = _parse_email_address(str(received_email.get("from") or ""))
+            sender_name, sender = _parse_email_identity(str(received_email.get("from") or ""))
             if not sender:
                 self.event_repository.mark_completed(email_id)
                 return ResendInboundResult(
@@ -214,6 +214,7 @@ class ResendInboundService:
                 message_id=email_id,
                 thread_id=original_message_id or email_id,
                 from_address=sender,
+                from_name=sender_name,
                 response_address=reply_to,
                 to_addresses=[str(value) for value in received_email.get("to") or []],
                 subject=str(received_email.get("subject") or ""),
@@ -306,8 +307,16 @@ def webhook_payload_hash(raw_payload: bytes) -> str:
 
 
 def _parse_email_address(value: str) -> str | None:
-    address = parseaddr(value)[1].strip()
-    return address if "@" in address else None
+    return _parse_email_identity(value)[1]
+
+
+def _parse_email_identity(value: str) -> tuple[str | None, str | None]:
+    name, address = parseaddr(value)
+    name = name.strip()
+    address = address.strip()
+    if "@" not in address:
+        return None, None
+    return name or None, address
 
 
 def _header_value(headers: Any, name: str) -> str | None:

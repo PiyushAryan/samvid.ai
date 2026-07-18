@@ -121,6 +121,9 @@ must not be used as the persistent consumer; deploy the worker on a service that
 runs long-lived processes. Keep `CONTRACT_PROCESSING_MODE=sync` until both the
 managed RabbitMQ broker and worker deployment are healthy.
 
+Set `FRONTEND_ORIGIN=https://samvid-ai.vercel.app` on the worker so review
+emails link recipients to the authenticated contract detail page.
+
 The review path uses Agno with OpenAIChat. Set `OPENAI_API_KEY` in `.env`.
 Scanned PDFs use Sarvam Vision before review. Set `SARVAM_API_KEY`, and choose
 the document's primary BCP-47 language with `SARVAM_OCR_LANGUAGE` (English is

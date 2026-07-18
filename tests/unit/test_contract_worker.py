@@ -1,4 +1,5 @@
 from contractmate.services.contract_processing import ContractProcessingResult
+from contractmate.schemas.contracts import ContractReview
 from contractmate.settings import Settings
 from contractmate.workers.contract_worker import ContractWorker
 from contractmate.workers.queue import ContractReviewJob, QueueTopology
@@ -67,7 +68,13 @@ def test_worker_sends_review_as_threaded_reply(monkeypatch) -> None:
         "contractmate.workers.contract_worker.EmailSender.send",
         lambda _sender, message: sent.append(message),
     )
-    worker = ContractWorker(settings=Settings(email_from_address="onboarding@resend.dev"), queue=_FakeQueue(None))
+    worker = ContractWorker(
+        settings=Settings(
+            email_from_address="onboarding@resend.dev",
+            frontend_origin="https://samvid-ai.vercel.app",
+        ),
+        queue=_FakeQueue(None),
+    )
     job = ContractReviewJob(
         job_id="job-1",
         contract_id="contract-1",
@@ -75,6 +82,7 @@ def test_worker_sends_review_as_threaded_reply(monkeypatch) -> None:
         workspace_id="workspace-1",
         email_thread_id="thread-1",
         requested_by="sender@example.com",
+        recipient_name="Contract Sender",
         response_address="replies@example.com",
         original_subject="Please review",
         in_reply_to="<message@example.com>",
@@ -85,6 +93,11 @@ def test_worker_sends_review_as_threaded_reply(monkeypatch) -> None:
         contract_id="contract-1",
         contract_version_id="version-1",
         status=WorkflowState.REVIEW_READY,
+        review=ContractReview(
+            contract_id="contract-1",
+            contract_type="Vendor agreement",
+            recommended_next_action="Request revisions.",
+        ),
         message="Contract review is ready.",
     )
 
@@ -92,6 +105,11 @@ def test_worker_sends_review_as_threaded_reply(monkeypatch) -> None:
 
     assert sent[0].to_address == "replies@example.com"
     assert sent[0].subject == "Re: Please review"
+    assert sent[0].text.startswith("Hi Contract Sender,")
+    assert "https://samvid-ai.vercel.app/contracts/contract-1" in sent[0].text
+    assert sent[0].html is not None
+    assert "Open contract in Samvid" in sent[0].html
+    assert "Sent via Samvid" in sent[0].html
     assert sent[0].in_reply_to == "<message@example.com>"
     assert sent[0].references == "<earlier@example.com> <message@example.com>"
 

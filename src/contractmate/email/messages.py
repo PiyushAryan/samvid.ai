@@ -21,6 +21,7 @@ class EmailAttachment(BaseModel):
 class InboundEmailMessage(BaseModel):
     message_id: str = Field(min_length=1)
     from_address: str = Field(min_length=3)
+    from_name: str | None = None
     to_addresses: list[str] = Field(default_factory=list)
     subject: str = ""
     text: str = ""

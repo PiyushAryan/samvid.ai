@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 from contractmate.email.interface import EmailSender
 from contractmate.email.messages import OutboundEmailMessage
-from contractmate.email.rendering import render_review_email_text
+from contractmate.email.rendering import render_review_email_html, render_review_email_text
 from contractmate.services.contract_processing import ContractProcessingResult, ContractProcessingService
 from contractmate.settings import Settings
 from contractmate.workers.queue import ContractReviewJob, RabbitMQContractQueue
@@ -90,13 +90,35 @@ class ContractWorker:
         return True
 
     def _send_review_email(self, job: ContractReviewJob, result: ContractProcessingResult) -> None:
-        text = render_review_email_text(result.review) if result.review else result.message
+        recipient_address = job.response_address or job.requested_by
+        contract_url = _contract_url(self.settings.frontend_origin, job.contract_id)
+        text = (
+            render_review_email_text(
+                result.review,
+                recipient_name=job.recipient_name,
+                recipient_address=recipient_address,
+                contract_url=contract_url,
+            )
+            if result.review
+            else result.message
+        )
+        html = (
+            render_review_email_html(
+                result.review,
+                recipient_name=job.recipient_name,
+                recipient_address=recipient_address,
+                contract_url=contract_url,
+            )
+            if result.review
+            else None
+        )
         EmailSender(self.settings).send(
             OutboundEmailMessage(
-                to_address=job.response_address or job.requested_by,
+                to_address=recipient_address,
                 from_address=self.settings.email_from_address,
                 subject=_reply_subject(job.original_subject),
                 text=text,
+                html=html,
                 in_reply_to=job.in_reply_to,
                 references=job.references,
             )
@@ -106,3 +128,7 @@ class ContractWorker:
 def _reply_subject(original_subject: str | None) -> str:
     subject = (original_subject or "Contract review").strip()
     return subject if subject.casefold().startswith("re:") else f"Re: {subject}"
+
+
+def _contract_url(frontend_origin: str, contract_id: str) -> str:
+    return f"{frontend_origin.rstrip('/')}/contracts/{contract_id}"

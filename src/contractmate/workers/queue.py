@@ -24,6 +24,7 @@ class ContractReviewJob:
     workspace_id: str
     email_thread_id: str
     requested_by: str
+    recipient_name: str | None = None
     response_address: str | None = None
     original_subject: str | None = None
     in_reply_to: str | None = None
@@ -46,6 +47,7 @@ class ContractReviewJob:
             {
                 key: value
                 for key, value in {
+                    "recipient_name": self.recipient_name,
                     "response_address": self.response_address,
                     "original_subject": self.original_subject,
                     "in_reply_to": self.in_reply_to,
@@ -65,6 +67,7 @@ class ContractReviewJob:
             workspace_id=str(message["workspace_id"]),
             email_thread_id=str(message["email_thread_id"]),
             requested_by=str(message["requested_by"]),
+            recipient_name=str(message["recipient_name"]) if message.get("recipient_name") else None,
             response_address=str(message["response_address"]) if message.get("response_address") else None,
             original_subject=str(message["original_subject"]) if message.get("original_subject") else None,
             in_reply_to=str(message["in_reply_to"]) if message.get("in_reply_to") else None,
@@ -106,6 +109,7 @@ class ContractQueue(Protocol):
         workspace_id: str,
         email_thread_id: str,
         requested_by: str,
+        recipient_name: str | None = None,
         response_address: str | None = None,
         original_subject: str | None = None,
         in_reply_to: str | None = None,
@@ -127,6 +131,7 @@ class InMemoryContractQueue:
         workspace_id: str,
         email_thread_id: str,
         requested_by: str,
+        recipient_name: str | None = None,
         response_address: str | None = None,
         original_subject: str | None = None,
         in_reply_to: str | None = None,
@@ -140,6 +145,7 @@ class InMemoryContractQueue:
             workspace_id=workspace_id,
             email_thread_id=email_thread_id,
             requested_by=requested_by,
+            recipient_name=recipient_name,
             response_address=response_address,
             original_subject=original_subject,
             in_reply_to=in_reply_to,
@@ -197,6 +203,7 @@ class RabbitMQContractQueue:
         workspace_id: str,
         email_thread_id: str,
         requested_by: str,
+        recipient_name: str | None = None,
         response_address: str | None = None,
         original_subject: str | None = None,
         in_reply_to: str | None = None,
@@ -210,6 +217,7 @@ class RabbitMQContractQueue:
             workspace_id=workspace_id,
             email_thread_id=email_thread_id,
             requested_by=requested_by,
+            recipient_name=recipient_name,
             response_address=response_address,
             original_subject=original_subject,
             in_reply_to=in_reply_to,
@@ -337,6 +345,7 @@ class RabbitMQDelivery:
             workspace_id=self.job.workspace_id,
             email_thread_id=self.job.email_thread_id,
             requested_by=self.job.requested_by,
+            recipient_name=self.job.recipient_name,
             response_address=self.job.response_address,
             original_subject=self.job.original_subject,
             in_reply_to=self.job.in_reply_to,

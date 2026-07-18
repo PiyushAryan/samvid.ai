@@ -38,6 +38,7 @@ def test_contract_review_job_round_trips_optional_email_thread_metadata() -> Non
         workspace_id="workspace-1",
         email_thread_id="email-thread-1",
         requested_by="sender@example.com",
+        recipient_name="Contract Sender",
         response_address="replies@example.com",
         original_subject="Please review",
         in_reply_to="<message@example.com>",

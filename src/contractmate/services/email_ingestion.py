@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from contractmate.email.interface import EmailSender
 from contractmate.email.messages import InboundEmailMessage, OutboundEmailMessage
-from contractmate.email.rendering import render_review_email_text
+from contractmate.email.rendering import render_review_email_html, render_review_email_text
 from contractmate.services.contract_processing import ContractProcessingResult, ContractProcessingService
 from contractmate.settings import Settings
 from contractmate.workers.queue import ContractQueue, RabbitMQContractQueue
@@ -67,6 +67,7 @@ class EmailIngestionService:
                     self.processing_service.enqueue_local_file(
                         queue=self.queue,
                         send_review_email=send_response,
+                        recipient_name=message.from_name,
                         response_address=message.response_address or message.from_address,
                         original_subject=message.subject,
                         in_reply_to=message.original_message_id,
@@ -110,18 +111,36 @@ class EmailIngestionService:
         return destination
 
     def _send_review_response(self, message: InboundEmailMessage, results: list[ContractProcessingResult]) -> None:
-        body_parts = []
+        text_parts = []
+        html_parts = []
         for result in results:
             if result.review:
-                body_parts.append(render_review_email_text(result.review))
+                contract_url = _contract_url(self.settings.frontend_origin, result.contract_id)
+                text_parts.append(
+                    render_review_email_text(
+                        result.review,
+                        recipient_name=message.from_name,
+                        recipient_address=message.response_address or message.from_address,
+                        contract_url=contract_url,
+                    )
+                )
+                html_parts.append(
+                    render_review_email_html(
+                        result.review,
+                        recipient_name=message.from_name,
+                        recipient_address=message.response_address or message.from_address,
+                        contract_url=contract_url,
+                    )
+                )
             else:
-                body_parts.append(result.message)
+                text_parts.append(result.message)
         self.sender.send(
             OutboundEmailMessage(
                 to_address=message.response_address or message.from_address,
                 from_address=self.settings.email_from_address,
                 subject=_reply_subject(message.subject),
-                text="\n\n---\n\n".join(body_parts),
+                text="\n\n---\n\n".join(text_parts),
+                html=html_parts[0] if len(results) == 1 and len(html_parts) == 1 else None,
                 in_reply_to=message.original_message_id,
                 references=message.references,
             )
@@ -131,3 +150,7 @@ class EmailIngestionService:
 def _reply_subject(original_subject: str | None) -> str:
     subject = (original_subject or "Contract review").strip()
     return subject if subject.casefold().startswith("re:") else f"Re: {subject}"
+
+
+def _contract_url(frontend_origin: str, contract_id: str) -> str:
+    return f"{frontend_origin.rstrip('/')}/contracts/{contract_id}"
