@@ -25,7 +25,7 @@ SUPPORTED_ATTACHMENTS = {
     "text/plain": ".txt",
 }
 MAX_ATTACHMENTS_PER_EMAIL = 5
-RESEND_ATTACHMENT_HOST = "inbound-cdn.resend.com"
+RESEND_ATTACHMENT_HOSTS = frozenset({"inbound-cdn.resend.com", "cdn.resend.app"})
 
 
 class ResendWebhookData(BaseModel):
@@ -117,7 +117,7 @@ class ResendReceivingClient:
 
     def download_attachment(self, download_url: str, destination: Path, *, max_bytes: int) -> None:
         parsed = urlparse(download_url)
-        if parsed.scheme != "https" or parsed.hostname != RESEND_ATTACHMENT_HOST:
+        if parsed.scheme != "https" or parsed.hostname not in RESEND_ATTACHMENT_HOSTS:
             raise PermanentAttachmentRejection("Attachment download URL is not an approved Resend URL.")
 
         request = Request(download_url, headers={"User-Agent": "samvid-resend-inbound/1.0"})

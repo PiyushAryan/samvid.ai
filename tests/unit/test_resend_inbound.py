@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import time
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -221,6 +222,24 @@ def test_resend_download_rejects_non_resend_host(tmp_path: Path) -> None:
             tmp_path / "contract.pdf",
             max_bytes=100,
         )
+
+
+def test_resend_download_accepts_live_resend_cdn_host(tmp_path: Path) -> None:
+    chunks = iter([b"contract-content", b""])
+    response = SimpleNamespace(headers={}, read=lambda _size: next(chunks))
+    client = ResendReceivingClient(
+        "re_test",
+        open_url=lambda *_args, **_kwargs: nullcontext(response),
+    )
+    destination = tmp_path / "contract.pdf"
+
+    client.download_attachment(
+        "https://cdn.resend.app/received-email/attachments/contract.pdf?signature=test",
+        destination,
+        max_bytes=100,
+    )
+
+    assert destination.read_bytes() == b"contract-content"
 
 
 def test_inbound_settings_are_required_only_when_receiving_is_enabled() -> None:
