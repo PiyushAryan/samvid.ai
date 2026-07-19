@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { AppShell, ContractsTableSkeleton, ContractTable, ReviewTab, Timeline } from "./App";
+import { AppShell, ChatsPage, ContractsTableSkeleton, ContractTable, ReviewTab, Timeline } from "./App";
 import { LandingPage } from "./Home";
 import { TooltipProvider } from "./components/ui/tooltip";
 import type { ContractListItem, ContractReview, SigningRequest } from "./types";
@@ -85,20 +85,51 @@ test("workspace view slider switches between console and chats", () => {
         <Routes>
           <Route element={<AppShell />}>
             <Route path="/contracts" element={<div>Contracts page</div>} />
+            <Route path="/chats" element={<ChatsPage />} />
           </Route>
         </Routes>
       </MemoryRouter>
     </TooltipProvider>
   );
 
-  const consoleOption = within(container).getByRole("button", { name: "Console" });
-  const chatsOption = within(container).getByRole("button", { name: "Chats" });
+  const consoleOption = within(container).getByRole("button", { name: /console/i });
+  const chatsOption = within(container).getByRole("button", { name: /chats/i });
   expect(consoleOption).toHaveAttribute("aria-pressed", "true");
 
   fireEvent.click(chatsOption);
 
   expect(chatsOption).toHaveAttribute("aria-pressed", "true");
   expect(consoleOption).toHaveAttribute("aria-pressed", "false");
+  expect(within(container).getByRole("heading", { name: "Hello, Piyush Aryan" })).toBeInTheDocument();
+  expect(within(container).getByText("find anything about your contracts")).toBeInTheDocument();
+  const chatHistory = within(container).getByRole("region", { name: "Today" });
+  expect(within(chatHistory).getByRole("button", { name: "New chat" })).toBeInTheDocument();
+  expect(within(chatHistory).getAllByRole("button", { name: "chat" })).toHaveLength(2);
+  expect(within(container).queryByRole("link", { name: "Contracts" })).not.toBeInTheDocument();
+  expect(within(container).queryByRole("link", { name: "Signing" })).not.toBeInTheDocument();
+});
+
+test("chat composer accepts a file attachment", () => {
+  const { container } = render(
+    <MemoryRouter>
+      <ChatsPage />
+    </MemoryRouter>
+  );
+
+  expect(within(container).getByText("Ask about a contract", { selector: "label" })).toHaveAttribute("for", "ai-chat-prompt");
+  expect(within(container).getByRole("textbox")).toHaveAttribute("placeholder", "Ask a question about your contracts...");
+  expect(within(container).getByRole("button", { name: "Attach files" })).toHaveTextContent("Drop to attach");
+  expect(within(container).getByRole("button", { name: "Send message" })).toBeDisabled();
+
+  const fileInput = container.querySelector<HTMLInputElement>(".ai-chat-file-input");
+  expect(fileInput).not.toBeNull();
+  fireEvent.change(fileInput!, {
+    target: { files: [new File(["agreement"], "vendor-agreement.pdf", { type: "application/pdf" })] }
+  });
+
+  expect(within(container).getByText("vendor-agreement.pdf")).toBeInTheDocument();
+  expect(within(container).getByRole("status")).toHaveTextContent("1 file attached");
+  expect(within(container).getByRole("button", { name: "Send message" })).toBeEnabled();
 });
 
 test("sidebar actions menu opens and switches theme", () => {
@@ -122,7 +153,7 @@ test("sidebar actions menu opens and switches theme", () => {
   expect(menuTrigger).toHaveAttribute("aria-expanded", "true");
   const menu = within(container).getByRole("menu", { name: /sidebar actions|account/i });
   expect(within(menu).getByRole("menuitem", { name: "Account: Piyush Aryan" })).toBeInTheDocument();
-  expect(within(menu).getByText("piyush.aryan@nirvanaaisutra.com")).toBeInTheDocument();
+  expect(within(menu).getByText("piyusharyan81@gmail.com")).toBeInTheDocument();
   expect(within(menu).getByRole("menuitem", { name: "Settings" })).toHaveAttribute("aria-disabled", "true");
   expect(within(menu).getByRole("menuitem", { name: /log ?out/i })).toHaveAttribute("aria-disabled", "true");
 
@@ -136,7 +167,7 @@ test("sidebar actions menu opens and switches theme", () => {
 test("contract loading state exposes one accessible status and hides its placeholders", () => {
   const { container } = render(<ContractsTableSkeleton />);
 
-  expect(screen.getByRole("status")).toHaveTextContent("Loading contracts");
+  expect(within(container).getByRole("status")).toHaveTextContent("Loading contracts");
   expect(container.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(32);
   expect(container.querySelector(".contracts-skeleton")).toHaveAttribute("aria-hidden", "true");
 });

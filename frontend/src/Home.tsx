@@ -172,7 +172,7 @@ export function LandingPage() {
             className="landing-nav-cta"
             style={{ x: prefersReducedMotion ? 0 : smoothCtaX }}
           >
-            <Link to="/contracts" className="btn-lp-secondary">
+            <Link to="/chats" className="btn-lp-secondary">
               Sign up
             </Link>
             <a href="#workflow" className="btn-lp-primary">Book a Demo</a>
@@ -200,7 +200,7 @@ export function LandingPage() {
               <a href="#workflow" className="btn-lp-secondary">
                 See how it works
               </a>
-              <Link to="/contracts" className="btn-lp-primary">
+              <Link to="/chats" className="btn-lp-primary">
                 Open Workspace <ArrowRight size={15} />
               </Link>
               
@@ -587,7 +587,7 @@ export function LandingPage() {
             <div className="section-kicker">Contract memory</div>
             <h2 id="memory-title">Keep the next question answerable.</h2>
             <p>Samvid keeps terms, risks, evidence, versions, and signer events connected to the contract record, so your team can return to the source instead of restarting the review.</p>
-            <Link to="/contracts" className="memory-link">
+            <Link to="/chats" className="memory-link">
               Explore the workspace <ArrowRight size={14} />
             </Link>
           </div>
@@ -610,7 +610,7 @@ export function LandingPage() {
           </div>
           <div className="closing-cta-actions">
             <a href="#workflow" className="btn-lp-secondary">See the workflow</a>
-            <Link to="/contracts" className="btn-lp-primary">Open workspace <ArrowRight size={15} /></Link>
+            <Link to="/chats" className="btn-lp-primary">Open workspace <ArrowRight size={15} /></Link>
           </div>
         </section>
 

@@ -10,6 +10,7 @@ const LandingPage = lazy(() => import("./Home").then((module) => ({ default: mod
 const ChangelogPage = lazy(() => import("./Changelog").then((module) => ({ default: module.ChangelogPage })));
 const AppShell = lazy(() => import("./App").then((module) => ({ default: module.AppShell })));
 const ContractsPage = lazy(() => import("./App").then((module) => ({ default: module.ContractsPage })));
+const ChatsPage = lazy(() => import("./App").then((module) => ({ default: module.ChatsPage })));
 const ContractDetailPage = lazy(() => import("./App").then((module) => ({ default: module.ContractDetailPage })));
 const SigningPage = lazy(() => import("./App").then((module) => ({ default: module.SigningPage })));
 
@@ -36,6 +37,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               <Route path="/changelog" element={<ChangelogPage />} />
               <Route element={<AppShell />}>
                 <Route path="/contracts" element={<ContractsPage />} />
+                <Route path="/chats" element={<ChatsPage />} />
                 <Route path="/contracts/:contractId" element={<ContractDetailPage />} />
                 <Route path="/signing" element={<SigningPage />} />
               </Route>

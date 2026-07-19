@@ -11,6 +11,7 @@ import {
   Loader2,
   LogOut,
   Moon,
+  Paperclip,
   PanelLeft,
   Plus,
   RefreshCw,
@@ -18,14 +19,15 @@ import {
   Send,
   Settings,
   MessageCircleMore,
-  Gamepad2,
+  Component,
+  SquarePen,
   Sun,
   Upload,
   UserPlus,
   X
 } from "lucide-react";
-import { FormEvent, KeyboardEvent, ReactNode, useEffect, useRef, useState } from "react";
-import { Link, NavLink, Outlet, useParams, useSearchParams } from "react-router-dom";
+import { DragEvent, FormEvent, KeyboardEvent, ReactNode, useEffect, useRef, useState } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "motion/react";
 import {
@@ -83,12 +85,15 @@ const panelCardClass = "panel panel-card";
 const fieldLabelClass = "field";
 const fieldControlClass = "field-control";
 const accountName = import.meta.env.VITE_ACCOUNT_NAME || "Piyush Aryan";
-const accountEmail = import.meta.env.VITE_ACCOUNT_EMAIL || "piyush.aryan@nirvanaaisutra.com";
+const accountEmail = import.meta.env.VITE_ACCOUNT_EMAIL || "piyusharyan81@gmail.com";
 
 export function AppShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarMenuOpen, setSidebarMenuOpen] = useState(false);
-  const [workspaceView, setWorkspaceView] = useState<"console" | "chats">("console");
+  const location = useLocation();
+  const navigate = useNavigate();
+  const workspaceView = location.pathname.startsWith("/chats") ? "chats" : "console";
+  const activeChatId = new URLSearchParams(location.search).get("chat");
   const sidebarMenuRef = useRef<HTMLDivElement>(null);
   const sidebarMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -181,7 +186,7 @@ export function AppShell() {
     >
       <aside className="sidebar">
         <div className="sidebar-brand-row">
-          <Link to="/contracts" className="brand" aria-label="Samvid contracts">
+          <Link to="/chats" className="brand" aria-label="Samvid workspace">
             <motion.span
               className="brand-mark"
               aria-hidden="true"
@@ -331,84 +336,308 @@ export function AppShell() {
               type="button"
               className="sidebar-view-option"
               aria-pressed={workspaceView === "console"}
-              onClick={() => setWorkspaceView("console")}
+              onClick={() => navigate("/contracts")}
             >
-              <Gamepad2 size={15} aria-hidden="true" />
+              <Component size={15} aria-hidden="true" />
               <span className="sidebar-view-label">console</span>
             </button>
             <button
               type="button"
               className="sidebar-view-option"
               aria-pressed={workspaceView === "chats"}
-              onClick={() => setWorkspaceView("chats")}
+              onClick={() => navigate("/chats")}
             >
               <MessageCircleMore size={15} aria-hidden="true" />
               <span className="sidebar-view-label">chats</span>
             </button>
           </div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <NavLink
-                to="/contracts"
-                aria-label="Contracts"
-                className="nav-link"
+          {workspaceView === "chats" && (
+            <section className="sidebar-chat-section" aria-labelledby="sidebar-chat-history-title">
+              <button
+                className="sidebar-new-chat"
+                type="button"
+                onClick={() => navigate("/chats")}
               >
-                <MotionFileText size={17} layout="position" transition={sidebarTransition} />
-                <motion.span
-                  className="nav-label"
-                  initial={false}
-                  animate={sidebarCollapsed
-                    ? { width: 0, opacity: 0, x: -5 }
-                    : { width: "auto", opacity: 1, x: 0 }}
-                  transition={sidebarTransition}
-                  aria-hidden={sidebarCollapsed}
-                >
-                  Contracts
-                </motion.span>
-              </NavLink>
-            </TooltipTrigger>
-            {sidebarCollapsed && <TooltipContent side="right">Contracts</TooltipContent>}
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <NavLink
-                to="/signing"
-                aria-label="Signing"
-                className="nav-link"
-              >
-                <MotionHistory size={17} layout="position" transition={sidebarTransition} />
-                <motion.span
-                  className="nav-label"
-                  initial={false}
-                  animate={sidebarCollapsed
-                    ? { width: 0, opacity: 0, x: -5 }
-                    : { width: "auto", opacity: 1, x: 0 }}
-                  transition={sidebarTransition}
-                  aria-hidden={sidebarCollapsed}
-                >
-                  Signing
-                </motion.span>
-              </NavLink>
-            </TooltipTrigger>
-            {sidebarCollapsed && <TooltipContent side="right">Signing</TooltipContent>}
-          </Tooltip>
+                <SquarePen size={16} aria-hidden="true" />
+                <span>New chat</span>
+              </button>
+              <h2 id="sidebar-chat-history-title">Today</h2>
+              <ol className="sidebar-chat-list">
+                {["1", "2"].map((chatId) => (
+                  <li key={chatId}>
+                    <button
+                      type="button"
+                      aria-current={activeChatId === chatId ? "page" : undefined}
+                      onClick={() => navigate(`/chats?chat=${chatId}`)}
+                    >
+                      chat
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
+          {workspaceView === "console" && (
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <NavLink
+                    to="/contracts"
+                    aria-label="Contracts"
+                    className="nav-link"
+                  >
+                    <MotionFileText size={17} layout="position" transition={sidebarTransition} />
+                    <motion.span
+                      className="nav-label"
+                      initial={false}
+                      animate={sidebarCollapsed
+                        ? { width: 0, opacity: 0, x: -5 }
+                        : { width: "auto", opacity: 1, x: 0 }}
+                      transition={sidebarTransition}
+                      aria-hidden={sidebarCollapsed}
+                    >
+                      Contracts
+                    </motion.span>
+                  </NavLink>
+                </TooltipTrigger>
+                {sidebarCollapsed && <TooltipContent side="right">Contracts</TooltipContent>}
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <NavLink
+                    to="/signing"
+                    aria-label="Signing"
+                    className="nav-link"
+                  >
+                    <MotionHistory size={17} layout="position" transition={sidebarTransition} />
+                    <motion.span
+                      className="nav-label"
+                      initial={false}
+                      animate={sidebarCollapsed
+                        ? { width: 0, opacity: 0, x: -5 }
+                        : { width: "auto", opacity: 1, x: 0 }}
+                      transition={sidebarTransition}
+                      aria-hidden={sidebarCollapsed}
+                    >
+                      Signing
+                    </motion.span>
+                  </NavLink>
+                </TooltipTrigger>
+                {sidebarCollapsed && <TooltipContent side="right">Signing</TooltipContent>}
+              </Tooltip>
+            </>
+          )}
         </nav>
-        <motion.p
-          className="tracking-note"
-          initial={false}
-          animate={sidebarCollapsed
-            ? { height: 0, opacity: 0, paddingTop: 0 }
-            : { height: "auto", opacity: 1, paddingTop: 12 }}
-          transition={sidebarTransition}
-          aria-hidden={sidebarCollapsed}
-        >
-          Tracking only. Samvid does not execute electronic signatures.
-        </motion.p>
+        {workspaceView === "console" && (
+          <motion.p
+            className="tracking-note"
+            initial={false}
+            animate={sidebarCollapsed
+              ? { height: 0, opacity: 0, paddingTop: 0 }
+              : { height: "auto", opacity: 1, paddingTop: 12 }}
+            transition={sidebarTransition}
+            aria-hidden={sidebarCollapsed}
+          >
+            Tracking only. Samvid does not execute electronic signatures.
+          </motion.p>
+        )}
       </aside>
       <main className="workspace-main">
         <Outlet />
       </main>
     </motion.div>
+  );
+}
+
+type LocalChatMessage = {
+  id: number;
+  role: "user" | "assistant";
+  text: string;
+};
+
+type ChatAttachment = {
+  id: string;
+  file: File;
+};
+
+export function ChatsPage() {
+  const [draft, setDraft] = useState("");
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [messages, setMessages] = useState<LocalChatMessage[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const messageIdRef = useRef(0);
+
+  const attachFiles = (files: FileList | File[]) => {
+    const incoming = Array.from(files);
+    if (!incoming.length) return;
+
+    setAttachments((current) => [
+      ...current,
+      ...incoming.map((file) => ({
+        id: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID?.() || Math.random()}`,
+        file
+      }))
+    ]);
+    setAnnouncement(`${incoming.length} ${incoming.length === 1 ? "file" : "files"} attached`);
+  };
+
+  const removeAttachment = (id: string) => {
+    setAttachments((current) => {
+      const attachment = current.find((item) => item.id === id);
+      if (attachment) setAnnouncement(`${attachment.file.name} removed`);
+      return current.filter((item) => item.id !== id);
+    });
+  };
+
+  const submitMessage = () => {
+    const message = draft.trim();
+    if (!message && attachments.length === 0) return;
+
+    const attachmentSummary = attachments.length
+      ? `${attachments.length} ${attachments.length === 1 ? "attachment" : "attachments"}`
+      : "";
+    const userText = [message, attachmentSummary].filter(Boolean).join(" · ");
+    const userId = ++messageIdRef.current;
+    const assistantId = ++messageIdRef.current;
+    setMessages((current) => [
+      ...current,
+      { id: userId, role: "user", text: userText },
+      {
+        id: assistantId,
+        role: "assistant",
+        text: "This chat is running locally and is not connected to an AI service yet. Your message was not sent to a backend."
+      }
+    ]);
+    setDraft("");
+    setAttachments([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    setAnnouncement("Message added to this local conversation");
+  };
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    submitMessage();
+  };
+
+  const handleDrop = (event: DragEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+    attachFiles(event.dataTransfer.files);
+  };
+
+  return (
+    <section className="ai-chat-page" aria-labelledby="ai-chat-title">
+      <div className="ai-chat-content">
+        <header className="ai-chat-header">
+          <p className="ai-chat-eyebrow">Samvid AI</p>
+          <h1 id="ai-chat-title">Hello, {accountName}</h1>
+          <p>find anything about your contracts</p>
+        </header>
+
+        {messages.length > 0 && (
+          <div className="ai-chat-messages" aria-label="Local chat conversation" aria-live="polite">
+            {messages.map((message) => (
+              <article
+                key={message.id}
+                className={cx("ai-chat-message", `ai-chat-message-${message.role}`)}
+              >
+                <span className="ai-chat-message-role">
+                  {message.role === "user" ? "You" : "Samvid"}
+                </span>
+                <p>{message.text}</p>
+              </article>
+            ))}
+          </div>
+        )}
+
+        <form
+          className={cx("ai-chat-composer", isDragging && "ai-chat-composer-dragging")}
+          onSubmit={handleSubmit}
+          onDragEnter={(event) => {
+            event.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragOver={(event) => event.preventDefault()}
+          onDragLeave={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node)) setIsDragging(false);
+          }}
+          onDrop={handleDrop}
+        >
+          <label className="ai-chat-label" htmlFor="ai-chat-prompt">
+            Ask about a contract
+          </label>
+          <textarea
+            id="ai-chat-prompt"
+            className="ai-chat-textarea"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                submitMessage();
+              }
+            }}
+            placeholder="Ask a question about your contracts..."
+            rows={2}
+          />
+
+          {attachments.length > 0 && (
+            <ul className="ai-chat-attachments" aria-label="Attachments">
+              {attachments.map((attachment) => (
+                <li className="ai-chat-attachment" key={attachment.id}>
+                  <FileText size={14} aria-hidden="true" />
+                  <span title={attachment.file.name}>{attachment.file.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(attachment.id)}
+                    aria-label={`Remove ${attachment.file.name}`}
+                  >
+                    <X size={14} aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="ai-chat-composer-actions">
+            <input
+              ref={fileInputRef}
+              id="ai-chat-file-input"
+              className="ai-chat-file-input"
+              type="file"
+              multiple
+              onChange={(event) => {
+                if (event.target.files) attachFiles(event.target.files);
+                event.target.value = "";
+              }}
+            />
+            <button
+              className="ai-chat-attach-button"
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              aria-label="Attach files"
+            >
+              <Paperclip size={16} aria-hidden="true" />
+              <span>Drop to attach</span>
+            </button>
+            <button
+              className="ai-chat-send-button"
+              type="submit"
+              disabled={!draft.trim() && attachments.length === 0}
+              aria-label="Send message"
+            >
+              <Send size={16} aria-hidden="true" />
+              <span>Send</span>
+            </button>
+          </div>
+          <p className="ai-chat-status" role="status" aria-live="polite">
+            {announcement}
+          </p>
+        </form>
+      </div>
+    </section>
   );
 }
 

@@ -62,8 +62,8 @@ export function ChangelogPage() {
           </nav>
 
           <div className="changelog-navbar-actions">
-            <Link to="/contracts" className="btn-lp-secondary">Sign up</Link>
-            <Link to="/contracts" className="btn-lp-primary">Book a Demo</Link>
+            <Link to="/chats" className="btn-lp-secondary">Sign up</Link>
+            <Link to="/chats" className="btn-lp-primary">Book a Demo</Link>
           </div>
         </div>
       </header>
@@ -123,7 +123,7 @@ export function ChangelogPage() {
             <h2>Put the latest release to work.</h2>
             <p>Review contracts, inspect evidence, and coordinate signer status from the Samvid workspace.</p>
           </div>
-          <Link to="/contracts" className="btn-lp-primary">
+          <Link to="/chats" className="btn-lp-primary">
             Open workspace <ArrowRight size={15} />
           </Link>
         </section>
