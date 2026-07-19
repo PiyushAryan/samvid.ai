@@ -1,8 +1,9 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
-import { ContractTable, ReviewTab, Timeline } from "./App";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { AppShell, ContractsTableSkeleton, ContractTable, ReviewTab, Timeline } from "./App";
 import { LandingPage } from "./Home";
+import { TooltipProvider } from "./components/ui/tooltip";
 import type { ContractListItem, ContractReview, SigningRequest } from "./types";
 
 test("landing simulator switches between customer workflow previews", async () => {
@@ -56,6 +57,88 @@ test("contract listing renders signing counters and risk counts", () => {
   expect(screen.getByRole("link", { name: "Vendor agreement" })).toBeInTheDocument();
   expect(screen.getByText("In Progress")).toBeInTheDocument();
   expect(screen.getByText("1/2 required")).toBeInTheDocument();
+});
+
+test("sidebar control toggles its collapsed state", () => {
+  render(
+    <TooltipProvider>
+      <MemoryRouter initialEntries={["/contracts"]}>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route path="/contracts" element={<div>Contracts page</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </TooltipProvider>
+  );
+
+  const toggle = screen.getByRole("button", { name: "Collapse sidebar" });
+  fireEvent.click(toggle);
+
+  expect(screen.getByRole("button", { name: "Expand sidebar" })).toHaveAttribute("aria-pressed", "true");
+});
+
+test("workspace view slider switches between console and chats", () => {
+  const { container } = render(
+    <TooltipProvider>
+      <MemoryRouter initialEntries={["/contracts"]}>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route path="/contracts" element={<div>Contracts page</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </TooltipProvider>
+  );
+
+  const consoleOption = within(container).getByRole("button", { name: "Console" });
+  const chatsOption = within(container).getByRole("button", { name: "Chats" });
+  expect(consoleOption).toHaveAttribute("aria-pressed", "true");
+
+  fireEvent.click(chatsOption);
+
+  expect(chatsOption).toHaveAttribute("aria-pressed", "true");
+  expect(consoleOption).toHaveAttribute("aria-pressed", "false");
+});
+
+test("sidebar actions menu opens and switches theme", () => {
+  window.localStorage.setItem("samvid-theme", "light");
+
+  const { container } = render(
+    <TooltipProvider>
+      <MemoryRouter initialEntries={["/contracts"]}>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route path="/contracts" element={<div>Contracts page</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </TooltipProvider>
+  );
+
+  const menuTrigger = within(container).getByRole("button", { name: /open (?:sidebar actions|account menu)/i });
+  fireEvent.click(menuTrigger);
+
+  expect(menuTrigger).toHaveAttribute("aria-expanded", "true");
+  const menu = within(container).getByRole("menu", { name: /sidebar actions|account/i });
+  expect(within(menu).getByRole("menuitem", { name: "Account: Piyush Aryan" })).toBeInTheDocument();
+  expect(within(menu).getByText("piyush.aryan@nirvanaaisutra.com")).toBeInTheDocument();
+  expect(within(menu).getByRole("menuitem", { name: "Settings" })).toHaveAttribute("aria-disabled", "true");
+  expect(within(menu).getByRole("menuitem", { name: /log ?out/i })).toHaveAttribute("aria-disabled", "true");
+
+  fireEvent.click(within(menu).getByRole("menuitemcheckbox", { name: /dark mode/i }));
+
+  expect(container.querySelector(".app-shell")).toHaveAttribute("data-theme", "dark");
+  expect(window.localStorage.getItem("samvid-theme")).toBe("dark");
+  expect(within(container).queryByRole("menu", { name: /sidebar actions|account/i })).not.toBeInTheDocument();
+});
+
+test("contract loading state exposes one accessible status and hides its placeholders", () => {
+  const { container } = render(<ContractsTableSkeleton />);
+
+  expect(screen.getByRole("status")).toHaveTextContent("Loading contracts");
+  expect(container.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(32);
+  expect(container.querySelector(".contracts-skeleton")).toHaveAttribute("aria-hidden", "true");
 });
 
 test("review tab renders evidence-grounded risks", () => {

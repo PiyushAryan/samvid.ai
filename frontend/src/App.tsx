@@ -3,22 +3,31 @@ import {
   ArrowUpRight,
   CheckCircle2,
   ChevronRight,
+  ChevronsUpDown,
   Download,
   FileText,
   Filter,
   History,
   Loader2,
+  LogOut,
+  Moon,
+  PanelLeft,
   Plus,
   RefreshCw,
   Search,
   Send,
+  Settings,
+  MessageCircleMore,
+  Gamepad2,
+  Sun,
   Upload,
   UserPlus,
   X
 } from "lucide-react";
-import { FormEvent, ReactNode, useState } from "react";
+import { FormEvent, KeyboardEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion, useReducedMotion } from "motion/react";
 import {
   addSigner,
   appendSignerEvent,
@@ -39,6 +48,12 @@ import type {
   SigningRequest,
   SigningRequestStatus
 } from "./types";
+import { Skeleton } from "./components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
+
+const MotionPanelLeft = motion.create(PanelLeft);
+const MotionFileText = motion.create(FileText);
+const MotionHistory = motion.create(History);
 
 const signingStatuses: Array<SigningRequestStatus | ""> = ["", "not_started", "in_progress", "completed", "declined", "expired", "cancelled"];
 const reviewStatuses = ["", "received", "validating", "queued", "parsing", "analysing", "validating_evidence", "review_ready", "ocr_required", "parse_failed", "analysis_failed"];
@@ -67,44 +82,333 @@ const panelClass = "panel";
 const panelCardClass = "panel panel-card";
 const fieldLabelClass = "field";
 const fieldControlClass = "field-control";
+const accountName = import.meta.env.VITE_ACCOUNT_NAME || "Piyush Aryan";
+const accountEmail = import.meta.env.VITE_ACCOUNT_EMAIL || "piyush.aryan@nirvanaaisutra.com";
 
 export function AppShell() {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarMenuOpen, setSidebarMenuOpen] = useState(false);
+  const [workspaceView, setWorkspaceView] = useState<"console" | "chats">("console");
+  const sidebarMenuRef = useRef<HTMLDivElement>(null);
+  const sidebarMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    if (typeof window === "undefined") return "light";
+
+    const savedTheme = window.localStorage.getItem("samvid-theme");
+    if (savedTheme === "light" || savedTheme === "dark") return savedTheme;
+
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
+  const reduceMotion = useReducedMotion();
+  const sidebarTransition = reduceMotion
+    ? { duration: 0 }
+    : { duration: 0.3, ease: [0.22, 1, 0.36, 1] as const };
+
+  useEffect(() => {
+    window.localStorage.setItem("samvid-theme", theme);
+    document.documentElement.dataset.appTheme = theme;
+    document.documentElement.style.colorScheme = theme;
+  }, [theme]);
+
+  useEffect(() => () => {
+    delete document.documentElement.dataset.appTheme;
+    document.documentElement.style.removeProperty("color-scheme");
+  }, []);
+
+  useEffect(() => {
+    if (!sidebarMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!sidebarMenuRef.current?.contains(event.target as Node)) {
+        setSidebarMenuOpen(false);
+      }
+    };
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSidebarMenuOpen(false);
+        sidebarMenuTriggerRef.current?.focus();
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [sidebarMenuOpen]);
+
+  const focusSidebarMenuItem = (position: "first" | "last") => {
+    window.requestAnimationFrame(() => {
+      const items = sidebarMenuRef.current?.querySelectorAll<HTMLButtonElement>(".sidebar-menu-item");
+      if (!items?.length) return;
+      items[position === "first" ? 0 : items.length - 1].focus();
+    });
+  };
+
+  const handleSidebarMenuTriggerKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      setSidebarMenuOpen(true);
+      focusSidebarMenuItem(event.key === "ArrowDown" ? "first" : "last");
+    }
+  };
+
+  const handleSidebarMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "Home" && event.key !== "End") {
+      return;
+    }
+
+    event.preventDefault();
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>(".sidebar-menu-item"));
+    if (!items.length) return;
+    const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+    let nextIndex = currentIndex;
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = items.length - 1;
+    if (event.key === "ArrowDown") nextIndex = (currentIndex + 1) % items.length;
+    if (event.key === "ArrowUp") nextIndex = (currentIndex - 1 + items.length) % items.length;
+    items[nextIndex].focus();
+  };
+
   return (
-    <div className="app-shell">
+    <motion.div
+      className={cx("app-shell", sidebarCollapsed && "sidebar-collapsed")}
+      data-theme={theme}
+      initial={false}
+      animate={{ "--sidebar-width": sidebarCollapsed ? "68px" : "232px" }}
+      transition={sidebarTransition}
+    >
       <aside className="sidebar">
-        <Link to="/contracts" className="brand" aria-label="Samvid contracts">
-          <span className="brand-mark" aria-hidden="true">S</span>
-          <span>
-            <strong>Samvid</strong>
-            <small className="brand-caption">Contract workspace</small>
-          </span>
-        </Link>
+        <div className="sidebar-brand-row">
+          <Link to="/contracts" className="brand" aria-label="Samvid contracts">
+            <motion.span
+              className="brand-mark"
+              aria-hidden="true"
+              layout="position"
+              transition={sidebarTransition}
+            >
+              S
+            </motion.span>
+            <motion.span
+              className="brand-copy"
+              initial={false}
+              animate={sidebarCollapsed
+                ? { width: 0, opacity: 0, x: -6 }
+                : { width: "auto", opacity: 1, x: 0 }}
+              transition={sidebarTransition}
+              aria-hidden={sidebarCollapsed}
+            >
+              <strong>Samvid</strong>
+              <small className="brand-caption">Contract workspace</small>
+            </motion.span>
+          </Link>
+          <div className="sidebar-menu-controls">
+            <div className="sidebar-menu" ref={sidebarMenuRef}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    ref={sidebarMenuTriggerRef}
+                    className={cx(iconButton, "sidebar-menu-trigger")}
+                    type="button"
+                    aria-label={sidebarMenuOpen ? "Close sidebar actions" : "Open sidebar actions"}
+                    aria-haspopup="menu"
+                    aria-expanded={sidebarMenuOpen}
+                    aria-controls="sidebar-actions-menu"
+                    onClick={() => setSidebarMenuOpen((open) => !open)}
+                    onKeyDown={handleSidebarMenuTriggerKeyDown}
+                  >
+                    <ChevronsUpDown size={16} strokeWidth={1.7} aria-hidden="true" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Sidebar actions</TooltipContent>
+              </Tooltip>
+              {sidebarMenuOpen && (
+                <div
+                  id="sidebar-actions-menu"
+                  className="sidebar-menu-popover"
+                  role="menu"
+                  aria-label="Sidebar actions"
+                  onKeyDown={handleSidebarMenuKeyDown}
+                >
+                  <p className="sidebar-menu-eyebrow">Account</p>
+                  <button
+                    className="sidebar-menu-item sidebar-account"
+                    type="button"
+                    role="menuitem"
+                    aria-label={`Account: ${accountName}`}
+                    aria-disabled="true"
+                    title="Account management is not available yet"
+                  >
+                    <span className="sidebar-account-avatar" aria-hidden="true">
+                      {accountName.trim().charAt(0).toUpperCase()}
+                    </span>
+                    <span className="sidebar-account-copy">
+                      <span className="sidebar-account-title">
+                        <strong>{accountName}</strong>
+                      </span>
+                      <small className="sidebar-account-email">{accountEmail}</small>
+                    </span>
+                  </button>
+                  <div className="sidebar-menu-actions" role="group" aria-label="Account actions">
+                    <button
+                      className="sidebar-menu-item sidebar-menu-action"
+                      type="button"
+                      role="menuitem"
+                      aria-label="Settings"
+                      aria-disabled="true"
+                      title="Settings are not available yet"
+                    >
+                      <Settings size={19} aria-hidden="true" />
+                    </button>
+                    <button
+                      className="sidebar-menu-item sidebar-menu-action"
+                      type="button"
+                      role="menuitemcheckbox"
+                      aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                      aria-checked={theme === "dark"}
+                      title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                      onClick={() => {
+                        setTheme((currentTheme) => currentTheme === "light" ? "dark" : "light");
+                        setSidebarMenuOpen(false);
+                      }}
+                    >
+                      {theme === "dark"
+                        ? <Sun size={19} aria-hidden="true" />
+                        : <Moon size={19} aria-hidden="true" />}
+                    </button>
+                    <button
+                      className="sidebar-menu-item sidebar-menu-action sidebar-menu-logout"
+                      type="button"
+                      role="menuitem"
+                      aria-label="Logout"
+                      aria-disabled="true"
+                      title="Sign out is unavailable because this app has no user session"
+                    >
+                      <LogOut size={19} aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <motion.button
+                  className={cx(iconButton, "sidebar-toggle")}
+                  type="button"
+                  onClick={() => {
+                    setSidebarMenuOpen(false);
+                    setSidebarCollapsed((collapsed) => !collapsed);
+                  }}
+                  aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  aria-pressed={sidebarCollapsed}
+                  layout="position"
+                  transition={sidebarTransition}
+                >
+                  <MotionPanelLeft
+                    size={16}
+                    strokeWidth={1.7}
+                    aria-hidden="true"
+                    initial={false}
+                    animate={{ rotate: sidebarCollapsed ? 180 : 0 }}
+                    transition={sidebarTransition}
+                  />
+                </motion.button>
+              </TooltipTrigger>
+              {sidebarCollapsed && <TooltipContent side="right">Expand sidebar</TooltipContent>}
+            </Tooltip>
+          </div>
+        </div>
         <nav className="sidebar-nav">
-          <NavLink
-            to="/contracts"
-            className={({ isActive }) =>
-              cx("nav-link", isActive && "active")
-            }
+          <div
+            className="sidebar-view-switch"
+            data-active={workspaceView}
+            role="group"
+            aria-label="Workspace view"
           >
-            <FileText size={17} /> Contracts
-          </NavLink>
-          <NavLink
-            to="/signing"
-            className={({ isActive }) =>
-              cx("nav-link", isActive && "active")
-            }
-          >
-            <History size={17} /> Signing
-          </NavLink>
+            <span className="sidebar-view-indicator" aria-hidden="true" />
+            <button
+              type="button"
+              className="sidebar-view-option"
+              aria-pressed={workspaceView === "console"}
+              onClick={() => setWorkspaceView("console")}
+            >
+              <Gamepad2 size={15} aria-hidden="true" />
+              <span className="sidebar-view-label">console</span>
+            </button>
+            <button
+              type="button"
+              className="sidebar-view-option"
+              aria-pressed={workspaceView === "chats"}
+              onClick={() => setWorkspaceView("chats")}
+            >
+              <MessageCircleMore size={15} aria-hidden="true" />
+              <span className="sidebar-view-label">chats</span>
+            </button>
+          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <NavLink
+                to="/contracts"
+                aria-label="Contracts"
+                className="nav-link"
+              >
+                <MotionFileText size={17} layout="position" transition={sidebarTransition} />
+                <motion.span
+                  className="nav-label"
+                  initial={false}
+                  animate={sidebarCollapsed
+                    ? { width: 0, opacity: 0, x: -5 }
+                    : { width: "auto", opacity: 1, x: 0 }}
+                  transition={sidebarTransition}
+                  aria-hidden={sidebarCollapsed}
+                >
+                  Contracts
+                </motion.span>
+              </NavLink>
+            </TooltipTrigger>
+            {sidebarCollapsed && <TooltipContent side="right">Contracts</TooltipContent>}
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <NavLink
+                to="/signing"
+                aria-label="Signing"
+                className="nav-link"
+              >
+                <MotionHistory size={17} layout="position" transition={sidebarTransition} />
+                <motion.span
+                  className="nav-label"
+                  initial={false}
+                  animate={sidebarCollapsed
+                    ? { width: 0, opacity: 0, x: -5 }
+                    : { width: "auto", opacity: 1, x: 0 }}
+                  transition={sidebarTransition}
+                  aria-hidden={sidebarCollapsed}
+                >
+                  Signing
+                </motion.span>
+              </NavLink>
+            </TooltipTrigger>
+            {sidebarCollapsed && <TooltipContent side="right">Signing</TooltipContent>}
+          </Tooltip>
         </nav>
-        <p className="tracking-note">
+        <motion.p
+          className="tracking-note"
+          initial={false}
+          animate={sidebarCollapsed
+            ? { height: 0, opacity: 0, paddingTop: 0 }
+            : { height: "auto", opacity: 1, paddingTop: 12 }}
+          transition={sidebarTransition}
+          aria-hidden={sidebarCollapsed}
+        >
           Tracking only. Samvid does not execute electronic signatures.
-        </p>
+        </motion.p>
       </aside>
-      <main>
+      <main className="workspace-main">
         <Outlet />
       </main>
-    </div>
+    </motion.div>
   );
 }
 
@@ -161,7 +465,7 @@ export function ContractsPage() {
           <RefreshCw size={16} />
         </button>
       </div>
-      <QueryState query={contractsQuery}>
+      <QueryState query={contractsQuery} loadingFallback={<ContractsTableSkeleton />}>
         <ContractTable contracts={contractsQuery.data || []} />
       </QueryState>
       {uploadOpen && (
@@ -314,6 +618,57 @@ export function ContractTable({ contracts }: { contracts: ContractListItem[] }) 
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+export function ContractsTableSkeleton() {
+  return (
+    <div className="contracts-loading" role="status" aria-live="polite" aria-busy="true">
+      <span className="sr-only">Loading contracts</span>
+      <div className={cx(tableWrap, "contracts-skeleton")} aria-hidden="true">
+        <table className={cx(tableClass, "contracts-table")}>
+          <thead>
+            <tr>
+              <th className={thClass}>Contract</th>
+              <th className={thClass}>Review</th>
+              <th className={thClass}>Risks</th>
+              <th className={thClass}>Signing</th>
+              <th className={thClass}>Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: 4 }, (_, index) => (
+              <tr key={index}>
+                <td className={tdClass}>
+                  <div className="skeleton-stack skeleton-contract">
+                    <Skeleton className="skeleton-line skeleton-title" />
+                    <Skeleton className="skeleton-line skeleton-filename" />
+                  </div>
+                </td>
+                <td className={tdClass}>
+                  <Skeleton className="skeleton-badge" />
+                </td>
+                <td className={tdClass}>
+                  <div className="skeleton-inline">
+                    <Skeleton className="skeleton-chip" />
+                    <Skeleton className="skeleton-chip" />
+                  </div>
+                </td>
+                <td className={tdClass}>
+                  <div className="skeleton-stack">
+                    <Skeleton className="skeleton-badge skeleton-signing" />
+                    <Skeleton className="skeleton-line skeleton-counter" />
+                  </div>
+                </td>
+                <td className={tdClass}>
+                  <Skeleton className="skeleton-line skeleton-date" />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -720,9 +1075,17 @@ function PanelTitle({ children }: { children: ReactNode }) {
   return <h2>{children}</h2>;
 }
 
-function QueryState({ query, children }: { query: { isLoading: boolean; isError: boolean; error: unknown }; children: ReactNode }) {
+function QueryState({
+  query,
+  children,
+  loadingFallback
+}: {
+  query: { isLoading: boolean; isError: boolean; error: unknown };
+  children: ReactNode;
+  loadingFallback?: ReactNode;
+}) {
   if (query.isLoading) {
-    return <div className="state"><Loader2 className="spin" size={18} /> Loading</div>;
+    return loadingFallback || <div className="state"><Loader2 className="spin" size={18} /> Loading</div>;
   }
   if (query.isError) {
     return <div className="state error"><AlertTriangle size={18} /> {query.error instanceof Error ? query.error.message : "Something went wrong."}</div>;

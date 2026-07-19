@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React, { lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import { Navigate, NavLink, Route, BrowserRouter as Router, Routes } from "react-router-dom";
+import { TooltipProvider } from "./components/ui/tooltip";
 
 const LandingPage = lazy(() => import("./Home").then((module) => ({ default: module.LandingPage })));
 const ChangelogPage = lazy(() => import("./Changelog").then((module) => ({ default: module.ChangelogPage })));
@@ -27,20 +28,22 @@ const queryClient = new QueryClient({
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <Router>
-        <Suspense fallback={null}>
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/changelog" element={<ChangelogPage />} />
-            <Route element={<AppShell />}>
-              <Route path="/contracts" element={<ContractsPage />} />
-              <Route path="/contracts/:contractId" element={<ContractDetailPage />} />
-              <Route path="/signing" element={<SigningPage />} />
-            </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
-      </Router>
+      <TooltipProvider delayDuration={350} skipDelayDuration={100}>
+        <Router>
+          <Suspense fallback={null}>
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/changelog" element={<ChangelogPage />} />
+              <Route element={<AppShell />}>
+                <Route path="/contracts" element={<ContractsPage />} />
+                <Route path="/contracts/:contractId" element={<ContractDetailPage />} />
+                <Route path="/signing" element={<SigningPage />} />
+              </Route>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </Router>
+      </TooltipProvider>
     </QueryClientProvider>
   </React.StrictMode>
 );
