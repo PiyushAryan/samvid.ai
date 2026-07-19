@@ -106,6 +106,8 @@ class Settings(BaseModel):
                 errors.append("NEON_AUTH_URL is required when AUTH_MODE=neon")
             if not self.neon_auth_allowed_emails:
                 errors.append("NEON_AUTH_ALLOWED_EMAILS is required when AUTH_MODE=neon")
+            if not self.neon_auth_require_email_verified:
+                errors.append("NEON_AUTH_REQUIRE_EMAIL_VERIFIED must be true in production when AUTH_MODE=neon")
         if self.enable_ocr and not self.sarvam_api_key:
             errors.append("SARVAM_API_KEY is required when OCR is enabled")
         if self.auto_send_review_email and not (self.resend_api_key or self.smtp_host):

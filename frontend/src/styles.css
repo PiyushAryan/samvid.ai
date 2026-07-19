@@ -175,7 +175,7 @@ p {
   position: absolute;
   z-index: -1;
   inset: 0;
-  background-image: url("/blr.png");
+  background-image: url("/blr.webp");
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
@@ -184,7 +184,7 @@ p {
 }
 
 .app-shell[data-theme="dark"] .workspace-main::before {
-  background-image: url("/blr-dark.png");
+  background-image: url("/blr-dark.webp");
   opacity: 0.30;
 }
 
@@ -2388,6 +2388,59 @@ textarea.field-control {
 
 [data-app-theme="dark"] .auth-route-loading {
   background: #0b0c0e;
+}
+
+.auth-route-state {
+  display: grid;
+  min-height: 100svh;
+  place-items: center;
+  padding: 24px;
+  background: var(--app-bg);
+  color: var(--text);
+  font-family: var(--app-font);
+}
+
+.auth-route-state-panel {
+  width: min(100%, 440px);
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--menu-shadow);
+}
+
+.auth-route-state-panel > span {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.auth-route-state-panel h1 {
+  margin: 12px 0 10px;
+  font-size: 24px;
+  letter-spacing: 0;
+}
+
+.auth-route-state-panel p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.auth-route-state-panel button {
+  min-height: 42px;
+  margin-top: 22px;
+  padding: 0 16px;
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .document-panel-loading {

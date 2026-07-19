@@ -40,6 +40,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     if (response.status === 401) window.dispatchEvent(new Event("samvid:auth-required"));
+    if (response.status === 403) window.dispatchEvent(new Event("samvid:access-denied"));
     let payload: ApiErrorPayload = {};
     try {
       const parsed = await response.json();
@@ -171,6 +172,7 @@ export async function getContractDocument(contractId: string): Promise<Blob> {
   });
   if (!response.ok) {
     if (response.status === 401) window.dispatchEvent(new Event("samvid:auth-required"));
+    if (response.status === 403) window.dispatchEvent(new Event("samvid:access-denied"));
     throw new ApiError(response.status, { message: response.statusText || "Unable to load document" });
   }
   return response.blob();

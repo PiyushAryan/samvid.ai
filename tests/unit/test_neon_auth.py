@@ -112,6 +112,7 @@ def test_neon_mode_keeps_spa_public_and_protects_api(monkeypatch, tmp_path) -> N
         auth_mode="neon",
         neon_auth_url=AUTH_URL,
         neon_auth_allowed_emails=("owner@example.com",),
+        neon_auth_require_email_verified=True,
         allowed_hosts=("testserver",),
         database_url="postgresql://user:pass@database/samvid",
         local_storage_dir=tmp_path / "contracts",
@@ -130,5 +131,6 @@ def test_neon_mode_keeps_spa_public_and_protects_api(monkeypatch, tmp_path) -> N
         "subject": "user_123",
         "email": "owner@example.com",
         "name": "Workspace Owner",
+        "email_verified": True,
         "workspace_id": "email-workspace",
     }

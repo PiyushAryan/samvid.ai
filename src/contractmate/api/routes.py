@@ -65,12 +65,14 @@ def create_api_router(settings: Settings):
                 "subject": "local-user",
                 "email": settings.samvid_local_actor_email,
                 "name": settings.samvid_local_actor_name,
+                "email_verified": True,
                 "workspace_id": workspace_id(),
             }
         return {
             "subject": principal.subject,
             "email": principal.email,
             "name": principal.name,
+            "email_verified": principal.email_verified,
             "workspace_id": workspace_id(),
         }
 

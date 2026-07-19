@@ -7,6 +7,7 @@ import { Navigate, NavLink, Route, BrowserRouter as Router, Routes, useSearchPar
 import { TooltipProvider } from "./components/ui/tooltip";
 import { Skeleton } from "./components/ui/skeleton";
 import { AuthProvider, RequireAuth, useAuth } from "./AuthProvider";
+import { safeInternalPath } from "./auth";
 
 const LandingPage = lazy(() => import("./Home").then((module) => ({ default: module.LandingPage })));
 const ChangelogPage = lazy(() => import("./Changelog").then((module) => ({ default: module.ChangelogPage })));
@@ -21,11 +22,15 @@ function AuthRoute() {
   const { user, isLoading } = useAuth();
   const [searchParams] = useSearchParams();
   const requestedReturnTo = searchParams.get("returnTo") || "/contracts";
-  const returnTo = requestedReturnTo.startsWith("/") && !requestedReturnTo.startsWith("//")
-    ? requestedReturnTo
-    : "/contracts";
+  const returnTo = safeInternalPath(requestedReturnTo);
   const view = searchParams.get("view");
-  const initialView = view === "sign-up" || view === "forgot-password" ? view : "sign-in";
+  const resetToken = searchParams.get("token");
+  const allowAuthScreen = searchParams.get("signedOut") === "1" || searchParams.get("reset") === "complete";
+  const initialView = view === "sign-up" || view === "forgot-password" || view === "verify-email"
+    ? view
+    : view === "reset-password" || resetToken
+      ? "reset-password"
+      : "sign-in";
 
   if (isLoading) {
     return (
@@ -35,8 +40,13 @@ function AuthRoute() {
       </main>
     );
   }
-  if (!isLoading && user) return <Navigate to={returnTo} replace />;
-  return <AuthPage initialView={initialView} redirectTo={returnTo} />;
+  if (user && initialView !== "reset-password" && !allowAuthScreen) {
+    if (!user.emailVerified) {
+      return <AuthPage initialView="verify-email" initialEmail={user.email} redirectTo={returnTo} />;
+    }
+    return <Navigate to={returnTo} replace />;
+  }
+  return <AuthPage initialView={initialView} initialEmail={user?.email} redirectTo={returnTo} />;
 }
 
 const queryClient = new QueryClient({

@@ -28,7 +28,8 @@
   min-width: 320px;
   min-height: 100svh;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   background: var(--auth-bg);
   color: var(--auth-text);
   font-family: "Geist Pixel Square", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -293,7 +294,7 @@
 .auth-field label,
 .auth-label-row button,
 .auth-field > small {
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .auth-field label {
@@ -399,7 +400,7 @@
   margin: 0;
   padding: 10px 11px;
   border-radius: 6px;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.45;
 }
 
@@ -447,13 +448,14 @@
 }
 
 .auth-resend {
+  min-height: 36px;
   justify-self: center;
-  padding: 2px 0;
+  padding: 8px 4px;
   border: 0;
   background: transparent;
   color: var(--auth-accent);
   font: inherit;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 650;
   cursor: pointer;
 }
@@ -471,13 +473,14 @@
 
 .auth-verify-help {
   display: block;
+  min-height: 36px;
   margin: 15px auto 0;
-  padding: 2px 0;
+  padding: 8px 4px;
   border: 0;
   background: transparent;
   color: var(--auth-accent);
   font: inherit;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 650;
   cursor: pointer;
 }
@@ -497,6 +500,61 @@
   grid-template-columns: 18px minmax(0, 1fr);
 }
 
+.auth-code-input-shell input {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.auth-email-summary {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--auth-border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--auth-accent-soft) 58%, var(--auth-surface-solid));
+  color: var(--auth-accent);
+}
+
+.auth-email-summary > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.auth-email-summary small {
+  color: var(--auth-muted);
+  font-size: 10px;
+}
+
+.auth-email-summary strong {
+  overflow: hidden;
+  color: var(--auth-text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-email-summary button {
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--auth-accent);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-email-summary button:hover {
+  background: var(--auth-accent-soft);
+}
+
 .auth-spinner {
   animation: auth-spin 0.9s linear infinite;
 }
@@ -508,7 +566,7 @@
   gap: 6px;
   margin: 21px 0 0;
   color: var(--auth-muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .auth-switch button {
@@ -520,7 +578,7 @@
   padding-top: 17px;
   border-top: 1px solid var(--auth-border);
   color: var(--auth-muted);
-  font-size: 8px;
+  font-size: 10px;
   line-height: 1.5;
   text-align: center;
 }

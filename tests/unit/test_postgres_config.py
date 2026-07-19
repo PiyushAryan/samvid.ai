@@ -63,6 +63,7 @@ def test_production_settings_accept_neon_auth_without_basic_password(tmp_path) -
         auth_mode="neon",
         neon_auth_url="https://ep-example.neonauth.us-east-1.aws.neon.tech/neondb/auth",
         neon_auth_allowed_emails=("owner@example.com",),
+        neon_auth_require_email_verified=True,
         database_url="postgresql://user:pass@database/samvid",
         local_storage_dir=tmp_path / "contracts",
         inbound_attachment_dir=tmp_path / "inbound",

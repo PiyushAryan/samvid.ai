@@ -193,10 +193,45 @@ URL origin. `VITE_NEON_AUTH_URL` is a public endpoint, not a secret. Add both
 domains. Keep the frontend and backend on the same Neon branch because preview
 and production branches have different issuers and signing keys.
 
+Authentication email is sent by Neon Auth, not by Samvid's `RESEND_API_KEY`,
+the inbound Resend webhook, FastAPI, or the EC2 worker. In the production Neon
+branch, open **Auth -> Configuration** and configure all of the following:
+
+- Add `https://samvid-ai.vercel.app` as an exact trusted domain. Include the
+  protocol and omit the trailing slash.
+- Enable email/password sign-up and choose **verification code** for sign-up
+  verification. Samvid's verification form expects a six-digit code. Resends
+  use Neon's `sendVerificationEmail` API, which sends the verification method
+  selected for that branch in the Console.
+- Configure a custom SMTP provider for production delivery. Neon's shared
+  provider is appropriate only for development and verification-code testing.
+- Test verification and password-reset delivery against the same branch used by
+  `VITE_NEON_AUTH_URL` and `NEON_AUTH_URL`. Codes and reset links expire after
+  15 minutes.
+
+The browser preserves the pending verification email in session storage, applies
+a resend cooldown, and removes consumed password-reset tokens from browser
+history. Before rendering the workspace it also calls `/api/auth/me`; a valid
+Neon session is not enough when the email is outside the backend allowlist.
+
 The current product has one shared `EMAIL_WORKSPACE_ID`, so
 `NEON_AUTH_ALLOWED_EMAILS` is the authorization boundary for its existing
 contracts. Do not leave it empty or treat successful sign-up alone as workspace
-authorization. The EC2 worker does not require Neon Auth variables.
+authorization. The current deployment is therefore invite-only even though the
+sign-up form can create a Neon account. Add each approved account to the
+allowlist before testing workspace access. The EC2 worker does not require Neon
+Auth variables.
+
+### Authentication smoke test
+
+1. Create a user from the production frontend and confirm the verification code
+   arrives within two minutes.
+2. Verify the code, sign in, and confirm `/api/auth/me` returns HTTP 200.
+3. Repeat with an email outside `NEON_AUTH_ALLOWED_EMAILS` and confirm Samvid
+   shows the dedicated unauthorized-account screen without workspace data.
+4. Request a password reset, open the emailed link, choose a new password, and
+   confirm the reset token disappears from the browser URL after completion.
+5. Sign in with the new password and verify contracts load normally.
 
 Production deployment
 ---------------------

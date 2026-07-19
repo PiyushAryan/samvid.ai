@@ -11,16 +11,27 @@ import {
   Sun
 } from "lucide-react";
 import { FormEvent, useEffect, useId, useState } from "react";
-import { getAuthClient, getAuthErrorMessage, isNeonAuthConfigured } from "./auth";
+import { useLocation, useNavigate } from "react-router-dom";
+import {
+  getAuthClient,
+  getAuthErrorMessage,
+  isNeonAuthConfigured,
+  PENDING_AUTH_EMAIL_KEY,
+  safeInternalPath
+} from "./auth";
 import "./auth.css";
 
-export type AuthView = "sign-in" | "sign-up" | "forgot-password" | "verify-email";
+export type AuthView = "sign-in" | "sign-up" | "forgot-password" | "reset-password" | "verify-email";
 type AuthTheme = "light" | "dark";
 
 type AuthPageProps = {
   initialView?: AuthView;
+  initialEmail?: string;
   redirectTo?: string;
 };
+
+const VERIFICATION_CODE_LENGTH = 6;
+const RESEND_COOLDOWN_SECONDS = 30;
 
 const viewCopy: Record<AuthView, { eyebrow: string; title: string; description: string }> = {
   "sign-in": {
@@ -38,10 +49,15 @@ const viewCopy: Record<AuthView, { eyebrow: string; title: string; description: 
     title: "Reset your password",
     description: "Enter your work email and we will send you a secure reset link."
   },
+  "reset-password": {
+    eyebrow: "Account recovery",
+    title: "Choose a new password",
+    description: "Set a new password for your Samvid account."
+  },
   "verify-email": {
     eyebrow: "Confirm your email",
     title: "Check your inbox",
-    description: "Use the verification link or enter the verification code sent to your email."
+    description: "Enter the six-digit verification code sent to your email."
   }
 };
 
@@ -63,6 +79,11 @@ function accountNameFromEmail(email: string) {
     .join(" ");
 }
 
+function getPendingEmail() {
+  if (typeof window === "undefined") return "";
+  return window.sessionStorage.getItem(PENDING_AUTH_EMAIL_KEY) || "";
+}
+
 function requiresEmailVerification(error: unknown) {
   if (!error || typeof error !== "object") return false;
   const code = "code" in error && typeof error.code === "string" ? error.code : "";
@@ -74,21 +95,29 @@ function requiresEmailVerification(error: unknown) {
     || normalizedMessage.includes("verify your email");
 }
 
-export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }: AuthPageProps) {
+export function AuthPage({ initialView = "sign-in", initialEmail = "", redirectTo = "/contracts" }: AuthPageProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const safeRedirectTo = safeInternalPath(redirectTo);
   const [view, setView] = useState<AuthView>(initialView);
   const [theme, setTheme] = useState<AuthTheme>(getInitialTheme);
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => initialEmail || getPendingEmail());
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [verificationResendSeconds, setVerificationResendSeconds] = useState(0);
+  const [resetRequestSeconds, setResetRequestSeconds] = useState(0);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const nameId = useId();
   const emailId = useId();
   const passwordId = useId();
+  const confirmPasswordId = useId();
   const verificationCodeId = useId();
+  const verificationCodeHintId = useId();
   const errorId = useId();
 
   const copy = viewCopy[view];
@@ -98,18 +127,64 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
   }, [theme]);
 
   useEffect(() => {
-    setView(initialView);
-    setError("");
-    setNotice("");
-  }, [initialView]);
+    if (view !== initialView) {
+      setView(initialView);
+      setError("");
+      setNotice("");
+    }
+    if (initialEmail) setEmail(initialEmail);
+    else if (initialView === "verify-email") setEmail((current) => current || getPendingEmail());
+    // Internal navigation updates `view` first, so its new notice is preserved.
+  }, [initialEmail, initialView]);
 
-  const changeView = (nextView: AuthView) => {
+  useEffect(() => {
+    if (verificationResendSeconds <= 0 && resetRequestSeconds <= 0) return;
+    const timer = window.setInterval(() => {
+      setVerificationResendSeconds((seconds) => Math.max(0, seconds - 1));
+      setResetRequestSeconds((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resetRequestSeconds, verificationResendSeconds]);
+
+  const changeView = (nextView: AuthView, options: { replace?: boolean } = {}) => {
     setView(nextView);
     setError("");
     setNotice("");
     setPassword("");
+    setConfirmPassword("");
     setVerificationCode("");
     setShowPassword(false);
+
+    const params = new URLSearchParams();
+    if (nextView !== "sign-in") params.set("view", nextView);
+    if (safeRedirectTo !== "/contracts") params.set("returnTo", safeRedirectTo);
+    if (nextView === "reset-password") {
+      const token = new URLSearchParams(location.search).get("token");
+      if (token) params.set("token", token);
+    }
+    const search = params.toString();
+    navigate(`/auth${search ? `?${search}` : ""}`, { replace: options.replace });
+  };
+
+  const rememberPendingEmail = (value: string) => {
+    window.sessionStorage.setItem(PENDING_AUTH_EMAIL_KEY, value);
+    setEmail(value);
+  };
+
+  const leaveVerification = async (nextView: "sign-in" | "sign-up") => {
+    setIsSubmitting(true);
+    try {
+      if (isNeonAuthConfigured) await getAuthClient().signOut();
+    } finally {
+      window.sessionStorage.removeItem(PENDING_AUTH_EMAIL_KEY);
+      window.dispatchEvent(new Event("samvid:auth-required"));
+      setEmail("");
+      setView(nextView);
+      setError("");
+      setNotice("");
+      setIsSubmitting(false);
+      navigate(`/auth${nextView === "sign-up" ? "?view=sign-up&signedOut=1" : "?signedOut=1"}`, { replace: true });
+    }
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -128,30 +203,65 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
       const client = getAuthClient();
 
       if (view === "forgot-password") {
+        if (resetRequestSeconds > 0) return;
         const result = await client.requestPasswordReset({
           email: email.trim(),
-          redirectTo: `${window.location.origin}/auth`
+          redirectTo: `${window.location.origin}/auth?view=reset-password&returnTo=${encodeURIComponent(safeRedirectTo)}`
         });
 
         if (result.error) throw result.error;
 
-        setNotice("Check your inbox for a secure password reset link.");
+        setResetRequestSeconds(RESEND_COOLDOWN_SECONDS);
+        setNotice("If an account exists for this email, a password reset link has been sent.");
+        return;
+      }
+
+      if (view === "reset-password") {
+        const token = new URLSearchParams(location.search).get("token");
+        if (!token || token === "INVALID_TOKEN") {
+          setError("This password reset link is invalid or has expired. Request a new link.");
+          return;
+        }
+        if (password !== confirmPassword) {
+          setError("The passwords do not match.");
+          return;
+        }
+
+        const result = await client.resetPassword({
+          newPassword: password,
+          token
+        });
+        if (result.error) throw result.error;
+
+        await client.signOut();
+        window.dispatchEvent(new Event("samvid:auth-required"));
+        setView("sign-in");
+        setPassword("");
+        setConfirmPassword("");
+        navigate("/auth?reset=complete", { replace: true });
+        setNotice("Password updated. Sign in with your new password.");
         return;
       }
 
       if (view === "verify-email") {
+        if (verificationCode.length !== VERIFICATION_CODE_LENGTH) {
+          setError(`Enter the ${VERIFICATION_CODE_LENGTH}-digit verification code.`);
+          return;
+        }
         const result = await client.emailOtp.verifyEmail({
           email: email.trim(),
-          otp: verificationCode.trim()
+          otp: verificationCode
         });
         if (result.error) throw result.error;
 
         const session = await client.getSession();
-        if (session.data?.user?.emailVerified) {
-          window.location.assign(redirectTo);
+        if (result.data?.user?.emailVerified || session.data?.user?.emailVerified) {
+          window.sessionStorage.removeItem(PENDING_AUTH_EMAIL_KEY);
+          window.location.assign(safeRedirectTo);
           return;
         }
-        changeView("sign-in");
+        window.sessionStorage.removeItem(PENDING_AUTH_EMAIL_KEY);
+        changeView("sign-in", { replace: true });
         setNotice("Email verified. Sign in to continue.");
         return;
       }
@@ -161,29 +271,29 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
           name: name.trim() || accountNameFromEmail(email),
           email: email.trim(),
           password,
-          callbackURL: `${window.location.origin}${redirectTo}`
+          callbackURL: `${window.location.origin}${safeRedirectTo}`
         })
         : await client.signIn.email({
           email: email.trim(),
           password,
           rememberMe: true,
-          callbackURL: `${window.location.origin}${redirectTo}`
+          callbackURL: `${window.location.origin}${safeRedirectTo}`
         });
 
       if (result.error) throw result.error;
 
       if (view === "sign-up" && result.data?.user && !result.data.user.emailVerified) {
-        setView("verify-email");
-        setPassword("");
+        rememberPendingEmail(email.trim());
+        changeView("verify-email", { replace: true });
         setNotice(`We sent a verification message to ${email.trim()}.`);
         return;
       }
 
-      window.location.assign(redirectTo);
+      window.location.assign(safeRedirectTo);
     } catch (authError) {
       if (view === "sign-in" && requiresEmailVerification(authError)) {
-        setView("verify-email");
-        setPassword("");
+        rememberPendingEmail(email.trim());
+        changeView("verify-email");
         setNotice(`Verify ${email.trim()} before signing in.`);
         return;
       }
@@ -212,16 +322,16 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
     try {
       const result = await getAuthClient().sendVerificationEmail({
         email: normalizedEmail,
-        callbackURL: `${window.location.origin}${redirectTo}`
+        callbackURL: `${window.location.origin}${safeRedirectTo}`
       });
       if (result.error) throw result.error;
 
+      rememberPendingEmail(normalizedEmail);
       if (openVerificationView) {
-        setView("verify-email");
-        setPassword("");
-        setVerificationCode("");
+        changeView("verify-email");
       }
-      setNotice(`A new verification message was sent to ${normalizedEmail}.`);
+      setVerificationResendSeconds(RESEND_COOLDOWN_SECONDS);
+      setNotice(`A new verification code was sent to ${normalizedEmail}.`);
     } catch (authError) {
       setError(getAuthErrorMessage(authError, "We could not resend the verification message."));
     } finally {
@@ -269,8 +379,12 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
         </div>
 
         <div className="auth-panel">
-          {(view === "forgot-password" || view === "verify-email") && (
-            <button className="auth-back-button" type="button" onClick={() => changeView("sign-in")}>
+          {(view === "forgot-password" || view === "reset-password" || view === "verify-email") && (
+            <button
+              className="auth-back-button"
+              type="button"
+              onClick={() => view === "verify-email" ? void leaveVerification("sign-in") : changeView("sign-in")}
+            >
               <ArrowLeft size={15} aria-hidden="true" /> Back to sign in
             </button>
           )}
@@ -301,28 +415,30 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
               </div>
             )}
 
-            <div className="auth-field">
-              <label htmlFor={emailId}>Work email</label>
-              <div className="auth-input-shell">
-                <Mail size={16} aria-hidden="true" />
-                <input
-                  id={emailId}
-                  name="email"
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="you@company.com"
-                  required
-                />
+            {view !== "reset-password" && view !== "verify-email" && (
+              <div className="auth-field">
+                <label htmlFor={emailId}>Work email</label>
+                <div className="auth-input-shell">
+                  <Mail size={16} aria-hidden="true" />
+                  <input
+                    id={emailId}
+                    name="email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="you@company.com"
+                    required
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             {view !== "forgot-password" && view !== "verify-email" && (
               <div className="auth-field">
                 <div className="auth-label-row">
-                  <label htmlFor={passwordId}>Password</label>
+                  <label htmlFor={passwordId}>{view === "reset-password" ? "New password" : "Password"}</label>
                   {view === "sign-in" && (
                     <button type="button" onClick={() => changeView("forgot-password")}>
                       Forgot password?
@@ -335,7 +451,7 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
                     id={passwordId}
                     name="password"
                     type={showPassword ? "text" : "password"}
-                    autoComplete={view === "sign-up" ? "new-password" : "current-password"}
+                    autoComplete={view === "sign-up" || view === "reset-password" ? "new-password" : "current-password"}
                     minLength={8}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
@@ -352,29 +468,62 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
                     {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
                   </button>
                 </div>
-                {view === "sign-up" && <small>Use 8 or more characters.</small>}
+                {(view === "sign-up" || view === "reset-password") && <small>Use 8 or more characters.</small>}
+              </div>
+            )}
+
+            {view === "reset-password" && (
+              <div className="auth-field">
+                <label htmlFor={confirmPasswordId}>Confirm new password</label>
+                <div className="auth-input-shell">
+                  <LockKeyhole size={16} aria-hidden="true" />
+                  <input
+                    id={confirmPasswordId}
+                    name="confirm-password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    minLength={8}
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    placeholder="Repeat your new password"
+                    required
+                  />
+                </div>
               </div>
             )}
 
             {view === "verify-email" && (
-              <div className="auth-field">
-                <label htmlFor={verificationCodeId}>Verification code</label>
-                <div className="auth-input-shell auth-code-input-shell">
+              <>
+                <div className="auth-email-summary">
                   <Mail size={16} aria-hidden="true" />
-                  <input
-                    id={verificationCodeId}
-                    name="verification-code"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    value={verificationCode}
-                    onChange={(event) => setVerificationCode(event.target.value.replace(/\s/g, ""))}
-                    placeholder="Enter the code from your email"
-                    required
-                  />
+                  <span>
+                    <small>Verification code sent to</small>
+                    <strong>{email || "your email"}</strong>
+                  </span>
+                  <button type="button" onClick={() => void leaveVerification("sign-up")}>Change</button>
                 </div>
-                <small>Using a verification link? Open it in this browser instead.</small>
-              </div>
+                <div className="auth-field">
+                  <label htmlFor={verificationCodeId}>Verification code</label>
+                  <div className="auth-input-shell auth-code-input-shell">
+                    <Mail size={16} aria-hidden="true" />
+                    <input
+                      id={verificationCodeId}
+                      name="verification-code"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      pattern={`[0-9]{${VERIFICATION_CODE_LENGTH}}`}
+                      maxLength={VERIFICATION_CODE_LENGTH}
+                      aria-describedby={verificationCodeHintId}
+                      value={verificationCode}
+                      onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, VERIFICATION_CODE_LENGTH))}
+                      placeholder="000000"
+                      required
+                    />
+                  </div>
+                  <small id={verificationCodeHintId}>Codes expire after 15 minutes.</small>
+                </div>
+              </>
             )}
 
             {error && <p id={errorId} className="auth-message auth-message-error" role="alert">{error}</p>}
@@ -383,7 +532,7 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
             <button
               className="auth-submit"
               type="submit"
-              disabled={isSubmitting || (Boolean(notice) && view !== "verify-email")}
+              disabled={isSubmitting || (view === "forgot-password" && resetRequestSeconds > 0)}
             >
               {isSubmitting ? (
                 <><Loader2 className="auth-spinner" size={16} aria-hidden="true" /> Working...</>
@@ -391,7 +540,10 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
                 <>
                   {view === "sign-in" && "Sign in to workspace"}
                   {view === "sign-up" && "Create account"}
-                  {view === "forgot-password" && "Send reset link"}
+                  {view === "forgot-password" && (resetRequestSeconds > 0
+                    ? `Send again in ${resetRequestSeconds}s`
+                    : notice ? "Send another reset link" : "Send reset link")}
+                  {view === "reset-password" && "Update password"}
                   {view === "verify-email" && "Verify email"}
                   <ArrowRight size={16} aria-hidden="true" />
                 </>
@@ -402,10 +554,12 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
               <button
                 className="auth-resend"
                 type="button"
-                disabled={isSubmitting}
+                disabled={isSubmitting || verificationResendSeconds > 0}
                 onClick={() => void resendVerification()}
               >
-                Didn&apos;t receive it? Resend verification code
+                {verificationResendSeconds > 0
+                  ? `Resend available in ${verificationResendSeconds}s`
+                  : "Didn't receive it? Resend verification code"}
               </button>
             )}
           </form>
@@ -414,7 +568,7 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
             <button
               className="auth-verify-help"
               type="button"
-              disabled={isSubmitting}
+              disabled={isSubmitting || verificationResendSeconds > 0}
               onClick={() => void resendVerification(true)}
             >
               Email not verified? Resend verification code

@@ -5,8 +5,9 @@ def test_app_generates_openapi_schema() -> None:
     pytest.importorskip("fastapi")
 
     from contractmate.app import create_app
+    from contractmate.settings import Settings
 
-    schema = create_app().openapi()
+    schema = create_app(Settings()).openapi()
 
     assert schema["info"]["title"] == "Samvid"
     assert "/api/contracts" in schema["paths"]
