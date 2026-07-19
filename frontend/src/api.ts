@@ -1,4 +1,5 @@
 import { upload } from "@vercel/blob/client";
+import { getAccessToken } from "./auth";
 
 import type {
   ContractDetail,
@@ -27,11 +28,18 @@ export class ApiError extends Error {
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const token = await getAccessToken();
+  const headers = new Headers(init?.headers);
+  headers.set("Authorization", `Bearer ${token}`);
+  if (!(init?.body instanceof FormData) && init?.body !== undefined) {
+    headers.set("Content-Type", "application/json");
+  }
   const response = await fetch(url, {
-    headers: init?.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
-    ...init
+    ...init,
+    headers
   });
   if (!response.ok) {
+    if (response.status === 401) window.dispatchEvent(new Event("samvid:auth-required"));
     let payload: ApiErrorPayload = {};
     try {
       const parsed = await response.json();
@@ -100,16 +108,18 @@ export function appendSignerEvent(signerId: string, status: SignerStatus, note: 
   });
 }
 
-export function uploadContract(file: File, onProgress: (percent: number) => void): Promise<unknown> {
+export async function uploadContract(file: File, onProgress: (percent: number) => void): Promise<unknown> {
   if (import.meta.env.PROD) {
     return uploadContractThroughBlob(file, onProgress);
   }
 
+  const token = await getAccessToken();
   const form = new FormData();
   form.append("file", file);
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/contracts");
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
     };
@@ -131,10 +141,12 @@ export function uploadContract(file: File, onProgress: (percent: number) => void
 }
 
 async function uploadContractThroughBlob(file: File, onProgress: (percent: number) => void): Promise<unknown> {
+  const token = await getAccessToken();
   const safeFilename = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
   const blob = await upload(`contracts/${crypto.randomUUID()}/${safeFilename}`, file, {
     access: "private",
     handleUploadUrl: "/api/blob-upload",
+    headers: { Authorization: `Bearer ${token}` },
     contentType: file.type || undefined,
     multipart: file.size > 5 * 1024 * 1024,
     onUploadProgress: ({ percentage }) => onProgress(Math.min(90, Math.round(percentage * 0.9)))
@@ -150,4 +162,16 @@ async function uploadContractThroughBlob(file: File, onProgress: (percent: numbe
   });
   onProgress(100);
   return result;
+}
+
+export async function getContractDocument(contractId: string): Promise<Blob> {
+  const token = await getAccessToken();
+  const response = await fetch(`/api/contracts/${contractId}/document`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) {
+    if (response.status === 401) window.dispatchEvent(new Event("samvid:auth-required"));
+    throw new ApiError(response.status, { message: response.statusText || "Unable to load document" });
+  }
+  return response.blob();
 }

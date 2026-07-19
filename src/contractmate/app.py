@@ -5,6 +5,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from urllib.parse import urlsplit
 
 from contractmate.api.routes import create_api_router
 from contractmate.db.session import connect, initialize_database
@@ -18,6 +19,7 @@ from contractmate.email.resend_inbound import (
     webhook_payload_hash,
 )
 from contractmate.security.control_plane import authorize_control_plane_request
+from contractmate.security.neon_auth import NeonAuthenticationError, NeonAuthorizationError, NeonJWTVerifier
 from contractmate.settings import Settings
 from contractmate.tools.document_storage import document_storage_from_settings
 from contractmate.workers.queue import RabbitMQContractQueue
@@ -38,6 +40,19 @@ def create_app(settings: Settings | None = None):
 
     settings = settings or Settings.from_env()
     settings.validate_runtime()
+    neon_verifier = (
+        NeonJWTVerifier(
+            auth_url=settings.neon_auth_url or "",
+            jwks_url=settings.neon_auth_jwks_url,
+            issuer=settings.neon_auth_issuer,
+            audience=settings.neon_auth_audience,
+            allowed_emails=settings.neon_auth_allowed_emails,
+            require_email_verified=settings.neon_auth_require_email_verified,
+            clock_skew_seconds=settings.neon_auth_clock_skew_seconds,
+        )
+        if settings.auth_mode == "neon"
+        else None
+    )
 
     @asynccontextmanager
     async def lifespan(_app):
@@ -66,7 +81,23 @@ def create_app(settings: Settings | None = None):
     @app.middleware("http")
     async def production_boundary(request: Request, call_next):
         public_paths = {"/health", "/ready", "/email/inbound", "/agentos/control-plane/status"}
-        if settings.is_production and request.url.path not in public_paths:
+        is_api_request = request.url.path == "/api" or request.url.path.startswith("/api/")
+        if neon_verifier is not None and is_api_request:
+            try:
+                request.state.auth_principal = neon_verifier.verify_authorization_header(
+                    request.headers.get("authorization")
+                )
+            except NeonAuthenticationError as exc:
+                response = JSONResponse(
+                    status_code=401,
+                    content={"detail": str(exc)},
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+                return _with_security_headers(response, settings=settings, request_path=request.url.path)
+            except NeonAuthorizationError as exc:
+                response = JSONResponse(status_code=403, content={"detail": str(exc)})
+                return _with_security_headers(response, settings=settings, request_path=request.url.path)
+        elif settings.is_production and settings.auth_mode == "basic" and request.url.path not in public_paths:
             if not _basic_auth_is_valid(request.headers.get("authorization"), settings):
                 response = JSONResponse(
                     status_code=401,
@@ -74,6 +105,10 @@ def create_app(settings: Settings | None = None):
                     headers={"WWW-Authenticate": 'Basic realm="Samvid", charset="UTF-8"'},
                 )
                 return _with_security_headers(response, settings=settings, request_path=request.url.path)
+
+        if (neon_verifier is not None and is_api_request) or (
+            settings.is_production and settings.auth_mode == "basic" and request.url.path not in public_paths
+        ):
             if request.method not in {"GET", "HEAD", "OPTIONS"}:
                 fetch_site = request.headers.get("sec-fetch-site")
                 if fetch_site and fetch_site not in {"same-origin", "none"}:
@@ -223,10 +258,15 @@ def _with_security_headers(response, *, settings: Settings, request_path: str):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
+    connect_sources = ["'self'"]
+    if settings.neon_auth_url:
+        parsed_auth_url = urlsplit(settings.neon_auth_url)
+        if parsed_auth_url.scheme == "https" and parsed_auth_url.netloc:
+            connect_sources.append(f"{parsed_auth_url.scheme}://{parsed_auth_url.netloc}")
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; "
         "img-src 'self' data:; font-src 'self'; style-src 'self' 'unsafe-inline'; "
-        "script-src 'self'; connect-src 'self'"
+        f"script-src 'self'; frame-src 'self' blob:; connect-src {' '.join(connect_sources)}"
     )
     if settings.is_production:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"

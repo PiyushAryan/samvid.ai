@@ -9,8 +9,16 @@ from pydantic import BaseModel, Field
 class Settings(BaseModel):
     app_env: str = "development"
     app_base_url: str | None = None
+    auth_mode: str = "basic"
     app_access_username: str = "samvid"
     app_access_password: str | None = None
+    neon_auth_url: str | None = None
+    neon_auth_jwks_url: str | None = None
+    neon_auth_issuer: str | None = None
+    neon_auth_audience: str | None = None
+    neon_auth_allowed_emails: tuple[str, ...] = ()
+    neon_auth_require_email_verified: bool = False
+    neon_auth_clock_skew_seconds: int = Field(default=30, ge=0, le=300)
     allowed_hosts: tuple[str, ...] = ("localhost", "127.0.0.1", "testserver")
     resend_inbound_enabled: bool = False
     resend_webhook_secret: str | None = None
@@ -89,8 +97,15 @@ class Settings(BaseModel):
             errors.append("DATABASE_URL_UNPOOLED must point to PostgreSQL")
         if not self.model_api_key:
             errors.append("OPENAI_API_KEY or MODEL_API_KEY is required")
-        if not self.app_access_password or len(self.app_access_password) < 16:
-            errors.append("APP_ACCESS_PASSWORD must contain at least 16 characters")
+        if self.auth_mode not in {"basic", "neon"}:
+            errors.append("AUTH_MODE must be 'basic' or 'neon'")
+        if self.auth_mode == "basic" and (not self.app_access_password or len(self.app_access_password) < 16):
+            errors.append("APP_ACCESS_PASSWORD must contain at least 16 characters when AUTH_MODE=basic")
+        if self.auth_mode == "neon":
+            if not self.neon_auth_url:
+                errors.append("NEON_AUTH_URL is required when AUTH_MODE=neon")
+            if not self.neon_auth_allowed_emails:
+                errors.append("NEON_AUTH_ALLOWED_EMAILS is required when AUTH_MODE=neon")
         if self.enable_ocr and not self.sarvam_api_key:
             errors.append("SARVAM_API_KEY is required when OCR is enabled")
         if self.auto_send_review_email and not (self.resend_api_key or self.smtp_host):
@@ -129,8 +144,16 @@ class Settings(BaseModel):
         return cls(
             app_env=os.getenv("APP_ENV", "development"),
             app_base_url=os.getenv("APP_BASE_URL") or None,
+            auth_mode=os.getenv("AUTH_MODE", "basic").casefold(),
             app_access_username=os.getenv("APP_ACCESS_USERNAME", "samvid"),
             app_access_password=os.getenv("APP_ACCESS_PASSWORD") or None,
+            neon_auth_url=os.getenv("NEON_AUTH_URL") or os.getenv("NEON_AUTH_BASE_URL") or None,
+            neon_auth_jwks_url=os.getenv("NEON_AUTH_JWKS_URL") or None,
+            neon_auth_issuer=os.getenv("NEON_AUTH_ISSUER") or None,
+            neon_auth_audience=os.getenv("NEON_AUTH_AUDIENCE") or None,
+            neon_auth_allowed_emails=csv_env("NEON_AUTH_ALLOWED_EMAILS", ""),
+            neon_auth_require_email_verified=bool_env("NEON_AUTH_REQUIRE_EMAIL_VERIFIED", False),
+            neon_auth_clock_skew_seconds=int(os.getenv("NEON_AUTH_CLOCK_SKEW_SECONDS", "30")),
             allowed_hosts=csv_env("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver"),
             resend_inbound_enabled=bool_env("RESEND_INBOUND_ENABLED", False),
             resend_webhook_secret=os.getenv("RESEND_WEBHOOK_SECRET") or None,

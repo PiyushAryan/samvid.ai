@@ -46,6 +46,7 @@ Implemented MVP slice
 - RabbitMQ job message contract and topology adapter for durable async processing.
 - Control Plane runtime status endpoint protected by `OS_SECURITY_KEY` or JWT.
 - FastAPI app factory with `/health`, `/ready`, Control Plane status and email inbound webhook handling.
+- Neon Managed Better Auth sign-up, sign-in, password recovery and EdDSA/JWKS-protected workspace APIs.
 
 Configuration
 -------------
@@ -158,14 +159,54 @@ can retry immediately, while processing leases can be reclaimed after ten
 minutes. The original Message-ID and References headers travel with the RabbitMQ
 job so the EC2 worker can send a threaded `Re:` response after review.
 
+Neon authentication
+-------------------
+
+Samvid uses Neon Managed Better Auth for browser sessions. The React app talks
+to the branch-specific Neon Auth URL and sends the short-lived Neon JWT as a
+Bearer token on every workspace API request. FastAPI verifies the EdDSA
+signature against Neon JWKS, validates issuer, audience and expiry, and checks
+the authenticated email against the shared-workspace allowlist. The Resend
+webhook and AgentOS Control Plane keep their independent authentication paths.
+
+Set this in the frontend project:
+
+```text
+VITE_NEON_AUTH_URL=<Neon branch Auth URL>
+```
+
+Set these in the backend project:
+
+```text
+AUTH_MODE=neon
+NEON_AUTH_URL=<the same Neon branch Auth URL>
+NEON_AUTH_ALLOWED_EMAILS=owner@example.com
+NEON_AUTH_REQUIRE_EMAIL_VERIFIED=true
+NEON_AUTH_CLOCK_SKEW_SECONDS=30
+```
+
+`NEON_AUTH_JWKS_URL`, `NEON_AUTH_ISSUER`, and `NEON_AUTH_AUDIENCE` are optional
+overrides. By default, JWKS is read from
+`<NEON_AUTH_URL>/.well-known/jwks.json`, while issuer and audience use the Auth
+URL origin. `VITE_NEON_AUTH_URL` is a public endpoint, not a secret. Add both
+`http://localhost:5173` and the production frontend URL to Neon Auth's trusted
+domains. Keep the frontend and backend on the same Neon branch because preview
+and production branches have different issuers and signing keys.
+
+The current product has one shared `EMAIL_WORKSPACE_ID`, so
+`NEON_AUTH_ALLOWED_EMAILS` is the authorization boundary for its existing
+contracts. Do not leave it empty or treat successful sign-up alone as workspace
+authorization. The EC2 worker does not require Neon Auth variables.
+
 Production deployment
 ---------------------
 
 Production uses two Vercel projects from this repository:
 
 - The frontend project has `frontend/` as its Root Directory. Routing Middleware
-  keeps the landing page public, protects `/contracts`, and proxies `/api` to the
-  backend through `API_ORIGIN`.
+  leaves the React shell public so it can render the auth guard and proxies
+  `/api` to the backend through `API_ORIGIN`. FastAPI remains the data security
+  boundary.
 - The backend project uses the repository root. `Dockerfile.vercel` packages the
   FastAPI service as an OCI function that listens on Vercel's `PORT`.
 - A private Vercel Blob store is connected to both projects. Browser uploads go
@@ -178,8 +219,7 @@ Set these frontend project variables:
 
 ```text
 API_ORIGIN=https://your-backend-project.vercel.app
-APP_ACCESS_USERNAME=samvid
-APP_ACCESS_PASSWORD=<same strong password as the backend>
+VITE_NEON_AUTH_URL=<Neon branch Auth URL>
 MAX_FILE_SIZE_MB=20
 ```
 
@@ -188,8 +228,10 @@ Set these backend project variables, marking credentials as secrets:
 ```text
 APP_ENV=production
 ALLOWED_HOSTS=*.vercel.app,api.samvid.ai
-APP_ACCESS_USERNAME=samvid
-APP_ACCESS_PASSWORD=<strong shared password>
+AUTH_MODE=neon
+NEON_AUTH_URL=<Neon branch Auth URL>
+NEON_AUTH_ALLOWED_EMAILS=<comma-separated workspace users>
+NEON_AUTH_REQUIRE_EMAIL_VERIFIED=true
 APP_BASE_URL=https://your-backend-project.vercel.app
 DATABASE_URL=<managed PostgreSQL connection string>
 DATABASE_URL_UNPOOLED=<direct Neon connection string>

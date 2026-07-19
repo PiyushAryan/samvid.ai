@@ -35,10 +35,12 @@ import {
   appendSignerEvent,
   createSigningRequest,
   getContract,
+  getContractDocument,
   listContracts,
   listSigningRequests,
   uploadContract
 } from "./api";
+import { useAuth } from "./AuthProvider";
 import type {
   ContractDetail,
   ContractListItem,
@@ -84,14 +86,14 @@ const panelClass = "panel";
 const panelCardClass = "panel panel-card";
 const fieldLabelClass = "field";
 const fieldControlClass = "field-control";
-const accountName = import.meta.env.VITE_ACCOUNT_NAME || "Piyush Aryan";
-const accountEmail = import.meta.env.VITE_ACCOUNT_EMAIL || "piyusharyan81@gmail.com";
-
 export function AppShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarMenuOpen, setSidebarMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const accountName = user?.name || "Samvid user";
+  const accountEmail = user?.email || "";
   const workspaceView = location.pathname.startsWith("/chats") ? "chats" : "console";
   const activeChatId = new URLSearchParams(location.search).get("chat");
   const sidebarMenuRef = useRef<HTMLDivElement>(null);
@@ -287,8 +289,11 @@ export function AppShell() {
                       type="button"
                       role="menuitem"
                       aria-label="Logout"
-                      aria-disabled="true"
-                      title="Sign out is unavailable because this app has no user session"
+                      title="Sign out"
+                      onClick={() => {
+                        setSidebarMenuOpen(false);
+                        void signOut().finally(() => navigate("/auth", { replace: true }));
+                      }}
                     >
                       <LogOut size={19} aria-hidden="true" />
                     </button>
@@ -461,6 +466,8 @@ type ChatAttachment = {
 };
 
 export function ChatsPage() {
+  const { user } = useAuth();
+  const accountName = user?.name || "there";
   const [draft, setDraft] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [messages, setMessages] = useState<LocalChatMessage[]>([]);
@@ -721,6 +728,13 @@ export function ContractDetailPage() {
     refetchInterval: (query) =>
       query.state.data && activeReviewStatuses.has(query.state.data.review_status) ? 3000 : false
   });
+  const documentQuery = useQuery({
+    queryKey: ["contract-document", contractId],
+    queryFn: () => getContractDocument(contractId!),
+    enabled: Boolean(contractQuery.data?.current_version),
+    staleTime: 5 * 60 * 1000
+  });
+  const documentUrl = useObjectUrl(documentQuery.data);
 
   return (
     <section className={pageClass}>
@@ -731,7 +745,13 @@ export function ContractDetailPage() {
               eyebrow="Contract"
               title={contractQuery.data.title}
               action={
-                <a className={secondaryButton} href={`/api/contracts/${contractQuery.data.id}/document`} target="_blank" rel="noreferrer">
+                <a
+                  className={secondaryButton}
+                  href={documentUrl || undefined}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-disabled={!documentUrl}
+                >
                   Open original <ArrowUpRight size={15} />
                 </a>
               }
@@ -750,7 +770,14 @@ export function ContractDetailPage() {
               ))}
             </div>
             {tab === "review" && <ReviewTab review={contractQuery.data.review} />}
-            {tab === "document" && <DocumentTab contract={contractQuery.data} />}
+            {tab === "document" && (
+              <DocumentTab
+                contract={contractQuery.data}
+                url={documentUrl}
+                isLoading={documentQuery.isLoading}
+                error={documentQuery.error instanceof Error ? documentQuery.error.message : null}
+              />
+            )}
             {tab === "signing" && <SigningTab contract={contractQuery.data} />}
           </>
         )}
@@ -975,8 +1002,27 @@ export function ReviewTab({ review }: { review: ContractReview | null }) {
   );
 }
 
-function DocumentTab({ contract }: { contract: ContractDetail }) {
-  const url = `/api/contracts/${contract.id}/document`;
+function DocumentTab({
+  contract,
+  url,
+  isLoading,
+  error
+}: {
+  contract: ContractDetail;
+  url: string | null;
+  isLoading: boolean;
+  error: string | null;
+}) {
+  if (error) {
+    return <section className="panel error">Unable to load this document. {error}</section>;
+  }
+  if (isLoading || !url) {
+    return (
+      <section className="document-panel document-panel-loading" aria-label="Loading document" aria-busy="true">
+        <Loader2 className="spin" size={24} aria-hidden="true" />
+      </section>
+    );
+  }
   if (contract.mime_type === "application/pdf") {
     return (
       <section className="document-panel">
@@ -993,6 +1039,20 @@ function DocumentTab({ contract }: { contract: ContractDetail }) {
       </a>
     </section>
   );
+}
+
+function useObjectUrl(blob: Blob | undefined) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!blob) {
+      setUrl(null);
+      return;
+    }
+    const nextUrl = URL.createObjectURL(blob);
+    setUrl(nextUrl);
+    return () => URL.revokeObjectURL(nextUrl);
+  }, [blob]);
+  return url;
 }
 
 function SigningTab({ contract }: { contract: ContractDetail }) {

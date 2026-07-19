@@ -57,6 +57,22 @@ def test_production_settings_accept_vercel_blob_oidc(tmp_path) -> None:
     settings.validate_runtime()
 
 
+def test_production_settings_accept_neon_auth_without_basic_password(tmp_path) -> None:
+    settings = Settings(
+        app_env="production",
+        auth_mode="neon",
+        neon_auth_url="https://ep-example.neonauth.us-east-1.aws.neon.tech/neondb/auth",
+        neon_auth_allowed_emails=("owner@example.com",),
+        database_url="postgresql://user:pass@database/samvid",
+        local_storage_dir=tmp_path / "contracts",
+        inbound_attachment_dir=tmp_path / "inbound",
+        model_api_key="model-key",
+        auto_send_review_email=False,
+    )
+
+    settings.validate_runtime()
+
+
 def test_auto_initialize_database_can_be_disabled_from_env(monkeypatch) -> None:
     monkeypatch.setenv("AUTO_INITIALIZE_DATABASE", "false")
 

@@ -6,17 +6,15 @@ const allowedContentTypes = [
   "text/plain"
 ];
 
-function hasValidBasicAuth(request: Request): boolean {
-  const username = process.env.APP_ACCESS_USERNAME || "samvid";
-  const password = process.env.APP_ACCESS_PASSWORD;
+async function hasValidNeonAuth(request: Request): Promise<boolean> {
+  const apiOrigin = process.env.API_ORIGIN;
   const authorization = request.headers.get("authorization");
-  if (!password || !authorization?.startsWith("Basic ")) return false;
-
-  try {
-    return atob(authorization.slice(6)) === `${username}:${password}`;
-  } catch {
-    return false;
-  }
+  if (!apiOrigin || !authorization?.startsWith("Bearer ")) return false;
+  const response = await fetch(new URL("/api/auth/me", apiOrigin), {
+    headers: { Authorization: authorization },
+    signal: AbortSignal.timeout(5000)
+  });
+  return response.ok;
 }
 
 export default async function handler(request: Request): Promise<Response> {
@@ -30,7 +28,7 @@ export default async function handler(request: Request): Promise<Response> {
       body,
       request,
       onBeforeGenerateToken: async (pathname) => {
-        if (!hasValidBasicAuth(request)) throw new Error("Authentication required");
+        if (!(await hasValidNeonAuth(request))) throw new Error("Authentication required");
         if (!pathname.startsWith("contracts/")) throw new Error("Invalid upload path");
 
         return {
@@ -48,7 +46,7 @@ export default async function handler(request: Request): Promise<Response> {
       { error: message },
       {
         status,
-        headers: status === 401 ? { "WWW-Authenticate": 'Basic realm="Samvid", charset="UTF-8"' } : undefined
+        headers: status === 401 ? { "WWW-Authenticate": "Bearer" } : undefined
       }
     );
   }

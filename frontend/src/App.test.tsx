@@ -6,6 +6,20 @@ import { LandingPage } from "./Home";
 import { TooltipProvider } from "./components/ui/tooltip";
 import type { ContractListItem, ContractReview, SigningRequest } from "./types";
 
+vi.mock("./AuthProvider", () => ({
+  useAuth: () => ({
+    user: {
+      id: "user_123",
+      name: "Piyush Aryan",
+      email: "piyusharyan81@gmail.com",
+      emailVerified: true
+    },
+    isLoading: false,
+    refreshSession: vi.fn(),
+    signOut: vi.fn()
+  })
+}));
+
 test("landing simulator switches between customer workflow previews", async () => {
   vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
 
@@ -155,7 +169,7 @@ test("sidebar actions menu opens and switches theme", () => {
   expect(within(menu).getByRole("menuitem", { name: "Account: Piyush Aryan" })).toBeInTheDocument();
   expect(within(menu).getByText("piyusharyan81@gmail.com")).toBeInTheDocument();
   expect(within(menu).getByRole("menuitem", { name: "Settings" })).toHaveAttribute("aria-disabled", "true");
-  expect(within(menu).getByRole("menuitem", { name: /log ?out/i })).toHaveAttribute("aria-disabled", "true");
+  expect(within(menu).getByRole("menuitem", { name: /log ?out/i })).toBeEnabled();
 
   fireEvent.click(within(menu).getByRole("menuitemcheckbox", { name: /dark mode/i }));
 

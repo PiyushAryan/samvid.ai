@@ -3,8 +3,10 @@ import "./styles.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React, { lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
-import { Navigate, NavLink, Route, BrowserRouter as Router, Routes } from "react-router-dom";
+import { Navigate, NavLink, Route, BrowserRouter as Router, Routes, useSearchParams } from "react-router-dom";
 import { TooltipProvider } from "./components/ui/tooltip";
+import { Skeleton } from "./components/ui/skeleton";
+import { AuthProvider, RequireAuth, useAuth } from "./AuthProvider";
 
 const LandingPage = lazy(() => import("./Home").then((module) => ({ default: module.LandingPage })));
 const ChangelogPage = lazy(() => import("./Changelog").then((module) => ({ default: module.ChangelogPage })));
@@ -13,6 +15,29 @@ const ContractsPage = lazy(() => import("./App").then((module) => ({ default: mo
 const ChatsPage = lazy(() => import("./App").then((module) => ({ default: module.ChatsPage })));
 const ContractDetailPage = lazy(() => import("./App").then((module) => ({ default: module.ContractDetailPage })));
 const SigningPage = lazy(() => import("./App").then((module) => ({ default: module.SigningPage })));
+const AuthPage = lazy(() => import("./AuthPage"));
+
+function AuthRoute() {
+  const { user, isLoading } = useAuth();
+  const [searchParams] = useSearchParams();
+  const requestedReturnTo = searchParams.get("returnTo") || "/contracts";
+  const returnTo = requestedReturnTo.startsWith("/") && !requestedReturnTo.startsWith("//")
+    ? requestedReturnTo
+    : "/contracts";
+  const view = searchParams.get("view");
+  const initialView = view === "sign-up" || view === "forgot-password" ? view : "sign-in";
+
+  if (isLoading) {
+    return (
+      <main className="auth-route-loading" aria-label="Checking your session" aria-busy="true">
+        <Skeleton className="auth-route-loading-mark" />
+        <Skeleton className="auth-route-loading-line" />
+      </main>
+    );
+  }
+  if (!isLoading && user) return <Navigate to={returnTo} replace />;
+  return <AuthPage initialView={initialView} redirectTo={returnTo} />;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,19 +56,22 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={350} skipDelayDuration={100}>
         <Router>
-          <Suspense fallback={null}>
-            <Routes>
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/changelog" element={<ChangelogPage />} />
-              <Route element={<AppShell />}>
-                <Route path="/contracts" element={<ContractsPage />} />
-                <Route path="/chats" element={<ChatsPage />} />
-                <Route path="/contracts/:contractId" element={<ContractDetailPage />} />
-                <Route path="/signing" element={<SigningPage />} />
-              </Route>
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
+          <AuthProvider>
+            <Suspense fallback={null}>
+              <Routes>
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/changelog" element={<ChangelogPage />} />
+                <Route path="/auth" element={<AuthRoute />} />
+                <Route element={<RequireAuth><AppShell /></RequireAuth>}>
+                  <Route path="/contracts" element={<ContractsPage />} />
+                  <Route path="/chats" element={<ChatsPage />} />
+                  <Route path="/contracts/:contractId" element={<ContractDetailPage />} />
+                  <Route path="/signing" element={<SigningPage />} />
+                </Route>
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
+          </AuthProvider>
         </Router>
       </TooltipProvider>
     </QueryClientProvider>

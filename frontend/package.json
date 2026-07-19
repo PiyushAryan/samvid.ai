@@ -10,6 +10,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@neondatabase/neon-js": "^0.6.2-beta",
     "@tanstack/react-query": "^5.59.16",
     "@vercel/blob": "^2.6.1",
     "@vercel/functions": "^3.7.5",

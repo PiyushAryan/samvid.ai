@@ -25,6 +25,7 @@ where = ["src"]
 [project.optional-dependencies]
 api = [
     "fastapi>=0.111,<1",
+    "PyJWT[crypto]>=2.9,<3",
     "python-multipart>=0.0.9,<1",
     "uvicorn[standard]>=0.30,<1",
 ]

@@ -25,7 +25,7 @@ from vercel.blob.errors import BlobError
 
 def create_api_router(settings: Settings):
     try:
-        from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+        from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
         from fastapi.responses import JSONResponse, Response
     except ModuleNotFoundError as exc:
         raise RuntimeError("Install the 'api' extra to run the HTTP app: uv sync --extra api") from exc
@@ -46,14 +46,33 @@ def create_api_router(settings: Settings):
         finally:
             connection.close()
 
-    def actor_email() -> str:
-        return settings.samvid_local_actor_email
+    def actor_email(request: Request) -> str:
+        principal = getattr(request.state, "auth_principal", None)
+        return principal.email if principal is not None else settings.samvid_local_actor_email
 
-    def actor_name() -> str:
-        return settings.samvid_local_actor_name
+    def actor_name(request: Request) -> str:
+        principal = getattr(request.state, "auth_principal", None)
+        return principal.name if principal is not None else settings.samvid_local_actor_name
 
     def workspace_id() -> str:
         return settings.email_workspace_id
+
+    @router.get("/auth/me")
+    def authenticated_user(request: Request) -> dict[str, Any]:
+        principal = getattr(request.state, "auth_principal", None)
+        if principal is None:
+            return {
+                "subject": "local-user",
+                "email": settings.samvid_local_actor_email,
+                "name": settings.samvid_local_actor_name,
+                "workspace_id": workspace_id(),
+            }
+        return {
+            "subject": principal.subject,
+            "email": principal.email,
+            "name": principal.name,
+            "workspace_id": workspace_id(),
+        }
 
     @router.get("/contracts")
     def list_contracts(
@@ -72,6 +91,7 @@ def create_api_router(settings: Settings):
 
     @router.post("/contracts")
     def upload_contract(
+        request: Request,
         file: UploadFile = File(...),
         connection: Any = Depends(db_connection),
     ) -> dict[str, Any]:
@@ -100,7 +120,7 @@ def create_api_router(settings: Settings):
                 "file_path": temp_path,
                 "workspace_id": workspace_id(),
                 "email_thread_id": f"samvid-upload-{uuid4()}",
-                "requested_by": actor_email(),
+                "requested_by": actor_email(request),
                 "declared_mime_type": file.content_type,
             }
             result = (
@@ -116,6 +136,7 @@ def create_api_router(settings: Settings):
 
     @router.post("/contracts/from-blob")
     def upload_contract_from_blob(
+        request: Request,
         payload: ContractBlobUpload,
         connection: Any = Depends(db_connection),
     ) -> dict[str, Any]:
@@ -157,7 +178,7 @@ def create_api_router(settings: Settings):
                 "file_path": temp_path,
                 "workspace_id": workspace_id(),
                 "email_thread_id": f"samvid-upload-{uuid4()}",
-                "requested_by": actor_email(),
+                "requested_by": actor_email(request),
                 "declared_mime_type": metadata.content_type or payload.content_type,
                 "original_filename": payload.original_filename,
                 "stored_object_key": metadata.object_key,
@@ -222,6 +243,7 @@ def create_api_router(settings: Settings):
 
     @router.post("/contracts/{contract_id}/signing-requests")
     def create_signing_request(
+        request: Request,
         contract_id: str,
         payload: SigningRequestCreate,
         connection: Any = Depends(db_connection),
@@ -232,8 +254,8 @@ def create_api_router(settings: Settings):
                 workspace_id=workspace_id(),
                 contract_id=contract_id,
                 payload=payload,
-                actor_email=actor_email(),
-                actor_name=actor_name(),
+                actor_email=actor_email(request),
+                actor_name=actor_name(request),
             )
         except SigningError as exc:
             raise _http_signing_error(exc) from exc
@@ -262,6 +284,7 @@ def create_api_router(settings: Settings):
 
     @router.post("/signing-requests/{request_id}/signers")
     def add_signer(
+        request: Request,
         request_id: str,
         payload: SignerCreate,
         connection: Any = Depends(db_connection),
@@ -272,8 +295,8 @@ def create_api_router(settings: Settings):
                 workspace_id=workspace_id(),
                 request_id=request_id,
                 signer=payload,
-                actor_email=actor_email(),
-                actor_name=actor_name(),
+                actor_email=actor_email(request),
+                actor_name=actor_name(request),
             )
         except SigningError as exc:
             raise _http_signing_error(exc) from exc
@@ -281,6 +304,7 @@ def create_api_router(settings: Settings):
 
     @router.post("/signers/{signer_id}/events")
     def append_signer_event(
+        request: Request,
         signer_id: str,
         payload: SignerStatusEventCreate,
         connection: Any = Depends(db_connection),
@@ -291,8 +315,8 @@ def create_api_router(settings: Settings):
                 workspace_id=workspace_id(),
                 signer_id=signer_id,
                 payload=payload,
-                actor_email=actor_email(),
-                actor_name=actor_name(),
+                actor_email=actor_email(request),
+                actor_name=actor_name(request),
             )
         except SigningError as exc:
             raise _http_signing_error(exc) from exc
