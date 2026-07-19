@@ -41,6 +41,7 @@ import {
   uploadContract
 } from "./api";
 import { useAuth } from "./AuthProvider";
+import { setFaviconTheme } from "./favicon";
 import type {
   ContractDetail,
   ContractListItem,
@@ -115,6 +116,7 @@ export function AppShell() {
     window.localStorage.setItem("samvid-theme", theme);
     document.documentElement.dataset.appTheme = theme;
     document.documentElement.style.colorScheme = theme;
+    setFaviconTheme(theme);
   }, [theme]);
 
   useEffect(() => () => {

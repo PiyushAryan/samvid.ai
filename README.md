@@ -1,389 +1,497 @@
-ContractMate
-============
+# Samvid
 
-ContractMate is an email-native MVP for reviewing emailed contracts with typed
-schemas, deterministic document parsing, evidence validation, durable workflow
-state, and human-approved response drafts.
+**Contract intelligence from inbox to signature.**
 
-Quick start
------------
+Samvid is an AI-powered contract workspace for legal, procurement, finance, and
+operations teams. Forward a contract by email or upload it from the browser;
+Samvid reads every page, identifies material terms and risks, preserves the
+supporting evidence, and keeps review and signing activity moving in one
+accountable workflow.
 
-```bash
-uv sync --extra dev
-uv run pytest
-uv run contractmate review tests/fixtures/vendor-agreement.txt
+Samvid is the customer-facing product. `contractmate` is the internal Python
+package and operator CLI used by the API and background worker.
+
+## The Product
+
+Contract work is often split across inboxes, shared drives, chat threads, and
+spreadsheets. Samvid brings that work into a single searchable record so teams
+can answer three questions without relying on memory:
+
+- What does this contract require?
+- What needs attention before it moves forward?
+- Who owns the next action?
+
+Every contract can enter through the channel people already use, return with a
+plain-language review, and continue through a visible signing workflow.
+
+## What Samvid Does
+
+### Intake from email or the workspace
+
+Forward PDF, DOCX, or TXT contracts to the configured Samvid inbox, or upload
+them directly from the Contracts workspace. Samvid validates each file, records
+its SHA-256 identity, stores the original privately, and creates a durable
+contract record before processing begins.
+
+### Read the complete document
+
+Samvid extracts text from digital documents and uses Sarvam OCR for scanned
+PDFs. Large OCR jobs are split into supported page groups and reassembled with
+their original page numbering, so the review remains traceable to the source.
+
+### Explain terms and risks in plain language
+
+The review identifies parties, dates, obligations, renewal terms, governing
+law, indemnities, liability exposure, and other material clauses. Risk findings
+include evidence from the document and are validated before they are presented
+to the user.
+
+### Keep work moving
+
+Teams can follow contract status from review through signing coordination,
+record signer activity, and preserve a chronological event history. Email-led
+reviews return to the original thread with a professional summary and a link to
+open the contract in Samvid.
+
+### Keep every contract discoverable
+
+The workspace provides contract search, review and signing filters, contract
+detail views, source-document access, and a shared signing queue. The browser
+experience and email workflow use the same contract record rather than creating
+parallel sources of truth.
+
+## Product Experience
+
+- **Contracts:** Search, filter, upload, and monitor every contract in the
+  workspace.
+- **Review:** Read the summary, parties, key terms, risks, evidence, and next
+  actions generated from the document.
+- **Document:** Open the stored original through an authenticated API response.
+- **Signing:** Create signing requests, assign signers, and record sent, viewed,
+  signed, declined, and related workflow events.
+- **Email intake:** Send a contract to one address and receive the completed
+  review in the same email thread.
+- **Account access:** Sign up, verify an email address, sign in, recover a
+  password, and access only the authorized Samvid workspace.
+
+## Contract Lifecycle
+
+```text
+Email attachment or browser upload
+                |
+                v
+      FastAPI intake and validation
+                |
+                v
+   Private document storage + Neon record
+                |
+                v
+        Durable RabbitMQ review job
+                |
+                v
+       Persistent contract worker
+                |
+       +--------+---------+
+       |                  |
+       v                  v
+Parsing / Sarvam OCR   Agno / OpenAI review
+       |                  |
+       +--------+---------+
+                |
+                v
+ Evidence validation + persisted result
+                |
+       +--------+---------+
+       |                  |
+       v                  v
+ Samvid workspace    Threaded email response
 ```
 
-Run the HTTP app for inbound email webhooks:
+The API stores the document and creates the database record before publishing a
+job. The worker downloads that exact stored version, verifies its hash, performs
+OCR and review, saves the result, and only then acknowledges the RabbitMQ
+message. Retry queues and a dead-letter queue protect work from transient or
+repeated failures.
+
+## Platform Architecture
+
+| Surface | Technology | Responsibility |
+| --- | --- | --- |
+| Web workspace | React, TypeScript, Vite | Contract, review, document, signing, and account experiences |
+| Authentication | Neon Auth, Better Auth, JWKS | Browser sessions, email verification, password recovery, JWT issuance |
+| API | FastAPI, Pydantic | Authorization, contract APIs, uploads, webhooks, signing activity |
+| Database | Neon PostgreSQL | Contracts, reviews, versions, signers, events, and webhook idempotency |
+| Document storage | Private Vercel Blob or local filesystem | Original contract files and version-safe retrieval |
+| Job broker | RabbitMQ / CloudAMQP | Durable review delivery, retry, and dead-letter routing |
+| Review worker | Python, Agno, OpenAI | Parsing, structured analysis, evidence validation, and response generation |
+| OCR | Sarvam | Text recovery from scanned PDFs |
+| Email | Resend | Inbound contract receiving and threaded outbound reviews |
+| Delivery | Vercel, GHCR, EC2, GitHub Actions | Web/API hosting, worker images, and persistent processing |
+
+The API and worker are intentionally separate. Vercel handles bursty HTTP
+traffic, while the EC2 worker remains available for long-running OCR and model
+calls without relying on a serverless request lifetime.
+
+## Trust and Safety
+
+- Private contracts are served through authenticated API routes rather than
+  public storage URLs.
+- Neon JWTs are verified against branch-specific EdDSA/JWKS keys, issuer,
+  audience, expiry, and the configured workspace allowlist.
+- Resend webhooks are verified from the untouched request body using their Svix
+  signature headers.
+- Inbound events are idempotent. Completed deliveries are ignored, failed
+  deliveries can retry, and stale processing leases can be reclaimed.
+- File type, MIME content, size, attachment count, and SHA-256 identity are
+  validated before review.
+- Evidence validation removes unsupported risk findings before results are
+  persisted or emailed.
+- Signing actions and status changes are recorded as workflow events.
+- Secrets belong in environment-variable stores and must never be committed.
+
+## Signing Scope
+
+Samvid coordinates and tracks signature workflows. It does not place visual
+signature fields in documents, verify a signer's legal identity, issue digital
+certificates, or execute legally binding electronic signatures. Execution
+requires an integration with an e-signature provider.
+
+## Local Development
+
+### Prerequisites
+
+- Python 3.12 or later
+- [`uv`](https://docs.astral.sh/uv/)
+- Node.js 20 or later
+- Docker with the Compose plugin for local PostgreSQL and RabbitMQ
+
+### Install and test the backend
 
 ```bash
 uv sync --extra api --extra rabbitmq --extra dev
+uv run pytest
+```
+
+Review a local fixture through the CLI:
+
+```bash
+uv run contractmate review tests/fixtures/vendor-agreement.txt
+```
+
+Start PostgreSQL and RabbitMQ:
+
+```bash
+docker compose up -d postgres rabbitmq
+```
+
+RabbitMQ management is available at `http://localhost:15672` with the local
+credentials defined in `docker-compose.yml`.
+
+Create a local environment file from `.env.example`, then start the API:
+
+```bash
+cp .env.example .env
 uv run uvicorn contractmate.app:create_app --factory --reload --port 8000
 ```
 
-`POST /email/inbound` accepts signed Resend `email.received` events. It is not a
-general JSON upload endpoint. For local webhook testing, expose port 8000 through
-an HTTPS tunnel and temporarily point a Resend webhook at the tunnel URL.
+The service exposes:
 
-Local development defaults to PostgreSQL and filesystem storage under
-`.contractmate/`. Production integrations are isolated behind adapters for
-Email, S3, RabbitMQ/Amazon MQ, PostgreSQL, pdfmuse, Agno and the AgentOS
-Control Plane.
+- `GET /health` for process health
+- `GET /ready` for dependency readiness
+- `POST /email/inbound` for signed Resend `email.received` events
+- `/api/*` for authenticated workspace operations
+- `GET /agentos/control-plane/status` for protected runtime status
 
-Implemented MVP slice
----------------------
-
-- Pydantic schemas for parsed documents, contract reviews, risks, evidence and approvals.
-- File validation with MIME sniffing, size limits and SHA-256 hashing.
-- Parser abstraction with a pdfmuse-facing wrapper and deterministic local fallback.
-- Sarvam Vision OCR for scanned PDFs, including automatic 10-page job chunking and page-number restoration.
-- Contract review service with evidence-grounded risk extraction.
-- Agno-backed structured extraction using OpenAIChat and typed output validation.
-- Evidence validator that removes unsupported risk findings.
-- Workflow state machine and durable local repository matching the planned entities.
-- Signed Resend inbound retrieval, attachment filtering, idempotency and threaded replies.
-- Human approval records that permit one final decision per proposed action.
-- RabbitMQ job message contract and topology adapter for durable async processing.
-- Control Plane runtime status endpoint protected by `OS_SECURITY_KEY` or JWT.
-- FastAPI app factory with `/health`, `/ready`, Control Plane status and email inbound webhook handling.
-- Neon Managed Better Auth sign-up, sign-in, password recovery and EdDSA/JWKS-protected workspace APIs.
-
-Configuration
--------------
-
-Copy `.env.example` and fill in real values for deployed environments. Never
-commit secrets.
-
-```dotenv
-DATABASE_URL=postgresql://contractmate:contractmate@localhost:5432/contractmate
-LOCAL_STORAGE_DIR=.contractmate/files
-RABBITMQ_URL=amqp://contractmate:contractmate@localhost:5672/%2F
-CONTRACT_PROCESSING_MODE=sync
-MODEL_PROVIDER=openai
-MODEL_ID=gpt-5-mini
-OPENAI_API_KEY=
-ENABLE_OCR=true
-OCR_PROVIDER=sarvam
-SARVAM_API_KEY=
-SARVAM_OCR_LANGUAGE=en-IN
-SARVAM_OCR_TIMEOUT_SECONDS=600
-AUTO_SEND_REVIEW_EMAIL=true
-EMAIL_FROM_ADDRESS=onboarding@resend.dev
-RESEND_API_KEY=re_xxxxxxxxx
-RESEND_INBOUND_ENABLED=false
-RESEND_WEBHOOK_SECRET=
-RESEND_INBOUND_RECIPIENTS=contracts@oldimeluub.resend.app
-OS_SECURITY_KEY=
-JWT_VERIFICATION_KEY=
-```
-
-Replace `re_xxxxxxxxx` with your real Resend API key. During initial testing,
-`onboarding@resend.dev` can send only to the email address associated with your
-Resend account. Verify a domain and update `EMAIL_FROM_ADDRESS` before sending
-to other recipients.
-
-Send a configuration test:
+### Start the frontend
 
 ```bash
-uv run contractmate send-test-email --to piyusharyan81@gmail.com
+cd frontend
+cp .env.example .env.local
+npm install
+npm run dev
 ```
 
-Local RabbitMQ and PostgreSQL are available through Docker Compose:
+The local workspace runs at `http://localhost:5173` and proxies `/api` to the
+configured `API_ORIGIN`.
+
+Run frontend verification with:
 
 ```bash
-docker compose up -d postgres rabbitmq
+npm test
+npm run build
 ```
 
-RabbitMQ management UI runs on `http://localhost:15672` with the local
-development credentials in `docker-compose.yml`.
+### Run asynchronous processing locally
 
-Asynchronous contract review
-----------------------------
-
-RabbitMQ processing is opt-in. Start PostgreSQL and RabbitMQ, switch the API to
-queue mode, and run the persistent consumer in a separate process:
+Set `CONTRACT_PROCESSING_MODE=rabbitmq` for the API and start a separate worker:
 
 ```bash
-docker compose up -d postgres rabbitmq
 CONTRACT_PROCESSING_MODE=rabbitmq uv run contractmate worker
 ```
 
-With `CONTRACT_PROCESSING_MODE=rabbitmq`, browser uploads and inbound email
-attachments are validated and stored before a durable identifier-only job is
-published. The worker downloads that exact stored version, verifies its SHA-256,
-runs parsing, OCR and Agno review, persists the result, and acknowledges the job.
-Failures are retried through the TTL retry queue and move to the DLQ after
-`RABBITMQ_MAX_ATTEMPTS`. `RABBITMQ_HEARTBEAT_SECONDS` should exceed the longest
-expected OCR/model call. Email reviews are sent by the worker after completion.
+Keep `RABBITMQ_HEARTBEAT_SECONDS` longer than the slowest expected OCR or model
+operation. Failed jobs move through the TTL retry queue and reach the dead-letter
+queue after `RABBITMQ_MAX_ATTEMPTS`.
 
-The API and worker must share `DATABASE_URL`, document-storage credentials,
-OpenAI/Sarvam/Resend settings, and RabbitMQ topology settings. Vercel Functions
-must not be used as the persistent consumer; deploy the worker on a service that
-runs long-lived processes. Keep `CONTRACT_PROCESSING_MODE=sync` until both the
-managed RabbitMQ broker and worker deployment are healthy.
+## Configuration
 
-Set `FRONTEND_ORIGIN=https://samvid-ai.vercel.app` on the worker so review
-emails link recipients to the authenticated contract detail page.
+Use `.env.example`, `frontend/.env.example`, and `worker.env.example` as the
+source of truth for supported variables. The groups below describe the values
+that define a production deployment.
 
-The review path uses Agno with OpenAIChat. Set `OPENAI_API_KEY` in `.env`.
-Scanned PDFs use Sarvam Vision before review. Set `SARVAM_API_KEY`, and choose
-the document's primary BCP-47 language with `SARVAM_OCR_LANGUAGE` (English is
-`en-IN`). PDFs over Sarvam's 10-page per-job limit are split and reassembled
-automatically. Partial OCR jobs fail visibly and are never sent to the reviewer.
+### Frontend
 
-Inbound email processing is autonomous by default: a received email attachment
-is reviewed and a response email is sent or dry-run printed. Binding legal
-actions such as signing, accepting terms or sending negotiation commitments
-still require an explicit approval workflow.
-
-Resend inbound receiving
-------------------------
-
-The managed inbox is `contracts@oldimeluub.resend.app`. In the Resend dashboard,
-create a webhook for only the `email.received` event with this endpoint:
-
-```text
-https://samvid-api.vercel.app/email/inbound
-```
-
-Copy the webhook signing secret into the backend project as
-`RESEND_WEBHOOK_SECRET`. The endpoint verifies the raw Svix signature before
-parsing JSON, accepts only `RESEND_INBOUND_RECIPIENTS`, retrieves the complete
-message and signed attachment URLs from Resend, and downloads at most five
-non-inline PDF, DOCX, or TXT files. Files over `MAX_FILE_SIZE_MB` and unsupported
-attachments are acknowledged and ignored. Transient Resend, storage, database,
-or RabbitMQ failures return HTTP 500 so Resend can retry.
-
-Completed deliveries are recorded in `inbound_email_events`. Failed deliveries
-can retry immediately, while processing leases can be reclaimed after ten
-minutes. The original Message-ID and References headers travel with the RabbitMQ
-job so the EC2 worker can send a threaded `Re:` response after review.
-
-Neon authentication
--------------------
-
-Samvid uses Neon Managed Better Auth for browser sessions. The React app talks
-to the branch-specific Neon Auth URL and sends the short-lived Neon JWT as a
-Bearer token on every workspace API request. FastAPI verifies the EdDSA
-signature against Neon JWKS, validates issuer, audience and expiry, and checks
-the authenticated email against the shared-workspace allowlist. The Resend
-webhook and AgentOS Control Plane keep their independent authentication paths.
-
-Set this in the frontend project:
-
-```text
-VITE_NEON_AUTH_URL=<Neon branch Auth URL>
-```
-
-Set these in the backend project:
-
-```text
-AUTH_MODE=neon
-NEON_AUTH_URL=<the same Neon branch Auth URL>
-NEON_AUTH_ALLOWED_EMAILS=owner@example.com
-NEON_AUTH_REQUIRE_EMAIL_VERIFIED=true
-NEON_AUTH_CLOCK_SKEW_SECONDS=30
-```
-
-`NEON_AUTH_JWKS_URL`, `NEON_AUTH_ISSUER`, and `NEON_AUTH_AUDIENCE` are optional
-overrides. By default, JWKS is read from
-`<NEON_AUTH_URL>/.well-known/jwks.json`, while issuer and audience use the Auth
-URL origin. `VITE_NEON_AUTH_URL` is a public endpoint, not a secret. Add both
-`http://localhost:5173` and the production frontend URL to Neon Auth's trusted
-domains. Keep the frontend and backend on the same Neon branch because preview
-and production branches have different issuers and signing keys.
-
-Authentication email is sent by Neon Auth, not by Samvid's `RESEND_API_KEY`,
-the inbound Resend webhook, FastAPI, or the EC2 worker. In the production Neon
-branch, open **Auth -> Configuration** and configure all of the following:
-
-- Add `https://samvid-ai.vercel.app` as an exact trusted domain. Include the
-  protocol and omit the trailing slash.
-- Enable email/password sign-up and choose **verification code** for sign-up
-  verification. Samvid's verification form expects a six-digit code. Resends
-  use Neon's `sendVerificationEmail` API, which sends the verification method
-  selected for that branch in the Console.
-- Configure a custom SMTP provider for production delivery. Neon's shared
-  provider is appropriate only for development and verification-code testing.
-- Test verification and password-reset delivery against the same branch used by
-  `VITE_NEON_AUTH_URL` and `NEON_AUTH_URL`. Codes and reset links expire after
-  15 minutes.
-
-The browser preserves the pending verification email in session storage, applies
-a resend cooldown, and removes consumed password-reset tokens from browser
-history. Before rendering the workspace it also calls `/api/auth/me`; a valid
-Neon session is not enough when the email is outside the backend allowlist.
-
-The current product has one shared `EMAIL_WORKSPACE_ID`, so
-`NEON_AUTH_ALLOWED_EMAILS` is the authorization boundary for its existing
-contracts. Do not leave it empty or treat successful sign-up alone as workspace
-authorization. The current deployment is therefore invite-only even though the
-sign-up form can create a Neon account. Add each approved account to the
-allowlist before testing workspace access. The EC2 worker does not require Neon
-Auth variables.
-
-### Authentication smoke test
-
-1. Create a user from the production frontend and confirm the verification code
-   arrives within two minutes.
-2. Verify the code, sign in, and confirm `/api/auth/me` returns HTTP 200.
-3. Repeat with an email outside `NEON_AUTH_ALLOWED_EMAILS` and confirm Samvid
-   shows the dedicated unauthorized-account screen without workspace data.
-4. Request a password reset, open the emailed link, choose a new password, and
-   confirm the reset token disappears from the browser URL after completion.
-5. Sign in with the new password and verify contracts load normally.
-
-Production deployment
----------------------
-
-Production uses two Vercel projects from this repository:
-
-- The frontend project has `frontend/` as its Root Directory. Routing Middleware
-  leaves the React shell public so it can render the auth guard and proxies
-  `/api` to the backend through `API_ORIGIN`. FastAPI remains the data security
-  boundary.
-- The backend project uses the repository root. `Dockerfile.vercel` packages the
-  FastAPI service as an OCI function that listens on Vercel's `PORT`.
-- A private Vercel Blob store is connected to both projects. Browser uploads go
-  directly to Blob, so contracts up to `MAX_FILE_SIZE_MB` do not pass through
-  Vercel's Function request-body limit.
-- PostgreSQL must be supplied through `DATABASE_URL`; Neon or Supabase can be
-  connected through the Vercel Marketplace.
-
-Set these frontend project variables:
-
-```text
-API_ORIGIN=https://your-backend-project.vercel.app
-VITE_NEON_AUTH_URL=<Neon branch Auth URL>
+```dotenv
+API_ORIGIN=https://api.samvid.online
+VITE_NEON_AUTH_URL=https://<neon-auth-host>/neondb/auth
 MAX_FILE_SIZE_MB=20
 ```
 
-Set these backend project variables, marking credentials as secrets:
+`VITE_NEON_AUTH_URL` is a public service endpoint, not a secret.
 
-```text
+### API
+
+```dotenv
 APP_ENV=production
-ALLOWED_HOSTS=*.vercel.app,api.samvid.ai
+APP_BASE_URL=https://api.samvid.online
+FRONTEND_ORIGIN=https://samvid.online
+ALLOWED_HOSTS=api.samvid.online,*.vercel.app
+
 AUTH_MODE=neon
-NEON_AUTH_URL=<Neon branch Auth URL>
-NEON_AUTH_ALLOWED_EMAILS=<comma-separated workspace users>
+NEON_AUTH_URL=https://<neon-auth-host>/neondb/auth
+NEON_AUTH_ALLOWED_EMAILS=owner@example.com,legal@example.com
 NEON_AUTH_REQUIRE_EMAIL_VERIFIED=true
-APP_BASE_URL=https://your-backend-project.vercel.app
-DATABASE_URL=<managed PostgreSQL connection string>
-DATABASE_URL_UNPOOLED=<direct Neon connection string>
+
+DATABASE_URL=<pooled Neon PostgreSQL URL>
+DATABASE_URL_UNPOOLED=<direct Neon PostgreSQL URL>
 AUTO_INITIALIZE_DATABASE=false
-CONTRACT_PROCESSING_MODE=rabbitmq
-RABBITMQ_URL=<CloudAMQP amqps connection string>
-RABBITMQ_EXCHANGE=contract.events
-RABBITMQ_REVIEW_QUEUE=contract.review.q
-RABBITMQ_RETRY_QUEUE=contract.review.retry.q
-RABBITMQ_DLQ=contract.review.dlq
+
 DOCUMENT_STORAGE_BACKEND=vercel_blob
-INBOUND_ATTACHMENT_DIR=/tmp/samvid/inbound-email
+CONTRACT_PROCESSING_MODE=rabbitmq
+RABBITMQ_URL=<CloudAMQP amqps URL>
+
 OPENAI_API_KEY=<secret>
 ENABLE_OCR=true
+OCR_PROVIDER=sarvam
 SARVAM_API_KEY=<secret>
-SARVAM_OCR_TIMEOUT_SECONDS=240
-AUTO_SEND_REVIEW_EMAIL=true
-EMAIL_FROM_ADDRESS=onboarding@resend.dev
-RESEND_API_KEY=<secret>
+
 RESEND_INBOUND_ENABLED=true
-RESEND_WEBHOOK_SECRET=<Resend webhook signing secret>
-RESEND_INBOUND_RECIPIENTS=contracts@oldimeluub.resend.app
-MAX_FILE_SIZE_MB=20
+RESEND_WEBHOOK_SECRET=<Resend signing secret>
+RESEND_INBOUND_RECIPIENTS=contracts@inbound.samvid.online
+RESEND_API_KEY=<secret>
+EMAIL_FROM_ADDRESS=contracts@samvid.online
+AUTO_SEND_REVIEW_EMAIL=true
 ```
 
-`RESEND_WEBHOOK_SECRET` belongs only on the Vercel API. The worker needs
-`RESEND_API_KEY` and `EMAIL_FROM_ADDRESS` for outbound review replies, but it does
-not receive the webhook secret or inbound recipient allowlist. With
-`onboarding@resend.dev`, Resend permits test delivery only to the email address
-associated with the Resend account. Keep `AUTO_SEND_REVIEW_EMAIL=true` only for
-those tests until a sending domain is owned and verified.
+Set `AUTO_INITIALIZE_DATABASE=true` only for the first schema initialization,
+deploy once, and return it to `false`. This keeps DDL work out of Vercel cold
+starts.
 
-Connect the same private Blob store to each project so Vercel injects
-`BLOB_STORE_ID` and its short-lived OIDC credential. For a backend hosted outside
-Vercel, use `BLOB_READ_WRITE_TOKEN` instead.
+### Worker
 
-Initialize the production schema once with `AUTO_INITIALIZE_DATABASE=true`, then
-set it to `false` for the deployed service. This keeps schema DDL out of Vercel
-container cold starts.
+The worker shares the database, Blob, RabbitMQ, model, OCR, and outbound email
+configuration with the API. It does not need Neon Auth variables,
+`RESEND_WEBHOOK_SECRET`, or `RESEND_INBOUND_RECIPIENTS`.
 
-Run the persistent RabbitMQ consumer on an EC2 instance with Docker. The worker
-does not accept inbound traffic and does not need a public port or persistent
-volume; contract files remain in Vercel Blob and workflow state remains in Neon.
-GitHub Actions builds the `linux/amd64` image and publishes both immutable commit
-and `latest` tags to `ghcr.io/piyusharyan/samvid-contract-worker`.
+Required worker-specific production values include:
 
-The GHCR package is private by default. Create a classic GitHub personal access
-token with only `read:packages`, then authenticate once on the EC2 host. Do not
-put this token in `.env.worker`:
-
-```bash
-read -s GHCR_TOKEN
-echo "$GHCR_TOKEN" | docker login ghcr.io -u PiyushAryan --password-stdin
-unset GHCR_TOKEN
-chmod 600 ~/.docker/config.json
+```dotenv
+APP_ENV=production
+FRONTEND_ORIGIN=https://samvid.online
+DATABASE_URL=<pooled Neon PostgreSQL URL>
+AUTO_INITIALIZE_DATABASE=false
+DOCUMENT_STORAGE_BACKEND=vercel_blob
+BLOB_READ_WRITE_TOKEN=<long-lived private Blob token>
+INBOUND_ATTACHMENT_DIR=/tmp/samvid/inbound-email
+CONTRACT_PROCESSING_MODE=rabbitmq
+RABBITMQ_URL=<CloudAMQP amqps URL>
+OPENAI_API_KEY=<secret>
+SARVAM_API_KEY=<secret>
+RESEND_API_KEY=<secret>
+EMAIL_FROM_ADDRESS=contracts@samvid.online
+AUTO_SEND_REVIEW_EMAIL=true
 ```
 
-Clone the repository for the compose definition and environment template, then
-pull the prebuilt image:
+`INBOUND_ATTACHMENT_DIR` is temporary scratch space. Durable contract files
+remain in private Blob storage and workflow state remains in Neon.
+
+## Email Intake and Replies
+
+Create a Resend webhook for the `email.received` event:
+
+```text
+https://api.samvid.online/email/inbound
+```
+
+Set the webhook signing secret as `RESEND_WEBHOOK_SECRET` on the API only. The
+endpoint verifies `svix-id`, `svix-timestamp`, and `svix-signature` before it
+parses the JSON payload.
+
+For every accepted delivery, Samvid:
+
+1. Confirms the recipient is in `RESEND_INBOUND_RECIPIENTS`.
+2. Retrieves the complete message and attachment metadata from Resend.
+3. Downloads up to five non-inline PDF, DOCX, or TXT attachments from Resend's
+   signed HTTPS attachment URLs.
+4. Rejects unsupported or oversized files without creating unsafe work.
+5. Stores accepted files, creates contract records, and publishes review jobs.
+6. Preserves the sender, subject, Message-ID, and References for the worker.
+7. Sends `Re: <original subject>` with a professional review, contract link,
+   `In-Reply-To`, and `References` after processing completes.
+
+Transient Resend, storage, database, and RabbitMQ failures return HTTP 500 so
+Resend can retry. Permanent attachment rejections are acknowledged without
+repeated delivery attempts.
+
+When using a Resend test sender, outbound delivery is restricted to the email
+address associated with that Resend account. Verify the Samvid sending domain
+before enabling replies to customers.
+
+## Authentication and Workspace Access
+
+Samvid uses Neon Auth for browser sessions. The React client obtains a
+short-lived Neon JWT and sends it as a Bearer token on workspace requests.
+FastAPI validates the token and applies workspace authorization independently of
+the frontend.
+
+Configure the production Neon branch with:
+
+- `https://samvid.online` as an exact trusted domain
+- `http://localhost:5173` as a development trusted domain
+- email/password sign-up and sign-in enabled
+- verification at sign-up enabled with the verification-code method
+- a custom SMTP provider for verification and password-recovery delivery
+- the same Auth URL in `VITE_NEON_AUTH_URL` and `NEON_AUTH_URL`
+
+Authentication emails are sent by Neon Auth's configured SMTP provider. They do
+not use Samvid's inbound Resend webhook, API email adapter, or EC2 worker.
+
+`NEON_AUTH_ALLOWED_EMAILS` is the authorization boundary for the current shared
+workspace. A user can have a valid Neon account and still be denied contract
+access when their email is absent from this list. Keep the list explicit and add
+only approved workspace members.
+
+Optional `NEON_AUTH_JWKS_URL`, `NEON_AUTH_ISSUER`, and
+`NEON_AUTH_AUDIENCE` values override endpoint-derived defaults. Production and
+preview branches must use their matching Auth URLs because each branch has its
+own issuer and signing keys.
+
+### Authentication verification
+
+1. Create an approved account and confirm the six-digit verification code is
+   delivered.
+2. Verify the account, sign in, and confirm `GET /api/auth/me` returns HTTP 200.
+3. Sign in with an email outside `NEON_AUTH_ALLOWED_EMAILS` and confirm no
+   workspace data is returned.
+4. Request a password reset, complete it from the email, and sign in with the
+   new password.
+
+## Production Delivery
+
+### Web and API on Vercel
+
+The frontend deployment uses `frontend/` as its root directory. Routing
+middleware keeps the React shell public for authentication screens and proxies
+`/api` to `API_ORIGIN`; FastAPI remains the data-security boundary.
+
+The backend deployment uses the repository root. `Dockerfile.vercel` packages
+FastAPI as an OCI function that listens on Vercel's `PORT`. Both deployments
+connect to the same private Blob store, while Neon provides PostgreSQL.
+
+Recommended branded domains:
+
+| Service | Domain |
+| --- | --- |
+| Samvid workspace | `https://samvid.online` |
+| Samvid API | `https://api.samvid.online` |
+| Contract inbox | `contracts@inbound.samvid.online` |
+| Authentication sender | `auth@mail.samvid.online` |
+
+Vercel deployment aliases can remain available for diagnostics, but production
+environment variables and provider redirects should use the branded domains.
+
+Deploy the backend manually from the repository root when the Vercel deployment
+is not connected to GitHub:
 
 ```bash
-git clone <repository-url> samvid
-cd samvid
-cp worker.env.example .env.worker
-# Fill .env.worker with production secrets, then restrict it.
-chmod 600 .env.worker
-docker compose -f docker-compose.worker.yml config
+vercel --prod
+```
+
+### Worker on EC2
+
+GitHub Actions tests the backend and frontend, builds both production images,
+and publishes the worker as:
+
+```text
+ghcr.io/piyusharyan/samvid-contract-worker:latest
+ghcr.io/piyusharyan/samvid-contract-worker:<git-commit-sha>
+```
+
+The EC2 host pulls the prebuilt image; it does not build application images.
+Authenticate to GHCR once with a classic GitHub token limited to
+`read:packages`, then deploy from the Compose definition:
+
+```bash
+cd ~/samvid-worker
 docker compose -f docker-compose.worker.yml pull
-docker compose -f docker-compose.worker.yml up -d --no-build
+docker compose -f docker-compose.worker.yml up -d --no-build --force-recreate
 docker compose -f docker-compose.worker.yml ps
-docker compose -f docker-compose.worker.yml logs -f --tail=100
+docker compose -f docker-compose.worker.yml logs --tail=100 contract-worker
 ```
 
-For a reproducible deployment, pin a commit tag instead of `latest`:
+Pin an immutable release when reproducibility is required:
 
 ```bash
 export WORKER_IMAGE=ghcr.io/piyusharyan/samvid-contract-worker:<git-commit-sha>
 docker compose -f docker-compose.worker.yml pull
-docker compose -f docker-compose.worker.yml up -d --no-build
+docker compose -f docker-compose.worker.yml up -d --no-build --force-recreate
 ```
 
-For later releases, pull the repository changes and repeat the `pull` and `up`
-commands. The publish workflow handles image builds; EC2 does not build images.
+The Compose service has no public port, restarts unless stopped, limits resource
+usage, and rotates Docker logs. The EC2 security group needs no application
+inbound rule. Restrict SSH to administrator addresses and retain outbound access
+to Neon, CloudAMQP, Vercel Blob, OpenAI, Sarvam, and Resend.
 
-For the inbound-email release, deploy in this order:
+### Release order
 
-1. Deploy the backend manually from the repository root with `vercel --prod`.
-2. Push the commit and wait for CI to publish the updated GHCR worker image.
-3. On EC2, pull and recreate the worker with the Compose commands above.
-4. Add `RESEND_INBOUND_ENABLED`, `RESEND_WEBHOOK_SECRET`, and `RESEND_INBOUND_RECIPIENTS` to the Vercel API and redeploy.
-5. Create the Resend webhook, then email a small supported contract from the Resend account address.
+1. Run backend and frontend tests locally.
+2. Push the release and wait for CI to publish the GHCR worker image.
+3. Deploy the Vercel API and frontend configuration.
+4. Pull and recreate the EC2 worker.
+5. Confirm `/health` and `/ready` return success.
+6. Send a small supported contract to the production inbox.
+7. Confirm the job reaches CloudAMQP and the worker completes it.
+8. Confirm the review is visible in Samvid and the threaded reply is delivered.
 
-Verify the webhook returns HTTP 200, CloudAMQP receives the review job, the EC2
-worker completes it, Neon contains the review, the workspace displays it, and
-the threaded reply arrives. Because this Vercel project is not connected to
-GitHub, environment or code changes require an explicit production deployment.
+## Operational Checks
 
-The production worker is sized for a 2 vCPU, 2 GiB `t3.small`. The container is
-limited to 1.5 CPUs and 1.5 GiB RAM, leaving capacity for the host OS and Docker.
-The configured 2 GiB swap remains a runtime safety margin but is no longer needed
-for image builds. Monitor runtime usage with `docker stats`. Docker logs rotate
-at 10 MiB. The security group needs no application inbound rule; restrict SSH to
-an administrator IP and retain outbound access to Neon PostgreSQL, CloudAMQP over
-TLS, Vercel Blob, OpenAI, Sarvam, and Resend.
-
-Keep the Vercel API on `CONTRACT_PROCESSING_MODE=sync` until the worker log says
-it is polling `contract.review.q`. Then configure the same `RABBITMQ_URL` and
-queue names on Vercel, set `CONTRACT_PROCESSING_MODE=rabbitmq`, redeploy the API,
-and submit a small test contract. Roll back by returning the Vercel setting to
-`sync`.
-
-Local production-image validation:
+Inspect worker state:
 
 ```bash
-docker build -t samvid:local .
-docker run --rm -p 8000:8000 --env-file .env samvid:local
+docker compose -f docker-compose.worker.yml ps
+docker inspect "$(docker compose -f docker-compose.worker.yml ps -q contract-worker)" \
+  --format 'status={{.State.Status}} restarts={{.RestartCount}}'
 ```
 
-`APP_ENV=production` intentionally fails fast when required secrets, PostgreSQL,
-private document storage, or writable scratch storage are missing.
+Follow worker logs:
+
+```bash
+docker compose -f docker-compose.worker.yml logs -f --tail=200 contract-worker
+```
+
+Validate production images locally:
+
+```bash
+docker build -f Dockerfile.vercel -t samvid-api:local .
+docker build -f Dockerfile.worker -t samvid-worker:local .
+```
+
+`APP_ENV=production` fails fast when required credentials, PostgreSQL, private
+document storage, RabbitMQ, or writable scratch storage are missing. Treat that
+validation as a deployment guard, not an error to bypass.
+
+## Product Boundary
+
+Samvid turns contracts into structured, traceable work. It helps teams review,
+coordinate, and follow through; final legal judgment, negotiation authority, and
+contract execution remain with the people responsible for the agreement.

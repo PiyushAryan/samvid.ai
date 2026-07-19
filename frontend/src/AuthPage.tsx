@@ -19,6 +19,7 @@ import {
   PENDING_AUTH_EMAIL_KEY,
   safeInternalPath
 } from "./auth";
+import { setFaviconTheme } from "./favicon";
 import "./auth.css";
 
 export type AuthView = "sign-in" | "sign-up" | "forgot-password" | "reset-password" | "verify-email";
@@ -124,6 +125,7 @@ export function AuthPage({ initialView = "sign-in", initialEmail = "", redirectT
 
   useEffect(() => {
     window.localStorage.setItem("samvid-theme", theme);
+    setFaviconTheme(theme);
   }, [theme]);
 
   useEffect(() => {
