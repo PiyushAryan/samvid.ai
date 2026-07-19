@@ -446,6 +446,57 @@
   opacity: 0.66;
 }
 
+.auth-resend {
+  justify-self: center;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--auth-accent);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.auth-resend:hover:not(:disabled) {
+  color: var(--auth-accent-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.auth-resend:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.auth-verify-help {
+  display: block;
+  margin: 15px auto 0;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--auth-accent);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.auth-verify-help:hover:not(:disabled) {
+  color: var(--auth-accent-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.auth-verify-help:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.auth-code-input-shell {
+  grid-template-columns: 18px minmax(0, 1fr);
+}
+
 .auth-spinner {
   animation: auth-spin 0.9s linear infinite;
 }

@@ -14,7 +14,7 @@ import { FormEvent, useEffect, useId, useState } from "react";
 import { getAuthClient, getAuthErrorMessage, isNeonAuthConfigured } from "./auth";
 import "./auth.css";
 
-export type AuthView = "sign-in" | "sign-up" | "forgot-password";
+export type AuthView = "sign-in" | "sign-up" | "forgot-password" | "verify-email";
 type AuthTheme = "light" | "dark";
 
 type AuthPageProps = {
@@ -37,6 +37,11 @@ const viewCopy: Record<AuthView, { eyebrow: string; title: string; description: 
     eyebrow: "Account recovery",
     title: "Reset your password",
     description: "Enter your work email and we will send you a secure reset link."
+  },
+  "verify-email": {
+    eyebrow: "Confirm your email",
+    title: "Check your inbox",
+    description: "Use the verification link or enter the verification code sent to your email."
   }
 };
 
@@ -58,12 +63,24 @@ function accountNameFromEmail(email: string) {
     .join(" ");
 }
 
+function requiresEmailVerification(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const code = "code" in error && typeof error.code === "string" ? error.code : "";
+  const message = "message" in error && typeof error.message === "string" ? error.message : "";
+  const normalizedMessage = message.toLowerCase();
+  return code.toUpperCase().includes("EMAIL_NOT_VERIFIED")
+    || normalizedMessage.includes("verification required")
+    || normalizedMessage.includes("email not verified")
+    || normalizedMessage.includes("verify your email");
+}
+
 export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }: AuthPageProps) {
   const [view, setView] = useState<AuthView>(initialView);
   const [theme, setTheme] = useState<AuthTheme>(getInitialTheme);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -71,6 +88,7 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
   const nameId = useId();
   const emailId = useId();
   const passwordId = useId();
+  const verificationCodeId = useId();
   const errorId = useId();
 
   const copy = viewCopy[view];
@@ -90,6 +108,7 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
     setError("");
     setNotice("");
     setPassword("");
+    setVerificationCode("");
     setShowPassword(false);
   };
 
@@ -120,6 +139,23 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
         return;
       }
 
+      if (view === "verify-email") {
+        const result = await client.emailOtp.verifyEmail({
+          email: email.trim(),
+          otp: verificationCode.trim()
+        });
+        if (result.error) throw result.error;
+
+        const session = await client.getSession();
+        if (session.data?.user?.emailVerified) {
+          window.location.assign(redirectTo);
+          return;
+        }
+        changeView("sign-in");
+        setNotice("Email verified. Sign in to continue.");
+        return;
+      }
+
       const result = view === "sign-up"
         ? await client.signUp.email({
           name: name.trim() || accountNameFromEmail(email),
@@ -136,9 +172,58 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
 
       if (result.error) throw result.error;
 
+      if (view === "sign-up" && result.data?.user && !result.data.user.emailVerified) {
+        setView("verify-email");
+        setPassword("");
+        setNotice(`We sent a verification message to ${email.trim()}.`);
+        return;
+      }
+
       window.location.assign(redirectTo);
     } catch (authError) {
+      if (view === "sign-in" && requiresEmailVerification(authError)) {
+        setView("verify-email");
+        setPassword("");
+        setNotice(`Verify ${email.trim()} before signing in.`);
+        return;
+      }
       setError(getAuthErrorMessage(authError, "We could not complete that request. Please try again."));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const resendVerification = async (openVerificationView = false) => {
+    setError("");
+    setNotice("");
+
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      setError("Enter your email address before requesting a verification code.");
+      return;
+    }
+
+    if (!isNeonAuthConfigured) {
+      setError("Authentication is not configured for this environment.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const result = await getAuthClient().sendVerificationEmail({
+        email: normalizedEmail,
+        callbackURL: `${window.location.origin}${redirectTo}`
+      });
+      if (result.error) throw result.error;
+
+      if (openVerificationView) {
+        setView("verify-email");
+        setPassword("");
+        setVerificationCode("");
+      }
+      setNotice(`A new verification message was sent to ${normalizedEmail}.`);
+    } catch (authError) {
+      setError(getAuthErrorMessage(authError, "We could not resend the verification message."));
     } finally {
       setIsSubmitting(false);
     }
@@ -184,7 +269,7 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
         </div>
 
         <div className="auth-panel">
-          {view === "forgot-password" && (
+          {(view === "forgot-password" || view === "verify-email") && (
             <button className="auth-back-button" type="button" onClick={() => changeView("sign-in")}>
               <ArrowLeft size={15} aria-hidden="true" /> Back to sign in
             </button>
@@ -234,7 +319,7 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
               </div>
             </div>
 
-            {view !== "forgot-password" && (
+            {view !== "forgot-password" && view !== "verify-email" && (
               <div className="auth-field">
                 <div className="auth-label-row">
                   <label htmlFor={passwordId}>Password</label>
@@ -271,10 +356,35 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
               </div>
             )}
 
+            {view === "verify-email" && (
+              <div className="auth-field">
+                <label htmlFor={verificationCodeId}>Verification code</label>
+                <div className="auth-input-shell auth-code-input-shell">
+                  <Mail size={16} aria-hidden="true" />
+                  <input
+                    id={verificationCodeId}
+                    name="verification-code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={verificationCode}
+                    onChange={(event) => setVerificationCode(event.target.value.replace(/\s/g, ""))}
+                    placeholder="Enter the code from your email"
+                    required
+                  />
+                </div>
+                <small>Using a verification link? Open it in this browser instead.</small>
+              </div>
+            )}
+
             {error && <p id={errorId} className="auth-message auth-message-error" role="alert">{error}</p>}
             {notice && <p className="auth-message auth-message-success" role="status">{notice}</p>}
 
-            <button className="auth-submit" type="submit" disabled={isSubmitting || Boolean(notice)}>
+            <button
+              className="auth-submit"
+              type="submit"
+              disabled={isSubmitting || (Boolean(notice) && view !== "verify-email")}
+            >
               {isSubmitting ? (
                 <><Loader2 className="auth-spinner" size={16} aria-hidden="true" /> Working...</>
               ) : (
@@ -282,11 +392,34 @@ export function AuthPage({ initialView = "sign-in", redirectTo = "/contracts" }:
                   {view === "sign-in" && "Sign in to workspace"}
                   {view === "sign-up" && "Create account"}
                   {view === "forgot-password" && "Send reset link"}
+                  {view === "verify-email" && "Verify email"}
                   <ArrowRight size={16} aria-hidden="true" />
                 </>
               )}
             </button>
+
+            {view === "verify-email" && (
+              <button
+                className="auth-resend"
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => void resendVerification()}
+              >
+                Didn&apos;t receive it? Resend verification code
+              </button>
+            )}
           </form>
+
+          {view === "sign-in" && (
+            <button
+              className="auth-verify-help"
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => void resendVerification(true)}
+            >
+              Email not verified? Resend verification code
+            </button>
+          )}
 
           {view !== "forgot-password" && (
             <p className="auth-switch">
