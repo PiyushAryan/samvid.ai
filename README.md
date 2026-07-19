@@ -405,7 +405,7 @@ Recommended branded domains:
 | Samvid workspace | `https://samvid.online` |
 | Samvid API | `https://api.samvid.online` |
 | Contract inbox | `contracts@inbound.samvid.online` |
-| Authentication sender | `auth@mail.samvid.online` |
+| Authentication sender | `auth@samvid.online` |
 
 Vercel deployment aliases can remain available for diagnostics, but production
 environment variables and provider redirects should use the branded domains.
