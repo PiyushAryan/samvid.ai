@@ -703,6 +703,10 @@ p {
   background: var(--accent-soft);
 }
 
+.app-shell[data-theme="dark"] .nav-link[aria-current="page"] .nav-label {
+  color: #fff;
+}
+
 .nav-link[aria-current="page"]::before {
   position: absolute;
   left: 0;
