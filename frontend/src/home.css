@@ -218,12 +218,12 @@
 }
 
 /* Hero Section */
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
+.landing-body h1,
+.landing-body h2,
+.landing-body h3,
+.landing-body h4,
+.landing-body h5,
+.landing-body h6 {
   color: var(--lp-text-primary);
 }
 

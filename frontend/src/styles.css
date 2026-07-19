@@ -757,6 +757,7 @@ p {
   max-width: 760px;
   margin-top: 4px;
   overflow-wrap: anywhere;
+  color: var(--text);
   font-size: clamp(25px, 3vw, 34px);
   font-weight: 600;
   line-height: 1.2;
@@ -1314,6 +1315,10 @@ p {
   border-top: 0;
 }
 
+.detail-grid > .panel:nth-child(-n + 3) {
+  border-top: 0;
+}
+
 .panel.wide,
 .signing-layout > .notice {
   grid-column: 1 / -1;
@@ -1329,6 +1334,7 @@ p {
 .panel h2,
 .dialog h2 {
   margin: 0 0 14px;
+  color: var(--text);
   font-size: 15px;
   font-weight: 600;
   line-height: 1.35;
@@ -1365,11 +1371,23 @@ p {
 
 .term-list > div {
   display: grid;
-  grid-template-columns: minmax(100px, 0.7fr) minmax(0, 1.3fr);
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: start;
   gap: 14px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
   font-size: 12px;
+}
+
+.term-list > div > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.term-list strong,
+.term-list span {
+  display: block;
 }
 
 .term-list > div:last-child {
@@ -2203,6 +2221,10 @@ textarea.field-control {
 
   .detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .detail-grid > .panel:nth-child(n + 2) {
+    border-top: 1px solid var(--border);
   }
 
   .panel.wide {
