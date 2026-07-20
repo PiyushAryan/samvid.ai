@@ -6,15 +6,21 @@ const allowedContentTypes = [
   "text/plain"
 ];
 
-async function hasValidNeonAuth(request: Request): Promise<boolean> {
+async function personalWorkspaceForRequest(request: Request): Promise<string | null> {
   const apiOrigin = process.env.API_ORIGIN;
   const authorization = request.headers.get("authorization");
-  if (!apiOrigin || !authorization?.startsWith("Bearer ")) return false;
+  if (!apiOrigin || !authorization?.startsWith("Bearer ")) return null;
   const response = await fetch(new URL("/api/auth/me", apiOrigin), {
     headers: { Authorization: authorization },
     signal: AbortSignal.timeout(5000)
   });
-  return response.ok;
+  if (!response.ok) return null;
+  const payload = await response.json() as {
+    account?: { role?: string; state?: string; workspace_id?: string | null };
+  };
+  const workspaceId = payload.account?.workspace_id;
+  if (payload.account?.role !== "user" || payload.account?.state !== "active" || !workspaceId) return null;
+  return workspaceId;
 }
 
 export default async function handler(request: Request): Promise<Response> {
@@ -28,8 +34,9 @@ export default async function handler(request: Request): Promise<Response> {
       body,
       request,
       onBeforeGenerateToken: async (pathname) => {
-        if (!(await hasValidNeonAuth(request))) throw new Error("Authentication required");
-        if (!pathname.startsWith("contracts/")) throw new Error("Invalid upload path");
+        const workspaceId = await personalWorkspaceForRequest(request);
+        if (!workspaceId) throw new Error("Authentication required");
+        if (!pathname.startsWith(`contracts/${workspaceId}/`)) throw new Error("Invalid upload path");
 
         return {
           allowedContentTypes,

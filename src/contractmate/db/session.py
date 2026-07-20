@@ -5,7 +5,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
-from contractmate.db.models import POSTGRES_SCHEMA_SQL, SQLITE_SCHEMA_SQL
+from contractmate.db.models import POSTGRES_EXTENSIONS_SQL, POSTGRES_SCHEMA_SQL, SQLITE_SCHEMA_SQL
 
 _initialized_postgres_schemas: set[str] = set()
 _schema_lock = Lock()
@@ -59,6 +59,7 @@ def initialize_database(database_url: str, *, schema_database_url: str | None = 
             return
         connection = connect_postgres(migration_url)
         try:
+            connection.execute(POSTGRES_EXTENSIONS_SQL)
             connection.execute(POSTGRES_SCHEMA_SQL)
             connection.commit()
         finally:

@@ -1,10 +1,24 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { expect, test, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ReactNode } from "react";
+import { beforeEach, expect, test, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { AppShell, ChatsPage, ContractsTableSkeleton, ContractTable, ReviewTab, Timeline } from "./App";
 import { LandingPage } from "./Home";
+import * as api from "./api";
 import { TooltipProvider } from "./components/ui/tooltip";
-import type { ContractListItem, ContractReview, SigningRequest } from "./types";
+import type { ChatSession, ChatSessionSummary, ContractListItem, ContractReview, SigningRequest } from "./types";
+
+vi.mock("./api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./api")>();
+  return {
+    ...actual,
+    listChatSessions: vi.fn(),
+    createChatSession: vi.fn(),
+    getChatSession: vi.fn(),
+    streamChatMessage: vi.fn()
+  };
+});
 
 vi.mock("./AuthProvider", () => ({
   useAuth: () => ({
@@ -19,6 +33,72 @@ vi.mock("./AuthProvider", () => ({
     signOut: vi.fn()
   })
 }));
+
+const chatSessions: ChatSessionSummary[] = [
+  {
+    id: "chat-1",
+    title: "Vendor renewal terms",
+    message_count: 2,
+    created_at: "2026-07-20T09:00:00Z",
+    updated_at: "2026-07-20T09:05:00Z"
+  },
+  {
+    id: "chat-2",
+    title: "Indemnity exposure",
+    message_count: 4,
+    created_at: "2026-07-19T09:00:00Z",
+    updated_at: "2026-07-19T09:05:00Z"
+  }
+];
+
+const chatSession: ChatSession = {
+  ...chatSessions[0],
+  messages: [
+    {
+      id: "message-1",
+      role: "user",
+      content: "When does the vendor agreement renew?",
+      sources: [],
+      created_at: "2026-07-20T09:00:00Z"
+    },
+    {
+      id: "message-2",
+      role: "assistant",
+      content: "The agreement renews automatically for another 12 months.",
+      sources: [
+        {
+          id: "source-1",
+          contract_id: "contract-1",
+          contract_title: "Vendor agreement",
+          page_number: 7,
+          excerpt: "The term automatically renews for successive twelve-month periods."
+        }
+      ],
+      created_at: "2026-07-20T09:00:03Z"
+    }
+  ]
+};
+
+beforeEach(() => {
+  vi.mocked(api.listChatSessions).mockResolvedValue(chatSessions);
+  vi.mocked(api.getChatSession).mockResolvedValue(chatSession);
+  vi.mocked(api.createChatSession).mockResolvedValue({
+    id: "chat-new",
+    title: "Termination notice",
+    message_count: 0,
+    created_at: "2026-07-20T10:00:00Z",
+    updated_at: "2026-07-20T10:00:00Z",
+    messages: []
+  });
+  vi.mocked(api.streamChatMessage).mockResolvedValue(undefined);
+});
+
+function QueryProvider({ children }: { children: ReactNode }) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
+  });
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
 
 test("landing simulator switches between customer workflow previews", async () => {
   vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
@@ -92,18 +172,20 @@ test("sidebar control toggles its collapsed state", () => {
   expect(screen.getByRole("button", { name: "Expand sidebar" })).toHaveAttribute("aria-pressed", "true");
 });
 
-test("workspace view slider switches between console and chats", () => {
+test("workspace view slider switches between console and loads chat history", async () => {
   const { container } = render(
-    <TooltipProvider>
-      <MemoryRouter initialEntries={["/contracts"]}>
-        <Routes>
-          <Route element={<AppShell />}>
-            <Route path="/contracts" element={<div>Contracts page</div>} />
-            <Route path="/chats" element={<ChatsPage />} />
-          </Route>
-        </Routes>
-      </MemoryRouter>
-    </TooltipProvider>
+    <QueryProvider>
+      <TooltipProvider>
+        <MemoryRouter initialEntries={["/contracts"]}>
+          <Routes>
+            <Route element={<AppShell />}>
+              <Route path="/contracts" element={<div>Contracts page</div>} />
+              <Route path="/chats" element={<ChatsPage />} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </TooltipProvider>
+    </QueryProvider>
   );
 
   const consoleOption = within(container).getByRole("button", { name: /console/i });
@@ -116,34 +198,85 @@ test("workspace view slider switches between console and chats", () => {
   expect(consoleOption).toHaveAttribute("aria-pressed", "false");
   expect(within(container).getByRole("heading", { name: "Hello, Piyush Aryan" })).toBeInTheDocument();
   expect(within(container).getByText("find anything about your contracts")).toBeInTheDocument();
-  const chatHistory = within(container).getByRole("region", { name: "Today" });
+  const chatHistory = await within(container).findByRole("region", { name: "Recent" });
   expect(within(chatHistory).getByRole("button", { name: "New chat" })).toBeInTheDocument();
-  expect(within(chatHistory).getAllByRole("button", { name: "chat" })).toHaveLength(2);
+  expect(await within(chatHistory).findByRole("button", { name: "Vendor renewal terms" })).toBeInTheDocument();
+  expect(within(chatHistory).getByRole("button", { name: "Indemnity exposure" })).toBeInTheDocument();
   expect(within(container).queryByRole("link", { name: "Contracts" })).not.toBeInTheDocument();
   expect(within(container).queryByRole("link", { name: "Signing" })).not.toBeInTheDocument();
 });
 
-test("chat composer accepts a file attachment", () => {
+test("chat session renders persisted history and contract sources", async () => {
   const { container } = render(
-    <MemoryRouter>
-      <ChatsPage />
-    </MemoryRouter>
+    <QueryProvider>
+      <MemoryRouter initialEntries={["/chats?chat=chat-1"]}>
+        <ChatsPage />
+      </MemoryRouter>
+    </QueryProvider>
   );
 
-  expect(within(container).getByText("Ask about a contract", { selector: "label" })).toHaveAttribute("for", "ai-chat-prompt");
-  expect(within(container).getByRole("textbox")).toHaveAttribute("placeholder", "Ask a question about your contracts...");
-  expect(within(container).getByRole("button", { name: "Attach files" })).toHaveTextContent("Drop to attach");
-  expect(within(container).getByRole("button", { name: "Send message" })).toBeDisabled();
+  expect(within(container).getByText("Loading conversation")).toBeInTheDocument();
+  expect(await within(container).findByText("The agreement renews automatically for another 12 months.")).toBeInTheDocument();
+  const source = within(container).getByRole("link", { name: /Vendor agreement/i });
+  expect(source).toHaveAttribute("href", "/contracts/contract-1");
+  expect(within(container).getByText("Page 7")).toBeInTheDocument();
+  expect(within(container).getByText(/successive twelve-month periods/)).toBeInTheDocument();
+});
 
-  const fileInput = container.querySelector<HTMLInputElement>(".ai-chat-file-input");
-  expect(fileInput).not.toBeNull();
-  fireEvent.change(fileInput!, {
-    target: { files: [new File(["agreement"], "vendor-agreement.pdf", { type: "application/pdf" })] }
+test("chat session exposes a recoverable history error", async () => {
+  vi.mocked(api.getChatSession).mockRejectedValue(new Error("Knowledge index unavailable"));
+  const { container } = render(
+    <QueryProvider>
+      <MemoryRouter initialEntries={["/chats?chat=chat-missing"]}>
+        <ChatsPage />
+      </MemoryRouter>
+    </QueryProvider>
+  );
+
+  const alert = await within(container).findByRole("alert");
+  expect(alert).toHaveTextContent("Conversation unavailable");
+  expect(alert).toHaveTextContent("Knowledge index unavailable");
+  expect(within(alert).getByRole("button", { name: "Retry" })).toBeEnabled();
+});
+
+test("new chat streams an answer and exposes its sources", async () => {
+  vi.mocked(api.streamChatMessage).mockImplementation(async (_sessionId, _content, handlers) => {
+    handlers.onDelta?.("The termination notice is ");
+    handlers.onDelta?.("30 days.");
+    handlers.onSources?.([
+      {
+        contract_id: "contract-2",
+        contract_title: "Services agreement",
+        page_number: 11,
+        excerpt: "Either party may terminate on thirty days' notice."
+      }
+    ]);
   });
 
-  expect(within(container).getByText("vendor-agreement.pdf")).toBeInTheDocument();
-  expect(within(container).getByRole("status")).toHaveTextContent("1 file attached");
-  expect(within(container).getByRole("button", { name: "Send message" })).toBeEnabled();
+  const { container } = render(
+    <QueryProvider>
+      <MemoryRouter initialEntries={["/chats"]}>
+        <ChatsPage />
+      </MemoryRouter>
+    </QueryProvider>
+  );
+
+  const textbox = within(container).getByRole("textbox");
+  fireEvent.change(textbox, { target: { value: "What is the termination notice?" } });
+  fireEvent.click(within(container).getByRole("button", { name: "Send message" }));
+
+  await waitFor(() => expect(api.createChatSession).toHaveBeenCalledWith("What is the termination notice?"));
+  expect(api.streamChatMessage).toHaveBeenCalledWith(
+    "chat-new",
+    "What is the termination notice?",
+    expect.any(Object),
+    expect.any(AbortSignal)
+  );
+  expect(await within(container).findByText("The termination notice is 30 days.")).toBeInTheDocument();
+  expect(within(container).getByRole("link", { name: /Services agreement/i })).toHaveAttribute(
+    "href",
+    "/contracts/contract-2"
+  );
 });
 
 test("sidebar actions menu opens and switches theme", () => {

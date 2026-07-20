@@ -13,8 +13,14 @@ import resend
 from pydantic import BaseModel, Field, ValidationError
 
 from contractmate.db.repositories.inbound_email_events import InboundEmailEventRepository, InboundEventClaim
+from contractmate.db.repositories.user_accounts import UserAccountRepository
 from contractmate.db.session import connect, initialize_database
 from contractmate.email.messages import EmailAttachment, InboundEmailMessage
+from contractmate.services.account_access import (
+    AccountAccessService,
+    InvalidInboundSenderError,
+    SuperAdminInboundRejectedError,
+)
 from contractmate.services.email_ingestion import EmailIngestionService
 from contractmate.settings import Settings
 
@@ -141,45 +147,72 @@ class ResendInboundService:
         event_repository: InboundEmailEventRepository,
         ingestion_service: EmailIngestionService,
         client: ResendReceivingClient,
+        account_access: AccountAccessService | None = None,
     ) -> None:
         self.settings = settings
         self.event_repository = event_repository
         self.ingestion_service = ingestion_service
         self.client = client
+        self.account_access = account_access
 
     @classmethod
     def local(cls, settings: Settings) -> "ResendInboundService":
         if settings.auto_initialize_database:
             initialize_database(settings.database_url, schema_database_url=settings.database_direct_url)
         connection = connect(settings.database_url)
+        account_access = None
+        if settings.samvid_super_admin_email:
+            account_access = AccountAccessService(
+                repository=UserAccountRepository(connection),
+                super_admin_email=settings.samvid_super_admin_email,
+            )
         return cls(
             settings=settings,
             event_repository=InboundEmailEventRepository(connection),
             ingestion_service=EmailIngestionService.local(settings),
             client=ResendReceivingClient(settings.resend_api_key or ""),
+            account_access=account_access,
         )
 
     def process(self, event: ResendWebhookEvent, *, event_id: str, payload_hash: str) -> ResendInboundResult:
         email_id = event.data.email_id
-        claim = self.event_repository.claim(
-            event_id=event_id,
-            email_message_id=email_id,
-            workspace_id=self.settings.email_workspace_id,
-            event_type=event.type,
-            payload_hash=payload_hash,
-        )
-        if claim is InboundEventClaim.COMPLETED:
-            return ResendInboundResult(event_id=event_id, email_id=email_id, status="duplicate")
-        if claim is InboundEventClaim.PROCESSING:
-            return ResendInboundResult(event_id=event_id, email_id=email_id, status="processing")
-
         temporary_files: list[Path] = []
+        claimed = False
         try:
+            claim = self.event_repository.claim(
+                event_id=event_id,
+                email_message_id=email_id,
+                workspace_id=self.settings.email_workspace_id,
+                event_type=event.type,
+                payload_hash=payload_hash,
+            )
+            if claim is InboundEventClaim.COMPLETED:
+                return ResendInboundResult(event_id=event_id, email_id=email_id, status="duplicate")
+            if claim is InboundEventClaim.PROCESSING:
+                return ResendInboundResult(event_id=event_id, email_id=email_id, status="processing")
+            claimed = True
+
             received_email = self.client.get_email(email_id)
             delivered_to = list(received_email.get("received_for") or []) + list(received_email.get("to") or [])
             if not recipient_is_allowed(delivered_to, self.settings.resend_inbound_recipients):
                 self.event_repository.mark_completed(email_id)
                 return ResendInboundResult(event_id=event_id, email_id=email_id, status="ignored")
+
+            sender_name, sender = _parse_email_identity(str(received_email.get("from") or ""))
+            if not sender:
+                self.event_repository.mark_completed(email_id)
+                return ResendInboundResult(event_id=event_id, email_id=email_id, status="ignored")
+
+            workspace_id = self.settings.email_workspace_id
+            if self.account_access is not None:
+                try:
+                    workspace_id = self.account_access.resolve_inbound_sender(
+                        f"{sender_name} <{sender}>" if sender_name else sender
+                    ).workspace_id
+                except (InvalidInboundSenderError, SuperAdminInboundRejectedError):
+                    self.event_repository.mark_completed(email_id)
+                    return ResendInboundResult(event_id=event_id, email_id=email_id, status="ignored")
+            self.event_repository.update_workspace(email_id, workspace_id)
 
             attachments, ignored, temporary_files = self._download_supported_attachments(email_id)
             if not attachments:
@@ -191,15 +224,6 @@ class ResendInboundService:
                     ignored_attachments=ignored,
                 )
 
-            sender_name, sender = _parse_email_identity(str(received_email.get("from") or ""))
-            if not sender:
-                self.event_repository.mark_completed(email_id)
-                return ResendInboundResult(
-                    event_id=event_id,
-                    email_id=email_id,
-                    status="ignored",
-                    ignored_attachments=ignored,
-                )
             reply_to = next(
                 (
                     parsed
@@ -226,6 +250,7 @@ class ResendInboundService:
             ingestion_result = self.ingestion_service.process_inbound_email(
                 message,
                 send_response=self.settings.auto_send_review_email,
+                workspace_id=workspace_id,
             )
             self.event_repository.mark_completed(email_id)
             return ResendInboundResult(
@@ -236,7 +261,8 @@ class ResendInboundService:
                 ignored_attachments=ignored + ingestion_result.ignored_attachments,
             )
         except Exception:
-            self.event_repository.mark_failed(email_id)
+            if claimed:
+                self.event_repository.mark_failed(email_id)
             raise
         finally:
             for path in temporary_files:

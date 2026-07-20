@@ -11,7 +11,6 @@ import {
   Loader2,
   LogOut,
   Moon,
-  Paperclip,
   PanelLeft,
   Plus,
   RefreshCw,
@@ -26,23 +25,30 @@ import {
   UserPlus,
   X
 } from "lucide-react";
-import { DragEvent, FormEvent, KeyboardEvent, ReactNode, useEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "motion/react";
 import {
   addSigner,
+  ApiError,
   appendSignerEvent,
+  createChatSession,
   createSigningRequest,
+  getChatSession,
   getContract,
   getContractDocument,
+  listChatSessions,
   listContracts,
   listSigningRequests,
+  streamChatMessage,
   uploadContract
 } from "./api";
 import { useAuth } from "./AuthProvider";
 import { setFaviconTheme } from "./favicon";
 import type {
+  ChatMessage,
+  ChatSessionSummary,
   ContractDetail,
   ContractListItem,
   ContractReview,
@@ -87,6 +93,57 @@ const panelClass = "panel";
 const panelCardClass = "panel panel-card";
 const fieldLabelClass = "field";
 const fieldControlClass = "field-control";
+
+function SidebarChatHistory({
+  activeChatId,
+  onSelect
+}: {
+  activeChatId: string | null;
+  onSelect: (chatId: string | null) => void;
+}) {
+  const sessionsQuery = useQuery({
+    queryKey: ["chat-sessions"],
+    queryFn: listChatSessions
+  });
+
+  return (
+    <section className="sidebar-chat-section" aria-labelledby="sidebar-chat-history-title">
+      <button className="sidebar-new-chat" type="button" onClick={() => onSelect(null)}>
+        <SquarePen size={16} aria-hidden="true" />
+        <span>New chat</span>
+      </button>
+      <h2 id="sidebar-chat-history-title">Recent</h2>
+      {sessionsQuery.isPending ? (
+        <div className="sidebar-chat-loading" role="status" aria-label="Loading chat history">
+          {[0, 1, 2].map((item) => <Skeleton key={item} className="sidebar-chat-skeleton" />)}
+        </div>
+      ) : sessionsQuery.isError ? (
+        <div className="sidebar-chat-state" role="alert">
+          <span>History unavailable</span>
+          <button type="button" onClick={() => void sessionsQuery.refetch()}>Retry</button>
+        </div>
+      ) : sessionsQuery.data.length === 0 ? (
+        <p className="sidebar-chat-empty">No conversations yet</p>
+      ) : (
+        <ol className="sidebar-chat-list">
+          {sessionsQuery.data.map((session) => (
+            <li key={session.id}>
+              <button
+                type="button"
+                title={session.title}
+                aria-current={activeChatId === session.id ? "page" : undefined}
+                onClick={() => onSelect(session.id)}
+              >
+                {session.title}
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
 export function AppShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarMenuOpen, setSidebarMenuOpen] = useState(false);
@@ -359,30 +416,10 @@ export function AppShell() {
             </button>
           </div>
           {workspaceView === "chats" && (
-            <section className="sidebar-chat-section" aria-labelledby="sidebar-chat-history-title">
-              <button
-                className="sidebar-new-chat"
-                type="button"
-                onClick={() => navigate("/chats")}
-              >
-                <SquarePen size={16} aria-hidden="true" />
-                <span>New chat</span>
-              </button>
-              <h2 id="sidebar-chat-history-title">Today</h2>
-              <ol className="sidebar-chat-list">
-                {["1", "2"].map((chatId) => (
-                  <li key={chatId}>
-                    <button
-                      type="button"
-                      aria-current={activeChatId === chatId ? "page" : undefined}
-                      onClick={() => navigate(`/chats?chat=${chatId}`)}
-                    >
-                      chat
-                    </button>
-                  </li>
-                ))}
-              </ol>
-            </section>
+            <SidebarChatHistory
+              activeChatId={activeChatId}
+              onSelect={(chatId) => navigate(chatId ? `/chats?chat=${encodeURIComponent(chatId)}` : "/chats")}
+            />
           )}
           {workspaceView === "console" && (
             <>
@@ -456,84 +493,112 @@ export function AppShell() {
   );
 }
 
-type LocalChatMessage = {
-  id: number;
-  role: "user" | "assistant";
-  text: string;
-};
-
-type ChatAttachment = {
-  id: string;
-  file: File;
-};
-
 export function ChatsPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const activeChatId = searchParams.get("chat");
   const accountName = user?.name || "there";
   const [draft, setDraft] = useState("");
-  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
-  const [messages, setMessages] = useState<LocalChatMessage[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
+  const [liveConversation, setLiveConversation] = useState<{ sessionId: string; messages: ChatMessage[] } | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const [streamError, setStreamError] = useState("");
   const [announcement, setAnnouncement] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const messageIdRef = useRef(0);
+  const streamControllerRef = useRef<AbortController | null>(null);
+  const sessionQuery = useQuery({
+    queryKey: ["chat-session", activeChatId],
+    queryFn: () => getChatSession(activeChatId!),
+    enabled: Boolean(activeChatId)
+  });
+  const messages = liveConversation?.sessionId === activeChatId
+    ? liveConversation.messages
+    : sessionQuery.data?.messages || [];
 
-  const attachFiles = (files: FileList | File[]) => {
-    const incoming = Array.from(files);
-    if (!incoming.length) return;
+  useEffect(() => {
+    if (activeChatId && liveConversation?.sessionId === activeChatId) return;
+    streamControllerRef.current?.abort();
+    streamControllerRef.current = null;
+    setLiveConversation((current) => current?.sessionId === activeChatId ? current : null);
+    setStreamError("");
+    setAnnouncement("");
+    setIsSending(false);
+  }, [activeChatId, liveConversation?.sessionId]);
 
-    setAttachments((current) => [
-      ...current,
-      ...incoming.map((file) => ({
-        id: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID?.() || Math.random()}`,
-        file
-      }))
-    ]);
-    setAnnouncement(`${incoming.length} ${incoming.length === 1 ? "file" : "files"} attached`);
-  };
+  useEffect(() => () => streamControllerRef.current?.abort(), []);
 
-  const removeAttachment = (id: string) => {
-    setAttachments((current) => {
-      const attachment = current.find((item) => item.id === id);
-      if (attachment) setAnnouncement(`${attachment.file.name} removed`);
-      return current.filter((item) => item.id !== id);
-    });
-  };
+  const submitMessage = async () => {
+    const content = draft.trim();
+    if (!content || isSending) return;
 
-  const submitMessage = () => {
-    const message = draft.trim();
-    if (!message && attachments.length === 0) return;
+    setIsSending(true);
+    setStreamError("");
+    setAnnouncement("Searching your contracts");
+    setDraft("");
+    let sessionId = activeChatId;
+    try {
+      if (!sessionId) {
+        const session = await createChatSession(chatTitle(content));
+        sessionId = session.id;
+        queryClient.setQueryData(["chat-session", session.id], session);
+        queryClient.setQueryData<ChatSessionSummary[]>(["chat-sessions"], (current = []) => [session, ...current]);
+        navigate(`/chats?chat=${encodeURIComponent(session.id)}`, { replace: true });
+      }
 
-    const attachmentSummary = attachments.length
-      ? `${attachments.length} ${attachments.length === 1 ? "attachment" : "attachments"}`
-      : "";
-    const userText = [message, attachmentSummary].filter(Boolean).join(" · ");
-    const userId = ++messageIdRef.current;
-    const assistantId = ++messageIdRef.current;
-    setMessages((current) => [
-      ...current,
-      { id: userId, role: "user", text: userText },
-      {
+      const now = new Date().toISOString();
+      const userMessage: ChatMessage = {
+        id: `pending-user-${crypto.randomUUID()}`,
+        role: "user",
+        content,
+        sources: [],
+        created_at: now
+      };
+      const assistantId = `pending-assistant-${crypto.randomUUID()}`;
+      const assistantMessage: ChatMessage = {
         id: assistantId,
         role: "assistant",
-        text: "This chat is running locally and is not connected to an AI service yet. Your message was not sent to a backend."
-      }
-    ]);
-    setDraft("");
-    setAttachments([]);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    setAnnouncement("Message added to this local conversation");
+        content: "",
+        sources: [],
+        created_at: now
+      };
+      const baseMessages = sessionId === activeChatId ? messages : [];
+      setLiveConversation({ sessionId, messages: [...baseMessages, userMessage, assistantMessage] });
+
+      const controller = new AbortController();
+      streamControllerRef.current = controller;
+      await streamChatMessage(sessionId, content, {
+        onDelta: (delta) => setLiveConversation((current) => updateChatMessage(current, sessionId!, assistantId, (message) => ({
+          ...message,
+          content: message.content + delta
+        }))),
+        onSources: (sources) => setLiveConversation((current) => updateChatMessage(current, sessionId!, assistantId, (message) => ({
+          ...message,
+          sources
+        }))),
+        onMessage: (message) => setLiveConversation((current) => updateChatMessage(current, sessionId!, assistantId, () => message))
+      }, controller.signal);
+      setAnnouncement("Answer ready");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["chat-sessions"] }),
+        queryClient.invalidateQueries({ queryKey: ["chat-session", sessionId] })
+      ]);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setStreamError(chatErrorMessage(error));
+      setDraft(content);
+      setLiveConversation((current) => current?.sessionId === sessionId
+        ? { ...current, messages: current.messages.filter((message) => !message.id.startsWith("pending-assistant-")) }
+        : current);
+      setAnnouncement("Message was not completed");
+    } finally {
+      streamControllerRef.current = null;
+      setIsSending(false);
+    }
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    submitMessage();
-  };
-
-  const handleDrop = (event: DragEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setIsDragging(false);
-    attachFiles(event.dataTransfer.files);
+    void submitMessage();
   };
 
   return (
@@ -542,11 +607,23 @@ export function ChatsPage() {
         <header className="ai-chat-header">
           <p className="ai-chat-eyebrow">Samvid AI</p>
           <h1 id="ai-chat-title">Hello, {accountName}</h1>
-          <p>find anything about your contracts</p>
+          <p>{activeChatId && sessionQuery.data ? sessionQuery.data.title : "find anything about your contracts"}</p>
         </header>
 
-        {messages.length > 0 && (
-          <div className="ai-chat-messages" aria-label="Local chat conversation" aria-live="polite">
+        {activeChatId && sessionQuery.isPending && !liveConversation ? (
+          <div className="ai-chat-conversation-state" role="status">
+            <Loader2 className="spin" size={18} aria-hidden="true" />
+            <span>Loading conversation</span>
+          </div>
+        ) : activeChatId && sessionQuery.isError && !liveConversation ? (
+          <div className="ai-chat-conversation-state ai-chat-error" role="alert">
+            <AlertTriangle size={18} aria-hidden="true" />
+            <strong>Conversation unavailable</strong>
+            <span>{chatErrorMessage(sessionQuery.error)}</span>
+            <button className={compactButton} type="button" onClick={() => void sessionQuery.refetch()}>Retry</button>
+          </div>
+        ) : messages.length > 0 ? (
+          <div className="ai-chat-messages" aria-label="Contract chat conversation" aria-live="polite" aria-busy={isSending}>
             {messages.map((message) => (
               <article
                 key={message.id}
@@ -555,24 +632,37 @@ export function ChatsPage() {
                 <span className="ai-chat-message-role">
                   {message.role === "user" ? "You" : "Samvid"}
                 </span>
-                <p>{message.text}</p>
+                <p>{message.content || (isSending ? "Searching your contracts..." : "No response was returned.")}</p>
+                {message.sources.length > 0 && (
+                  <ul className="ai-chat-sources" aria-label="Sources">
+                    {message.sources.map((source, index) => (
+                      <li key={source.id || `${source.contract_id}-${source.page_number}-${index}`}>
+                        <Link className="ai-chat-source" to={`/contracts/${encodeURIComponent(source.contract_id)}`}>
+                          <FileText size={14} aria-hidden="true" />
+                          <span>
+                            <strong>{source.contract_title}</strong>
+                            {source.page_number && <small>Page {source.page_number}</small>}
+                          </span>
+                          <ArrowUpRight size={13} aria-hidden="true" />
+                        </Link>
+                        {source.excerpt && <blockquote>{source.excerpt}</blockquote>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </article>
             ))}
+          </div>
+        ) : (
+          <div className="ai-chat-empty-state">
+            <MessageCircleMore className="ai-chat-empty-icon" size={22} aria-hidden="true" />
+            <p>Ask about risks, obligations, parties, dates, or any clause across your contracts.</p>
           </div>
         )}
 
         <form
-          className={cx("ai-chat-composer", isDragging && "ai-chat-composer-dragging")}
+          className="ai-chat-composer"
           onSubmit={handleSubmit}
-          onDragEnter={(event) => {
-            event.preventDefault();
-            setIsDragging(true);
-          }}
-          onDragOver={(event) => event.preventDefault()}
-          onDragLeave={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node)) setIsDragging(false);
-          }}
-          onDrop={handleDrop}
         >
           <label className="ai-chat-label" htmlFor="ai-chat-prompt">
             Ask about a contract
@@ -585,62 +675,27 @@ export function ChatsPage() {
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                submitMessage();
+                void submitMessage();
               }
             }}
             placeholder="Ask a question about your contracts..."
             rows={2}
+            disabled={isSending || Boolean(activeChatId && sessionQuery.isPending)}
           />
 
-          {attachments.length > 0 && (
-            <ul className="ai-chat-attachments" aria-label="Attachments">
-              {attachments.map((attachment) => (
-                <li className="ai-chat-attachment" key={attachment.id}>
-                  <FileText size={14} aria-hidden="true" />
-                  <span title={attachment.file.name}>{attachment.file.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeAttachment(attachment.id)}
-                    aria-label={`Remove ${attachment.file.name}`}
-                  >
-                    <X size={14} aria-hidden="true" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-
           <div className="ai-chat-composer-actions">
-            <input
-              ref={fileInputRef}
-              id="ai-chat-file-input"
-              className="ai-chat-file-input"
-              type="file"
-              multiple
-              onChange={(event) => {
-                if (event.target.files) attachFiles(event.target.files);
-                event.target.value = "";
-              }}
-            />
-            <button
-              className="ai-chat-attach-button"
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              aria-label="Attach files"
-            >
-              <Paperclip size={16} aria-hidden="true" />
-              <span>Drop to attach</span>
-            </button>
+            <span className="ai-chat-context-note">Answers use your indexed contracts</span>
             <button
               className="ai-chat-send-button"
               type="submit"
-              disabled={!draft.trim() && attachments.length === 0}
+              disabled={!draft.trim() || isSending || Boolean(activeChatId && sessionQuery.isPending)}
               aria-label="Send message"
             >
-              <Send size={16} aria-hidden="true" />
-              <span>Send</span>
+              {isSending ? <Loader2 className="spin" size={16} aria-hidden="true" /> : <Send size={16} aria-hidden="true" />}
+              <span>{isSending ? "Thinking" : "Send"}</span>
             </button>
           </div>
+          {streamError && <p className="ai-chat-stream-error" role="alert">{streamError}</p>}
           <p className="ai-chat-status" role="status" aria-live="polite">
             {announcement}
           </p>
@@ -648,6 +703,32 @@ export function ChatsPage() {
       </div>
     </section>
   );
+}
+
+function updateChatMessage(
+  conversation: { sessionId: string; messages: ChatMessage[] } | null,
+  sessionId: string,
+  messageId: string,
+  update: (message: ChatMessage) => ChatMessage
+) {
+  if (!conversation || conversation.sessionId !== sessionId) return conversation;
+  return {
+    ...conversation,
+    messages: conversation.messages.map((message) => message.id === messageId ? update(message) : message)
+  };
+}
+
+function chatTitle(content: string): string {
+  const normalized = content.replace(/\s+/g, " ").trim();
+  return normalized.length > 72 ? `${normalized.slice(0, 69)}...` : normalized;
+}
+
+function chatErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.payload.message) return error.payload.message;
+    if (typeof error.payload.detail === "string") return error.payload.detail;
+  }
+  return error instanceof Error ? error.message : "Unable to reach Samvid AI. Please try again.";
 }
 
 export function ContractsPage() {

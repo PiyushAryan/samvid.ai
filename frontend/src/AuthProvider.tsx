@@ -6,6 +6,9 @@ import {
   getAuthClient,
   getAuthSession,
   isNeonAuthConfigured,
+  setCurrentAccount,
+  type SamvidAccount,
+  type SamvidAccountRole,
   type SamvidAuthUser
 } from "./auth";
 
@@ -13,6 +16,7 @@ type WorkspaceAccessStatus = "idle" | "checking" | "allowed" | "unverified" | "d
 
 type AuthContextValue = {
   user: SamvidAuthUser | null;
+  account: SamvidAccount | null;
   isLoading: boolean;
   accessStatus: WorkspaceAccessStatus;
   accessMessage: string;
@@ -45,6 +49,7 @@ export function AuthRouteLoading({ label }: { label: string }) {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SamvidAuthUser | null>(null);
+  const [account, setAccount] = useState<SamvidAccount | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [accessStatus, setAccessStatus] = useState<WorkspaceAccessStatus>("idle");
   const [accessMessage, setAccessMessage] = useState("");
@@ -52,6 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshSession = useCallback(async () => {
     if (!isNeonAuthConfigured) {
       setUser(null);
+      setAccount(null);
+      setCurrentAccount(null);
       setAccessStatus("idle");
       setIsLoading(false);
       return;
@@ -61,6 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const session = await getAuthSession();
       const sessionUser = (session?.user as SamvidAuthUser | undefined) ?? null;
       setUser(sessionUser);
+      setAccount(null);
+      setCurrentAccount(null);
       setAccessMessage("");
 
       if (!sessionUser) {
@@ -85,11 +94,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (access.status === "unauthenticated") {
         setUser(null);
         setAccessStatus("idle");
+      } else if (access.status === "allowed") {
+        setAccount(access.profile.account);
+        setAccessStatus("allowed");
       } else {
         setAccessStatus(access.status);
       }
     } catch {
       setUser(null);
+      setAccount(null);
+      setCurrentAccount(null);
       setAccessStatus("idle");
     } finally {
       setIsLoading(false);
@@ -118,14 +132,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (isNeonAuthConfigured) await getAuthClient().signOut();
     } finally {
       setUser(null);
+      setAccount(null);
+      setCurrentAccount(null);
       setAccessStatus("idle");
       setAccessMessage("");
     }
   }, []);
 
   const value = useMemo(
-    () => ({ user, isLoading, accessStatus, accessMessage, refreshSession, signOut }),
-    [user, isLoading, accessStatus, accessMessage, refreshSession, signOut]
+    () => ({ user, account, isLoading, accessStatus, accessMessage, refreshSession, signOut }),
+    [user, account, isLoading, accessStatus, accessMessage, refreshSession, signOut]
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
@@ -137,7 +153,11 @@ export function useAuth() {
 }
 
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { user, isLoading, accessStatus, accessMessage, refreshSession, signOut } = useAuth();
+  return <RequireAccount>{children}</RequireAccount>;
+}
+
+function RequireAccount({ children, role }: { children: ReactNode; role?: SamvidAccountRole }) {
+  const { user, account, isLoading, accessStatus, accessMessage, refreshSession, signOut } = useAuth();
   const location = useLocation();
 
   if (isLoading || accessStatus === "checking") {
@@ -155,9 +175,9 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     return (
       <main className="auth-route-state">
         <section className="auth-route-state-panel" aria-labelledby="access-denied-title">
-          <span>Workspace access</span>
-          <h1 id="access-denied-title">This account is not authorized.</h1>
-          <p>{accessMessage || "Ask the Samvid workspace owner to add your email address."}</p>
+          <span>Account access</span>
+          <h1 id="access-denied-title">This account is not available.</h1>
+          <p>{accessMessage || "Samvid could not provision access for this account."}</p>
           <button type="button" onClick={() => void signOut()}>Sign out</button>
         </section>
       </main>
@@ -167,7 +187,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     return (
       <main className="auth-route-state">
         <section className="auth-route-state-panel" aria-labelledby="access-error-title">
-          <span>Workspace access</span>
+          <span>Account access</span>
           <h1 id="access-error-title">Access could not be verified.</h1>
           <p>{accessMessage || "Samvid could not reach the authorization service."}</p>
           <button type="button" onClick={() => void refreshSession()}>Try again</button>
@@ -176,7 +196,31 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     );
   }
   if (accessStatus !== "allowed") {
-    return <AuthRouteLoading label="Verifying workspace access" />;
+    return <AuthRouteLoading label="Verifying account access" />;
+  }
+  if (!account) return <AuthRouteLoading label="Loading your account" />;
+  if (account.state === "unclaimed") {
+    return (
+      <main className="auth-route-state">
+        <section className="auth-route-state-panel" aria-labelledby="claim-account-title">
+          <span>Account claim required</span>
+          <h1 id="claim-account-title">Verify the email that received this contract.</h1>
+          <p>Sign in with the exact verified address used to send the contract to Samvid.</p>
+          <button type="button" onClick={() => void signOut()}>Use another account</button>
+        </section>
+      </main>
+    );
+  }
+  if (role && account.role !== role) {
+    return <Navigate to={account.role === "super_admin" ? "/admin" : "/contracts"} replace />;
   }
   return children;
+}
+
+export function RequireUser({ children }: { children: ReactNode }) {
+  return <RequireAccount role="user">{children}</RequireAccount>;
+}
+
+export function RequireSuperAdmin({ children }: { children: ReactNode }) {
+  return <RequireAccount role="super_admin">{children}</RequireAccount>;
 }

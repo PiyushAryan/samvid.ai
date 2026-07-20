@@ -183,6 +183,126 @@ class ContractRepository:
             )
         return review_id
 
+    def finalize_contract_review(
+        self,
+        *,
+        workspace_id: str,
+        contract_id: str,
+        contract_version_id: str,
+        review: ContractReview,
+        agent: Any,
+        review_status: str = "valid",
+        removed_findings: int = 0,
+    ) -> tuple[str, str]:
+        """Commit the review, visible state, audit event, and index intent together."""
+
+        review_id = str(uuid4())
+        audit_event_id = str(uuid4())
+        outbox_id = str(uuid4())
+        review_statement = (
+            """
+            INSERT INTO contract_reviews(
+                id, contract_version_id, model_provider, model_name, prompt_version, review_json, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (contract_version_id) DO UPDATE SET
+                id = EXCLUDED.id,
+                model_provider = EXCLUDED.model_provider,
+                model_name = EXCLUDED.model_name,
+                prompt_version = EXCLUDED.prompt_version,
+                review_json = EXCLUDED.review_json,
+                status = EXCLUDED.status
+            """
+            if self.is_postgres
+            else """
+            INSERT OR REPLACE INTO contract_reviews(
+                id, contract_version_id, model_provider, model_name, prompt_version, review_json, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """
+        )
+        outbox_statement = (
+            """
+            INSERT INTO knowledge_index_outbox(
+                id, workspace_id, contract_id, contract_version_id, status
+            ) VALUES (?, ?, ?, ?, 'pending')
+            ON CONFLICT (workspace_id, contract_version_id) DO NOTHING
+            """
+            if self.is_postgres
+            else """
+            INSERT OR IGNORE INTO knowledge_index_outbox(
+                id, workspace_id, contract_id, contract_version_id, status
+            ) VALUES (?, ?, ?, ?, 'pending')
+            """
+        )
+
+        with self._transaction():
+            version = self.connection.execute(
+                self._sql(
+                    """
+                    SELECT 1
+                    FROM contracts c
+                    JOIN contract_versions cv ON cv.contract_id = c.id
+                    WHERE c.workspace_id = ? AND c.id = ?
+                      AND c.current_version_id = ? AND cv.id = ?
+                    """
+                ),
+                (workspace_id, contract_id, contract_version_id, contract_version_id),
+            ).fetchone()
+            if version is None:
+                raise ValueError("Contract version is not the current version in the expected workspace.")
+
+            self.connection.execute(
+                self._sql(review_statement),
+                (
+                    review_id,
+                    contract_version_id,
+                    agent.model_provider,
+                    agent.model_name,
+                    agent.prompt_version,
+                    review.model_dump_json(),
+                    review_status,
+                ),
+            )
+            updated = self.connection.execute(
+                self._sql(
+                    """
+                    UPDATE contracts
+                    SET status = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE workspace_id = ? AND id = ? AND current_version_id = ?
+                    """
+                ),
+                (WorkflowState.REVIEW_READY.value, workspace_id, contract_id, contract_version_id),
+            )
+            if updated.rowcount != 1:
+                raise ValueError("Contract could not be finalized in the expected workspace.")
+            self.connection.execute(
+                self._sql(
+                    """
+                    INSERT INTO audit_events(
+                        id, workspace_id, contract_id, actor_type, actor_id, event_type, metadata_json
+                    ) VALUES (?, ?, ?, 'system', NULL, 'contract.review_ready', ?)
+                    """
+                ),
+                (audit_event_id, workspace_id, contract_id, json.dumps({"removed_findings": removed_findings})),
+            )
+            self.connection.execute(
+                self._sql(outbox_statement),
+                (outbox_id, workspace_id, contract_id, contract_version_id),
+            )
+            persisted_outbox = self.connection.execute(
+                self._sql(
+                    """
+                    SELECT id
+                    FROM knowledge_index_outbox
+                    WHERE workspace_id = ? AND contract_version_id = ?
+                    """
+                ),
+                (workspace_id, contract_version_id),
+            ).fetchone()
+            if persisted_outbox is None:
+                raise RuntimeError("Knowledge indexing intent was not persisted.")
+            outbox_id = str(persisted_outbox["id"])
+        return review_id, outbox_id
+
     def get_contract_review(self, contract_id: str) -> ContractReview | None:
         row = self.connection.execute(
             self._sql(

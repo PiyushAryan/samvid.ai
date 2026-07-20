@@ -49,7 +49,13 @@ class EmailIngestionService:
             queue=queue,
         )
 
-    def process_inbound_email(self, message: InboundEmailMessage, *, send_response: bool = True) -> EmailIngestionResult:
+    def process_inbound_email(
+        self,
+        message: InboundEmailMessage,
+        *,
+        send_response: bool = True,
+        workspace_id: str | None = None,
+    ) -> EmailIngestionResult:
         processed: list[ContractProcessingResult] = []
         ignored: list[str] = []
         for attachment in message.attachments:
@@ -57,7 +63,7 @@ class EmailIngestionService:
             try:
                 arguments = {
                     "file_path": attachment_path,
-                    "workspace_id": self.settings.email_workspace_id,
+                    "workspace_id": workspace_id or self.settings.email_workspace_id,
                     "email_thread_id": message.email_thread_id,
                     "requested_by": str(message.from_address),
                     "declared_mime_type": attachment.mime_type,

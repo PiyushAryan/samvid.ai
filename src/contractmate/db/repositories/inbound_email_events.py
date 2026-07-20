@@ -86,6 +86,20 @@ class InboundEmailEventRepository:
     def mark_failed(self, email_message_id: str) -> None:
         self._mark(email_message_id, "failed")
 
+    def update_workspace(self, email_message_id: str, workspace_id: str) -> None:
+        """Bind a claimed event to the sender's resolved private workspace."""
+        with self._transaction():
+            self.connection.execute(
+                self._sql(
+                    """
+                    UPDATE inbound_email_events
+                    SET workspace_id = ?
+                    WHERE email_message_id = ? AND status = 'processing'
+                    """
+                ),
+                (workspace_id, email_message_id),
+            )
+
     def _mark(self, email_message_id: str, status: str) -> None:
         with self._transaction():
             self.connection.execute(

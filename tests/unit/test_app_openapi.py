@@ -34,8 +34,9 @@ def test_production_app_requires_basic_auth_and_sets_security_headers(monkeypatc
         database_url="postgresql://user:pass@database/samvid",
         local_storage_dir=tmp_path / "contracts",
         inbound_attachment_dir=tmp_path / "inbound",
-        model_api_key="model-key",
-        auto_send_review_email=False,
+            model_api_key="model-key",
+            fireworks_api_key="fireworks-key",
+            auto_send_review_email=False,
     )
     client = TestClient(create_app(settings))
 

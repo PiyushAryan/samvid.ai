@@ -348,18 +348,14 @@ class ContractProcessingService:
             contract_id=contract_id,
             parsed_document=parsed,
         )
-        self.repository.save_contract_review(
+        self.repository.finalize_contract_review(
+            workspace_id=ingested.workspace_id,
+            contract_id=contract_id,
             contract_version_id=version_id,
             review=validation_result.valid_review,
             agent=self.review_service.agent,
-            status="valid" if not validation_result.issues else "valid_with_removed_findings",
-        )
-        self.repository.update_contract_status(contract_id, WorkflowState.REVIEW_READY)
-        self.audit.record(
-            workspace_id=ingested.workspace_id,
-            contract_id=contract_id,
-            event_type="contract.review_ready",
-            metadata={"removed_findings": len(validation_result.issues)},
+            review_status="valid" if not validation_result.issues else "valid_with_removed_findings",
+            removed_findings=len(validation_result.issues),
         )
         return ContractProcessingResult(
             contract_id=contract_id,

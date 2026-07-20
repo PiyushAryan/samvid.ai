@@ -14,6 +14,9 @@ from contractmate.settings import Settings
 REVIEW_REQUESTED_ROUTING_KEY = "contract.review.requested"
 REVIEW_RETRY_ROUTING_KEY = "contract.review.retry"
 REVIEW_DEAD_ROUTING_KEY = "contract.review.dead"
+KNOWLEDGE_INDEX_ROUTING_KEY = "contract.knowledge-index.requested"
+KNOWLEDGE_INDEX_RETRY_ROUTING_KEY = "contract.knowledge-index.retry"
+KNOWLEDGE_INDEX_DEAD_ROUTING_KEY = "contract.knowledge-index.dead"
 
 
 @dataclass(frozen=True)
@@ -95,6 +98,57 @@ class QueueTopology(BaseModel):
             review_queue=settings.rabbitmq_review_queue,
             retry_queue=settings.rabbitmq_retry_queue,
             dlq=settings.rabbitmq_dlq,
+            retry_ttl_ms=settings.rabbitmq_retry_ttl_ms,
+            max_attempts=settings.rabbitmq_max_attempts,
+        )
+
+
+@dataclass(frozen=True)
+class KnowledgeIndexJob:
+    job_id: str
+    contract_id: str
+    contract_version_id: str
+    workspace_id: str
+    attempt: int = 1
+
+    def to_message(self) -> dict[str, object]:
+        return {
+            "job_id": self.job_id,
+            "contract_id": self.contract_id,
+            "contract_version_id": self.contract_version_id,
+            "workspace_id": self.workspace_id,
+            "attempt": self.attempt,
+        }
+
+    @classmethod
+    def from_message(cls, message: dict[str, object]) -> "KnowledgeIndexJob":
+        return cls(
+            job_id=str(message["job_id"]),
+            contract_id=str(message["contract_id"]),
+            contract_version_id=str(message["contract_version_id"]),
+            workspace_id=str(message["workspace_id"]),
+            attempt=int(message.get("attempt", 1)),
+        )
+
+
+class KnowledgeQueueTopology(BaseModel):
+    exchange: str = "contract.events"
+    queue: str = "contract.knowledge-index.q"
+    retry_queue: str = "contract.knowledge-index.retry.q"
+    dlq: str = "contract.knowledge-index.dlq"
+    retry_ttl_ms: int = Field(default=60_000, ge=1)
+    max_attempts: int = Field(default=3, ge=1)
+    routing_key: str = KNOWLEDGE_INDEX_ROUTING_KEY
+    retry_routing_key: str = KNOWLEDGE_INDEX_RETRY_ROUTING_KEY
+    dead_routing_key: str = KNOWLEDGE_INDEX_DEAD_ROUTING_KEY
+
+    @classmethod
+    def from_settings(cls, settings: Settings) -> "KnowledgeQueueTopology":
+        return cls(
+            exchange=settings.rabbitmq_exchange,
+            queue=settings.rabbitmq_knowledge_index_queue,
+            retry_queue=settings.rabbitmq_knowledge_index_retry_queue,
+            dlq=settings.rabbitmq_knowledge_index_dlq,
             retry_ttl_ms=settings.rabbitmq_retry_ttl_ms,
             max_attempts=settings.rabbitmq_max_attempts,
         )
@@ -370,6 +424,165 @@ class RabbitMQDelivery:
                 self.job,
                 routing_key=self.queue.topology.dead_routing_key,
             )
+            self.channel.basic_ack(delivery_tag=self.delivery_tag)
+        finally:
+            self.connection.close()
+
+
+class RabbitMQKnowledgeQueue:
+    """Durable RabbitMQ adapter for document embedding and indexing jobs."""
+
+    def __init__(self, *, rabbitmq_url: str, topology: KnowledgeQueueTopology, heartbeat_seconds: int = 600) -> None:
+        self.rabbitmq_url = rabbitmq_url
+        self.topology = topology
+        self.heartbeat_seconds = heartbeat_seconds
+
+    @classmethod
+    def from_settings(cls, settings: Settings) -> "RabbitMQKnowledgeQueue":
+        if not settings.rabbitmq_url:
+            raise ValueError("RABBITMQ_URL is required for RabbitMQKnowledgeQueue.")
+        return cls(
+            rabbitmq_url=settings.rabbitmq_url,
+            topology=KnowledgeQueueTopology.from_settings(settings),
+            heartbeat_seconds=settings.rabbitmq_heartbeat_seconds,
+        )
+
+    def declare_topology(self) -> None:
+        connection = self._connection()
+        try:
+            channel = connection.channel()
+            self._declare_topology(channel)
+        finally:
+            connection.close()
+
+    def check_ready(self) -> None:
+        self.declare_topology()
+
+    def enqueue(self, *, contract_id: str, contract_version_id: str, workspace_id: str) -> KnowledgeIndexJob:
+        job = KnowledgeIndexJob(
+            job_id=str(uuid4()),
+            contract_id=contract_id,
+            contract_version_id=contract_version_id,
+            workspace_id=workspace_id,
+        )
+        self.publish(job, routing_key=self.topology.routing_key)
+        return job
+
+    def publish(self, job: KnowledgeIndexJob, *, routing_key: str) -> None:
+        connection = self._connection()
+        try:
+            channel = connection.channel()
+            self._declare_topology(channel)
+            channel.confirm_delivery()
+            self._publish_on_channel(channel, job, routing_key=routing_key)
+        finally:
+            connection.close()
+
+    def receive(self, *, prefetch_count: int = 1) -> "RabbitMQKnowledgeDelivery | None":
+        connection = self._connection()
+        try:
+            channel = connection.channel()
+            self._declare_topology(channel)
+            channel.basic_qos(prefetch_count=prefetch_count)
+            method_frame, _, body = channel.basic_get(queue=self.topology.queue, auto_ack=False)
+            if method_frame is None:
+                connection.close()
+                return None
+            message = json.loads(body.decode("utf-8"))
+            return RabbitMQKnowledgeDelivery(
+                queue=self,
+                connection=connection,
+                channel=channel,
+                delivery_tag=method_frame.delivery_tag,
+                job=KnowledgeIndexJob.from_message(message),
+            )
+        except Exception:
+            connection.close()
+            raise
+
+    def _connection(self):
+        try:
+            import pika
+        except ModuleNotFoundError as exc:
+            raise RuntimeError("Install the 'rabbitmq' extra to use RabbitMQ.") from exc
+        parameters = pika.URLParameters(self.rabbitmq_url)
+        parameters.heartbeat = self.heartbeat_seconds
+        parameters.blocked_connection_timeout = 30
+        return pika.BlockingConnection(parameters)
+
+    def _declare_topology(self, channel) -> None:
+        channel.exchange_declare(exchange=self.topology.exchange, exchange_type="topic", durable=True)
+        channel.queue_declare(queue=self.topology.queue, durable=True)
+        channel.queue_bind(queue=self.topology.queue, exchange=self.topology.exchange, routing_key=self.topology.routing_key)
+        channel.queue_declare(
+            queue=self.topology.retry_queue,
+            durable=True,
+            arguments={
+                "x-message-ttl": self.topology.retry_ttl_ms,
+                "x-dead-letter-exchange": self.topology.exchange,
+                "x-dead-letter-routing-key": self.topology.routing_key,
+            },
+        )
+        channel.queue_bind(
+            queue=self.topology.retry_queue,
+            exchange=self.topology.exchange,
+            routing_key=self.topology.retry_routing_key,
+        )
+        channel.queue_declare(queue=self.topology.dlq, durable=True)
+        channel.queue_bind(queue=self.topology.dlq, exchange=self.topology.exchange, routing_key=self.topology.dead_routing_key)
+
+    def _publish_on_channel(self, channel, job: KnowledgeIndexJob, *, routing_key: str) -> None:
+        try:
+            import pika
+        except ModuleNotFoundError as exc:
+            raise RuntimeError("Install the 'rabbitmq' extra to use RabbitMQ.") from exc
+        channel.basic_publish(
+            exchange=self.topology.exchange,
+            routing_key=routing_key,
+            body=json.dumps(job.to_message()).encode("utf-8"),
+            properties=pika.BasicProperties(
+                content_type="application/json",
+                delivery_mode=2,
+                headers={"job_id": job.job_id, "attempt": job.attempt},
+            ),
+            mandatory=True,
+        )
+
+
+@dataclass
+class RabbitMQKnowledgeDelivery:
+    queue: RabbitMQKnowledgeQueue
+    connection: object
+    channel: object
+    delivery_tag: int
+    job: KnowledgeIndexJob
+
+    def ack(self) -> None:
+        try:
+            self.channel.basic_ack(delivery_tag=self.delivery_tag)
+        finally:
+            self.connection.close()
+
+    def retry(self) -> None:
+        if self.job.attempt >= self.queue.topology.max_attempts:
+            self.dead_letter()
+            return
+        retry_job = KnowledgeIndexJob(
+            job_id=self.job.job_id,
+            contract_id=self.job.contract_id,
+            contract_version_id=self.job.contract_version_id,
+            workspace_id=self.job.workspace_id,
+            attempt=self.job.attempt + 1,
+        )
+        try:
+            self.queue._publish_on_channel(self.channel, retry_job, routing_key=self.queue.topology.retry_routing_key)
+            self.channel.basic_ack(delivery_tag=self.delivery_tag)
+        finally:
+            self.connection.close()
+
+    def dead_letter(self) -> None:
+        try:
+            self.queue._publish_on_channel(self.channel, self.job, routing_key=self.queue.topology.dead_routing_key)
             self.channel.basic_ack(delivery_tag=self.delivery_tag)
         finally:
             self.connection.close()

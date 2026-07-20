@@ -5,8 +5,8 @@ import React, { lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import { Navigate, NavLink, Route, BrowserRouter as Router, Routes, useSearchParams } from "react-router-dom";
 import { TooltipProvider } from "./components/ui/tooltip";
-import { AuthProvider, AuthRouteLoading, RequireAuth, useAuth } from "./AuthProvider";
-import { safeInternalPath } from "./auth";
+import { AuthProvider, AuthRouteLoading, RequireSuperAdmin, RequireUser, useAuth } from "./AuthProvider";
+import { defaultRouteForAccount, safeInternalPath } from "./auth";
 
 const LandingPage = lazy(() => import("./Home").then((module) => ({ default: module.LandingPage })));
 const ChangelogPage = lazy(() => import("./Changelog").then((module) => ({ default: module.ChangelogPage })));
@@ -15,10 +15,15 @@ const ContractsPage = lazy(() => import("./App").then((module) => ({ default: mo
 const ChatsPage = lazy(() => import("./App").then((module) => ({ default: module.ChatsPage })));
 const ContractDetailPage = lazy(() => import("./App").then((module) => ({ default: module.ContractDetailPage })));
 const SigningPage = lazy(() => import("./App").then((module) => ({ default: module.SigningPage })));
+const AdminShell = lazy(() => import("./Admin").then((module) => ({ default: module.AdminShell })));
+const AdminUsersPage = lazy(() => import("./Admin").then((module) => ({ default: module.AdminUsersPage })));
+const AdminUserDetailPage = lazy(() => import("./Admin").then((module) => ({ default: module.AdminUserDetailPage })));
+const AdminContractDetailPage = lazy(() => import("./Admin").then((module) => ({ default: module.AdminContractDetailPage })));
+const AdminAccessEventsPage = lazy(() => import("./Admin").then((module) => ({ default: module.AdminAccessEventsPage })));
 const AuthPage = lazy(() => import("./AuthPage"));
 
 function AuthRoute() {
-  const { user, isLoading } = useAuth();
+  const { user, account, isLoading } = useAuth();
   const [searchParams] = useSearchParams();
   const requestedReturnTo = searchParams.get("returnTo") || "/contracts";
   const returnTo = safeInternalPath(requestedReturnTo);
@@ -38,7 +43,7 @@ function AuthRoute() {
     if (!user.emailVerified) {
       return <AuthPage initialView="verify-email" initialEmail={user.email} redirectTo={returnTo} />;
     }
-    return <Navigate to={returnTo} replace />;
+    return <Navigate to={account?.role === "super_admin" ? "/admin" : returnTo || defaultRouteForAccount(account)} replace />;
   }
   return <AuthPage initialView={initialView} initialEmail={user?.email} redirectTo={returnTo} />;
 }
@@ -66,11 +71,18 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/changelog" element={<ChangelogPage />} />
                 <Route path="/auth" element={<AuthRoute />} />
-                <Route element={<RequireAuth><AppShell /></RequireAuth>}>
+                <Route element={<RequireUser><AppShell /></RequireUser>}>
                   <Route path="/contracts" element={<ContractsPage />} />
                   <Route path="/chats" element={<ChatsPage />} />
                   <Route path="/contracts/:contractId" element={<ContractDetailPage />} />
                   <Route path="/signing" element={<SigningPage />} />
+                </Route>
+                <Route element={<RequireSuperAdmin><AdminShell /></RequireSuperAdmin>}>
+                  <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
+                  <Route path="/admin/users" element={<AdminUsersPage />} />
+                  <Route path="/admin/users/:userId" element={<AdminUserDetailPage />} />
+                  <Route path="/admin/contracts/:contractId" element={<AdminContractDetailPage />} />
+                  <Route path="/admin/access-events" element={<AdminAccessEventsPage />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

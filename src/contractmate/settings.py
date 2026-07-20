@@ -16,9 +16,9 @@ class Settings(BaseModel):
     neon_auth_jwks_url: str | None = None
     neon_auth_issuer: str | None = None
     neon_auth_audience: str | None = None
-    neon_auth_allowed_emails: tuple[str, ...] = ()
     neon_auth_require_email_verified: bool = False
     neon_auth_clock_skew_seconds: int = Field(default=30, ge=0, le=300)
+    samvid_super_admin_email: str | None = None
     allowed_hosts: tuple[str, ...] = ("localhost", "127.0.0.1", "testserver")
     resend_inbound_enabled: bool = False
     resend_webhook_secret: str | None = None
@@ -50,10 +50,21 @@ class Settings(BaseModel):
     rabbitmq_retry_ttl_ms: int = Field(default=60_000, ge=1)
     rabbitmq_max_attempts: int = Field(default=3, ge=1)
     rabbitmq_heartbeat_seconds: int = Field(default=600, ge=0)
+    rabbitmq_knowledge_index_queue: str = "contract.knowledge-index.q"
+    rabbitmq_knowledge_index_retry_queue: str = "contract.knowledge-index.retry.q"
+    rabbitmq_knowledge_index_dlq: str = "contract.knowledge-index.dlq"
     contract_processing_mode: str = "sync"
     model_provider: str = "openai"
     model_id: str = "gpt-5-mini"
     model_api_key: str | None = None
+    agentic_chat_enabled: bool = False
+    chat_model_id: str = "gpt-5-mini"
+    chat_max_input_chars: int = Field(default=4_000, ge=100, le=20_000)
+    fireworks_api_key: str | None = None
+    fireworks_base_url: str = "https://api.fireworks.ai/inference/v1"
+    embedding_model_id: str = "fireworks/qwen3-embedding-8b"
+    embedding_dimensions: int = Field(default=1024, ge=1024, le=1024)
+    rerank_model_id: str = "fireworks/qwen3-reranker-8b"
     max_file_size_mb: int = Field(default=20, ge=1)
     contract_retention_days: int = Field(default=30, ge=1)
     enable_ocr: bool = False
@@ -82,6 +93,8 @@ class Settings(BaseModel):
                 inbound_errors.append("RESEND_WEBHOOK_SECRET is required when Resend inbound receiving is enabled")
             if not self.resend_inbound_recipients:
                 inbound_errors.append("RESEND_INBOUND_RECIPIENTS is required when Resend inbound receiving is enabled")
+            if not self.samvid_super_admin_email:
+                inbound_errors.append("SAMVID_SUPER_ADMIN_EMAIL is required when Resend inbound receiving is enabled")
         if inbound_errors:
             raise ValueError("Invalid inbound email configuration: " + "; ".join(inbound_errors))
 
@@ -104,10 +117,14 @@ class Settings(BaseModel):
         if self.auth_mode == "neon":
             if not self.neon_auth_url:
                 errors.append("NEON_AUTH_URL is required when AUTH_MODE=neon")
-            if not self.neon_auth_allowed_emails:
-                errors.append("NEON_AUTH_ALLOWED_EMAILS is required when AUTH_MODE=neon")
             if not self.neon_auth_require_email_verified:
                 errors.append("NEON_AUTH_REQUIRE_EMAIL_VERIFIED must be true in production when AUTH_MODE=neon")
+            if not self.samvid_super_admin_email:
+                errors.append("SAMVID_SUPER_ADMIN_EMAIL is required when AUTH_MODE=neon")
+        if not self.fireworks_api_key:
+            errors.append("FIREWORKS_API_KEY is required for contract chat")
+        if not self.database_url.startswith(("postgres://", "postgresql://", "postgresql+psycopg://")):
+            errors.append("Contract chat requires PostgreSQL with pgvector")
         if self.enable_ocr and not self.sarvam_api_key:
             errors.append("SARVAM_API_KEY is required when OCR is enabled")
         if self.auto_send_review_email and not (self.resend_api_key or self.smtp_host):
@@ -153,9 +170,9 @@ class Settings(BaseModel):
             neon_auth_jwks_url=os.getenv("NEON_AUTH_JWKS_URL") or None,
             neon_auth_issuer=os.getenv("NEON_AUTH_ISSUER") or None,
             neon_auth_audience=os.getenv("NEON_AUTH_AUDIENCE") or None,
-            neon_auth_allowed_emails=csv_env("NEON_AUTH_ALLOWED_EMAILS", ""),
             neon_auth_require_email_verified=bool_env("NEON_AUTH_REQUIRE_EMAIL_VERIFIED", False),
             neon_auth_clock_skew_seconds=int(os.getenv("NEON_AUTH_CLOCK_SKEW_SECONDS", "30")),
+            samvid_super_admin_email=os.getenv("SAMVID_SUPER_ADMIN_EMAIL") or None,
             allowed_hosts=csv_env("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver"),
             resend_inbound_enabled=bool_env("RESEND_INBOUND_ENABLED", False),
             resend_webhook_secret=os.getenv("RESEND_WEBHOOK_SECRET") or None,
@@ -187,10 +204,23 @@ class Settings(BaseModel):
             rabbitmq_retry_ttl_ms=int(os.getenv("RABBITMQ_RETRY_TTL_MS", "60000")),
             rabbitmq_max_attempts=int(os.getenv("RABBITMQ_MAX_ATTEMPTS", "3")),
             rabbitmq_heartbeat_seconds=int(os.getenv("RABBITMQ_HEARTBEAT_SECONDS", "600")),
+            rabbitmq_knowledge_index_queue=os.getenv("RABBITMQ_KNOWLEDGE_INDEX_QUEUE", "contract.knowledge-index.q"),
+            rabbitmq_knowledge_index_retry_queue=os.getenv(
+                "RABBITMQ_KNOWLEDGE_INDEX_RETRY_QUEUE", "contract.knowledge-index.retry.q"
+            ),
+            rabbitmq_knowledge_index_dlq=os.getenv("RABBITMQ_KNOWLEDGE_INDEX_DLQ", "contract.knowledge-index.dlq"),
             contract_processing_mode=os.getenv("CONTRACT_PROCESSING_MODE", "sync").casefold(),
             model_provider=os.getenv("MODEL_PROVIDER", "openai"),
             model_id=os.getenv("MODEL_ID", "gpt-5-mini"),
             model_api_key=os.getenv("MODEL_API_KEY") or os.getenv("OPENAI_API_KEY") or None,
+            agentic_chat_enabled=bool_env("AGENTIC_CHAT_ENABLED", False),
+            chat_model_id=os.getenv("CHAT_MODEL_ID", os.getenv("MODEL_ID", "gpt-5-mini")),
+            chat_max_input_chars=int(os.getenv("CHAT_MAX_INPUT_CHARS", "4000")),
+            fireworks_api_key=os.getenv("FIREWORKS_API_KEY") or None,
+            fireworks_base_url=os.getenv("FIREWORKS_BASE_URL", "https://api.fireworks.ai/inference/v1").rstrip("/"),
+            embedding_model_id=os.getenv("EMBEDDING_MODEL_ID", "fireworks/qwen3-embedding-8b"),
+            embedding_dimensions=int(os.getenv("EMBEDDING_DIMENSIONS", "1024")),
+            rerank_model_id=os.getenv("RERANK_MODEL_ID", "fireworks/qwen3-reranker-8b"),
             max_file_size_mb=int(os.getenv("MAX_FILE_SIZE_MB", "20")),
             contract_retention_days=int(os.getenv("CONTRACT_RETENTION_DAYS", "30")),
             enable_ocr=bool_env("ENABLE_OCR", False),

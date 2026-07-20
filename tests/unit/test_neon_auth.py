@@ -14,9 +14,9 @@ AUTH_URL = "https://ep-example.neonauth.us-east-1.aws.neon.tech/neondb/auth"
 AUTH_ORIGIN = "https://ep-example.neonauth.us-east-1.aws.neon.tech"
 
 
-def make_verifier(*, allowed_emails: tuple[str, ...] = ("owner@example.com",)):
+def make_verifier():
     private_key = Ed25519PrivateKey.generate()
-    verifier = NeonJWTVerifier(auth_url=AUTH_URL, allowed_emails=allowed_emails)
+    verifier = NeonJWTVerifier(auth_url=AUTH_URL)
     verifier._jwks_client.get_signing_key_from_jwt = lambda _token: SimpleNamespace(key=private_key.public_key())
     return verifier, private_key
 
@@ -57,11 +57,12 @@ def test_verifier_rejects_wrong_audience() -> None:
         verifier.verify_token(make_token(private_key, aud="https://other.example.com"))
 
 
-def test_verifier_rejects_user_outside_workspace_allowlist() -> None:
+def test_verifier_accepts_verified_identity_for_account_provisioning() -> None:
     verifier, private_key = make_verifier()
 
-    with pytest.raises(NeonAuthorizationError, match="does not have access"):
-        verifier.verify_token(make_token(private_key, email="someone@example.com"))
+    principal = verifier.verify_token(make_token(private_key, email="someone@example.com"))
+
+    assert principal.email == "someone@example.com"
 
 
 def test_verifier_can_require_verified_email() -> None:
@@ -108,17 +109,17 @@ def test_neon_mode_keeps_spa_public_and_protects_api(monkeypatch, tmp_path) -> N
 
     monkeypatch.setattr(NeonJWTVerifier, "verify_authorization_header", fake_verify)
     settings = Settings(
-        app_env="production",
+        app_env="development",
         auth_mode="neon",
         neon_auth_url=AUTH_URL,
-        neon_auth_allowed_emails=("owner@example.com",),
         neon_auth_require_email_verified=True,
         allowed_hosts=("testserver",),
-        database_url="postgresql://user:pass@database/samvid",
+        database_url=f"sqlite:///{tmp_path / 'samvid.db'}",
         local_storage_dir=tmp_path / "contracts",
         inbound_attachment_dir=tmp_path / "inbound",
         model_api_key="model-key",
         auto_send_review_email=False,
+        samvid_super_admin_email="admin@samvid.online",
     )
     client = TestClient(create_app(settings))
 
@@ -128,9 +129,17 @@ def test_neon_mode_keeps_spa_public_and_protects_api(monkeypatch, tmp_path) -> N
 
     assert response.status_code == 200
     assert response.json() == {
-        "subject": "user_123",
-        "email": "owner@example.com",
-        "name": "Workspace Owner",
-        "email_verified": True,
-        "workspace_id": "email-workspace",
+        "user": {
+            "subject": "user_123",
+            "email": "owner@example.com",
+            "name": "Workspace Owner",
+            "email_verified": True,
+        },
+        "account": {
+            "id": response.json()["account"]["id"],
+            "role": "user",
+            "state": "active",
+            "workspace_id": response.json()["account"]["workspace_id"],
+        },
     }
+    assert response.json()["account"]["workspace_id"].startswith("user-")

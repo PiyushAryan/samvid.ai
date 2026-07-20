@@ -8,8 +8,9 @@ from contractmate.email.interface import EmailSender
 from contractmate.email.messages import OutboundEmailMessage
 from contractmate.email.rendering import render_review_email_html, render_review_email_text
 from contractmate.services.contract_processing import ContractProcessingResult, ContractProcessingService
+from contractmate.services.knowledge_outbox import KnowledgeOutboxDispatcher
 from contractmate.settings import Settings
-from contractmate.workers.queue import ContractReviewJob, RabbitMQContractQueue
+from contractmate.workers.queue import ContractReviewJob, RabbitMQContractQueue, RabbitMQKnowledgeQueue
 
 
 logger = logging.getLogger(__name__)
@@ -21,17 +22,30 @@ class ContractWorker:
         *,
         settings: Settings,
         queue: RabbitMQContractQueue,
+        knowledge_queue: RabbitMQKnowledgeQueue | None = None,
+        outbox_dispatcher: KnowledgeOutboxDispatcher | None = None,
         processing_service_factory: Callable[[Settings], ContractProcessingService] = ContractProcessingService.local,
     ) -> None:
         self.settings = settings
         self.queue = queue
+        self.knowledge_queue = knowledge_queue
+        self.outbox_dispatcher = outbox_dispatcher
         self.processing_service_factory = processing_service_factory
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "ContractWorker":
         if settings.contract_processing_mode != "rabbitmq":
             raise ValueError("Set CONTRACT_PROCESSING_MODE=rabbitmq before starting the contract worker.")
-        return cls(settings=settings, queue=RabbitMQContractQueue.from_settings(settings))
+        knowledge_queue = RabbitMQKnowledgeQueue.from_settings(settings)
+        return cls(
+            settings=settings,
+            queue=RabbitMQContractQueue.from_settings(settings),
+            knowledge_queue=knowledge_queue,
+            outbox_dispatcher=KnowledgeOutboxDispatcher.from_settings(
+                settings=settings,
+                publisher=knowledge_queue,
+            ),
+        )
 
     def run_forever(
         self,
@@ -40,24 +54,31 @@ class ContractWorker:
         stop_requested: Callable[[], bool] = lambda: False,
     ) -> None:
         self.queue.declare_topology()
+        if self.knowledge_queue is not None:
+            self.knowledge_queue.declare_topology()
         logger.info("Contract review worker is polling queue %s", self.queue.topology.review_queue)
-        while not stop_requested():
-            try:
-                processed = self.run_once()
-            except KeyboardInterrupt:
-                return
-            except Exception:
-                logger.exception("Contract worker could not poll RabbitMQ")
-                time.sleep(poll_interval_seconds)
-                continue
-            if not processed:
-                time.sleep(poll_interval_seconds)
+        try:
+            while not stop_requested():
+                try:
+                    processed = self.run_once()
+                except KeyboardInterrupt:
+                    return
+                except Exception:
+                    logger.exception("Contract worker could not poll RabbitMQ or drain the knowledge outbox")
+                    time.sleep(poll_interval_seconds)
+                    continue
+                if not processed:
+                    time.sleep(poll_interval_seconds)
+        finally:
+            if self.outbox_dispatcher is not None:
+                self.outbox_dispatcher.close()
         logger.info("Contract review worker stopped")
 
     def run_once(self) -> bool:
+        published_before_review = self._drain_knowledge_outbox()
         delivery = self.queue.receive(prefetch_count=1)
         if delivery is None:
-            return False
+            return published_before_review > 0
 
         service: ContractProcessingService | None = None
         try:
@@ -67,6 +88,7 @@ class ContractWorker:
                 contract_version_id=delivery.job.contract_version_id,
                 workspace_id=delivery.job.workspace_id,
             )
+            self._drain_knowledge_outbox()
             if delivery.job.send_review_email:
                 self._send_review_email(delivery.job, result)
         except Exception as exc:
@@ -88,6 +110,11 @@ class ContractWorker:
             if service is not None:
                 service.close()
         return True
+
+    def _drain_knowledge_outbox(self) -> int:
+        if self.outbox_dispatcher is None:
+            return 0
+        return self.outbox_dispatcher.drain_once()
 
     def _send_review_email(self, job: ContractReviewJob, result: ContractProcessingResult) -> None:
         recipient_address = job.response_address or job.requested_by

@@ -137,7 +137,8 @@ calls without relying on a serverless request lifetime.
 - Private contracts are served through authenticated API routes rather than
   public storage URLs.
 - Neon JWTs are verified against branch-specific EdDSA/JWKS keys, issuer,
-  audience, expiry, and the configured workspace allowlist.
+  audience, expiry, and verified-email state. Samvid then resolves the identity
+  to a private account in its own database.
 - Resend webhooks are verified from the untouched request body using their Svix
   signature headers.
 - Inbound events are idempotent. Completed deliveries are ignored, failed
@@ -259,8 +260,8 @@ ALLOWED_HOSTS=api.samvid.online,*.vercel.app
 
 AUTH_MODE=neon
 NEON_AUTH_URL=https://<neon-auth-host>/neondb/auth
-NEON_AUTH_ALLOWED_EMAILS=owner@example.com,legal@example.com
 NEON_AUTH_REQUIRE_EMAIL_VERIFIED=true
+SAMVID_SUPER_ADMIN_EMAIL=admin@samvid.online
 
 DATABASE_URL=<pooled Neon PostgreSQL URL>
 DATABASE_URL_UNPOOLED=<direct Neon PostgreSQL URL>
@@ -283,14 +284,26 @@ EMAIL_FROM_ADDRESS=contracts@samvid.online
 AUTO_SEND_REVIEW_EMAIL=true
 ```
 
-Set `AUTO_INITIALIZE_DATABASE=true` only for the first schema initialization,
-deploy once, and return it to `false`. This keeps DDL work out of Vercel cold
-starts.
+Apply schema changes from a trusted environment using the direct Neon URL
+before deploying the API:
+
+```bash
+DATABASE_URL_UNPOOLED='<direct Neon PostgreSQL URL>' \
+SAMVID_SUPER_ADMIN_EMAIL='admin@samvid.online' \
+uv run contractmate migrate
+```
+
+The migration creates the account and access-audit tables and seeds the configured
+super-admin. Delete the stale `email-workspace` test records and their Blob objects
+before enabling private accounts in production. Keep
+`AUTO_INITIALIZE_DATABASE=false` in Vercel so DDL is never performed during a
+cold start.
 
 ### Worker
 
 The worker shares the database, Blob, RabbitMQ, model, OCR, and outbound email
 configuration with the API. It does not need Neon Auth variables,
+`SAMVID_SUPER_ADMIN_EMAIL`,
 `RESEND_WEBHOOK_SECRET`, or `RESEND_INBOUND_RECIPIENTS`.
 
 Required worker-specific production values include:
@@ -334,9 +347,10 @@ For every accepted delivery, Samvid:
 3. Downloads up to five non-inline PDF, DOCX, or TXT attachments from Resend's
    signed HTTPS attachment URLs.
 4. Rejects unsupported or oversized files without creating unsafe work.
-5. Stores accepted files, creates contract records, and publishes review jobs.
-6. Preserves the sender, subject, Message-ID, and References for the worker.
-7. Sends `Re: <original subject>` with a professional review, contract link,
+5. Resolves the sender to a private account, creating an unclaimed account for a new sender.
+6. Stores accepted files, creates account-scoped contract records, and publishes review jobs.
+7. Preserves the sender, subject, Message-ID, and References for the worker.
+8. Sends `Re: <original subject>` with a professional review, contract link,
    `In-Reply-To`, and `References` after processing completes.
 
 Transient Resend, storage, database, and RabbitMQ failures return HTTP 500 so
@@ -366,10 +380,11 @@ Configure the production Neon branch with:
 Authentication emails are sent by Neon Auth's configured SMTP provider. They do
 not use Samvid's inbound Resend webhook, API email adapter, or EC2 worker.
 
-`NEON_AUTH_ALLOWED_EMAILS` is the authorization boundary for the current shared
-workspace. A user can have a valid Neon account and still be denied contract
-access when their email is absent from this list. Keep the list explicit and add
-only approved workspace members.
+Each verified Neon identity is bound to one private Samvid account. Normal users
+can access only contracts in their own internal workspace. The address in
+`SAMVID_SUPER_ADMIN_EMAIL` receives a separate read-only oversight account and
+has no personal contract workspace. Existing `email-workspace` records are test
+data and are deleted rather than assigned to a production account.
 
 Optional `NEON_AUTH_JWKS_URL`, `NEON_AUTH_ISSUER`, and
 `NEON_AUTH_AUDIENCE` values override endpoint-derived defaults. Production and
@@ -378,13 +393,15 @@ own issuer and signing keys.
 
 ### Authentication verification
 
-1. Create an approved account and confirm the six-digit verification code is
+1. Create an account and confirm the six-digit verification code is
    delivered.
 2. Verify the account, sign in, and confirm `GET /api/auth/me` returns HTTP 200.
-3. Sign in with an email outside `NEON_AUTH_ALLOWED_EMAILS` and confirm no
-   workspace data is returned.
+3. Sign in as two normal users and confirm neither account can list or open the
+   other account's contracts.
 4. Request a password reset, complete it from the email, and sign in with the
    new password.
+5. Sign in with `SAMVID_SUPER_ADMIN_EMAIL` and confirm the read-only admin view
+   can inspect both accounts without exposing mutation controls.
 
 ## Production Delivery
 

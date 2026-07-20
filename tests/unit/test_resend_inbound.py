@@ -279,9 +279,10 @@ class _FakeIngestionService:
         self.process_count = 0
         self.message = None
 
-    def process_inbound_email(self, message, *, send_response: bool):
+    def process_inbound_email(self, message, *, send_response: bool, workspace_id: str | None = None):
         self.process_count += 1
         self.message = message
+        self.workspace_id = workspace_id
         assert send_response
         for attachment in message.attachments:
             assert attachment.local_path.read_text(encoding="utf-8") == "Vendor agreement text"
@@ -341,6 +342,7 @@ def _webhook_settings() -> Settings:
         resend_api_key="re_test",
         resend_webhook_secret=WEBHOOK_SECRET,
         resend_inbound_recipients=("contracts@oldimeluub.resend.app",),
+        samvid_super_admin_email="admin@samvid.online",
     )
 
 
@@ -353,6 +355,7 @@ def _service_settings(tmp_path: Path) -> Settings:
         resend_api_key="re_test",
         resend_webhook_secret=WEBHOOK_SECRET,
         resend_inbound_recipients=("contracts@oldimeluub.resend.app",),
+        samvid_super_admin_email="admin@samvid.online",
         model_api_key="model-key",
         auto_send_review_email=True,
     )

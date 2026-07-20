@@ -33,7 +33,6 @@ class NeonJWTVerifier:
         jwks_url: str | None = None,
         issuer: str | None = None,
         audience: str | None = None,
-        allowed_emails: tuple[str, ...] = (),
         require_email_verified: bool = False,
         clock_skew_seconds: int = 30,
     ) -> None:
@@ -46,7 +45,6 @@ class NeonJWTVerifier:
         self.jwks_url = jwks_url or f"{normalized_auth_url}/.well-known/jwks.json"
         self.issuer = issuer or auth_origin
         self.audience = audience or auth_origin
-        self.allowed_emails = frozenset(email.strip().casefold() for email in allowed_emails if email.strip())
         self.require_email_verified = require_email_verified
         self.clock_skew_seconds = clock_skew_seconds
         self._jwks_client = jwt.PyJWKClient(
@@ -99,9 +97,6 @@ class NeonJWTVerifier:
         email_verified = bool(claims.get("emailVerified", claims.get("email_verified", False)))
         if self.require_email_verified and not email_verified:
             raise NeonAuthorizationError("Verify your email before opening the workspace")
-        if self.allowed_emails and email not in self.allowed_emails:
-            raise NeonAuthorizationError("This account does not have access to the Samvid workspace")
-
         name = claims.get("name")
         if not isinstance(name, str) or not name.strip():
             name = email.split("@", 1)[0]

@@ -1,4 +1,5 @@
 import json
+import logging
 from collections.abc import Iterator
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -7,13 +8,21 @@ from urllib.parse import quote
 from uuid import uuid4
 
 from contractmate.db.repositories.contracts import ContractRepository
+from contractmate.db.repositories.chat import ChatMessage as PersistedChatMessage
+from contractmate.db.repositories.chat import ChatRepository, ChatSession
+from contractmate.db.repositories.knowledge import KnowledgeRepository
 from contractmate.db.repositories.signing import SigningConflict, SigningError, SigningNotFound, SigningRepository
+from contractmate.db.repositories.user_accounts import UserAccountRepository
 from contractmate.db.session import connect
 from contractmate.schemas.contracts import ContractBlobUpload, ContractReview
+from contractmate.schemas.chat import ChatMessageCreate, ChatSessionCreate
 from contractmate.schemas.signing import SignerCreate, SignerStatusEventCreate, SigningRequestCreate, SigningRequestStatus
 from contractmate.services.audit_service import AuditService
 from contractmate.services.contract_processing import ContractProcessingService
 from contractmate.services.review_service import ReviewService
+from contractmate.services.account_access import AccountAccessError, AccountAccessService, VerifiedAccountResolution
+from contractmate.services.chat_agent import AgnoChatAgentService, ChatEvidenceSource, OpenAIChatConfig
+from contractmate.services.chat_runtime import DatabaseContractReader, chat_retriever_from_settings
 from contractmate.settings import Settings
 from contractmate.tools.document_storage import document_storage_from_settings
 from contractmate.parsers.pdfmuse_parser import PdfMuseDocumentParser
@@ -23,10 +32,13 @@ from contractmate.workflows.states import WorkflowState
 from vercel.blob.errors import BlobError
 
 
+logger = logging.getLogger(__name__)
+
+
 def create_api_router(settings: Settings):
     try:
         from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
-        from fastapi.responses import JSONResponse, Response
+        from fastapi.responses import JSONResponse, Response, StreamingResponse
     except ModuleNotFoundError as exc:
         raise RuntimeError("Install the 'api' extra to run the HTTP app: uv sync --extra api") from exc
 
@@ -54,38 +66,273 @@ def create_api_router(settings: Settings):
         principal = getattr(request.state, "auth_principal", None)
         return principal.name if principal is not None else settings.samvid_local_actor_name
 
-    def workspace_id() -> str:
-        return settings.email_workspace_id
+    def account_access(
+        request: Request,
+        connection: Any = Depends(db_connection),
+    ) -> VerifiedAccountResolution:
+        principal = getattr(request.state, "auth_principal", None)
+        if principal is None:
+            return VerifiedAccountResolution(
+                account_id="local-user",
+                email=settings.samvid_local_actor_email,
+                role="user",
+                state="active",
+                workspace_id=settings.email_workspace_id,
+            )
+        if not settings.samvid_super_admin_email:
+            raise HTTPException(status_code=503, detail={"code": "account_config_missing", "message": "Samvid account access is not configured."})
+        try:
+            return AccountAccessService(
+                repository=UserAccountRepository(connection),
+                super_admin_email=settings.samvid_super_admin_email,
+            ).resolve_verified_principal(principal)
+        except AccountAccessError as exc:
+            raise HTTPException(status_code=403, detail={"code": "account_access_denied", "message": str(exc)}) from exc
+
+    def personal_workspace(access: VerifiedAccountResolution = Depends(account_access)) -> str:
+        if access.role != "user" or not access.workspace_id:
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "read_only_super_admin", "message": "Super admins use the read-only admin console."},
+            )
+        return access.workspace_id
+
+    def super_admin(access: VerifiedAccountResolution = Depends(account_access)) -> VerifiedAccountResolution:
+        if access.role != "super_admin":
+            raise HTTPException(status_code=403, detail={"code": "super_admin_required", "message": "Super-admin access is required."})
+        return access
+
+    def chat_session_response(
+        session: ChatSession,
+        *,
+        repository: ChatRepository,
+        include_messages: bool = False,
+    ) -> dict[str, Any]:
+        messages = repository.list_messages(workspace_id=session.workspace_id, session_id=session.id)
+        response: dict[str, Any] = {
+            "id": session.id,
+            "title": session.title or "New conversation",
+            "message_count": len(messages),
+            "created_at": str(session.created_at),
+            "updated_at": str(session.updated_at),
+        }
+        if include_messages:
+            response["messages"] = [chat_message_response(message) for message in messages if message.role != "system"]
+        return response
+
+    def chat_message_response(message: PersistedChatMessage) -> dict[str, Any]:
+        return {
+            "id": message.id,
+            "role": message.role,
+            "content": message.content,
+            "sources": message.citations,
+            "created_at": str(message.created_at),
+        }
+
+    def chat_source_cards(
+        *,
+        connection: Any,
+        workspace_id: str,
+        evidence_sources: tuple[ChatEvidenceSource, ...],
+    ) -> list[dict[str, Any]]:
+        titles: dict[str, str] = {}
+        sources: list[dict[str, Any]] = []
+        for source in evidence_sources:
+            contract_id = source.contract_id
+            if contract_id not in titles:
+                contract = _get_contract_row(connection, workspace_id=workspace_id, contract_id=contract_id)
+                metadata_title = source.metadata.get("contract_title") or source.metadata.get("title")
+                titles[contract_id] = (
+                    str(contract["title"] or contract["original_filename"] or "Untitled contract")
+                    if contract
+                    else str(metadata_title or "Contract")
+                )
+            sources.append(
+                {
+                    "id": source.source_id,
+                    "chunk_id": source.chunk_id,
+                    "contract_id": contract_id,
+                    "contract_version_id": source.contract_version_id,
+                    "contract_title": titles[contract_id],
+                    "page_number": source.page_number,
+                    "source_type": source.source_type,
+                    "excerpt": source.excerpt[:600],
+                    "relevance": source.relevance,
+                }
+            )
+        return sources
 
     @router.get("/auth/me")
-    def authenticated_user(request: Request) -> dict[str, Any]:
+    def authenticated_user(
+        request: Request,
+        access: VerifiedAccountResolution = Depends(account_access),
+    ) -> dict[str, Any]:
         principal = getattr(request.state, "auth_principal", None)
         if principal is None:
             return {
-                "subject": "local-user",
-                "email": settings.samvid_local_actor_email,
-                "name": settings.samvid_local_actor_name,
-                "email_verified": True,
-                "workspace_id": workspace_id(),
+                "user": {
+                    "subject": "local-user",
+                    "email": settings.samvid_local_actor_email,
+                    "name": settings.samvid_local_actor_name,
+                    "email_verified": True,
+                },
+                "account": {
+                    "id": access.account_id,
+                    "role": access.role,
+                    "state": access.state,
+                    "workspace_id": access.workspace_id,
+                },
             }
         return {
-            "subject": principal.subject,
-            "email": principal.email,
-            "name": principal.name,
-            "email_verified": principal.email_verified,
-            "workspace_id": workspace_id(),
+            "user": {
+                "subject": principal.subject,
+                "email": principal.email,
+                "name": principal.name,
+                "email_verified": principal.email_verified,
+            },
+            "account": {
+                "id": access.account_id,
+                "role": access.role,
+                "state": access.state,
+                "workspace_id": access.workspace_id,
+            },
         }
+
+    @router.get("/chats")
+    def list_chats(
+        access: VerifiedAccountResolution = Depends(account_access),
+        workspace: str = Depends(personal_workspace),
+        connection: Any = Depends(db_connection),
+    ) -> list[dict[str, Any]]:
+        repository = ChatRepository(connection)
+        sessions = repository.list_sessions(workspace_id=workspace, account_id=access.account_id)
+        return [chat_session_response(session, repository=repository) for session in sessions]
+
+    @router.post("/chats")
+    def create_chat(
+        payload: ChatSessionCreate,
+        access: VerifiedAccountResolution = Depends(account_access),
+        workspace: str = Depends(personal_workspace),
+        connection: Any = Depends(db_connection),
+    ) -> dict[str, Any]:
+        try:
+            repository = ChatRepository(connection)
+            session = repository.create_session(
+                workspace_id=workspace,
+                account_id=access.account_id,
+                title=payload.title,
+                contract_id=payload.contract_id,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Contract not found."}) from exc
+        return chat_session_response(session, repository=repository)
+
+    @router.get("/chats/{session_id}")
+    def get_chat(
+        session_id: str,
+        access: VerifiedAccountResolution = Depends(account_access),
+        workspace: str = Depends(personal_workspace),
+        connection: Any = Depends(db_connection),
+    ) -> dict[str, Any]:
+        repository = ChatRepository(connection)
+        session = repository.get_session(workspace_id=workspace, session_id=session_id)
+        if session is None or session.account_id != access.account_id:
+            raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Conversation not found."})
+        return chat_session_response(session, repository=repository, include_messages=True)
+
+    @router.post("/chats/{session_id}/messages")
+    def send_chat_message(
+        session_id: str,
+        payload: ChatMessageCreate,
+        access: VerifiedAccountResolution = Depends(account_access),
+        workspace: str = Depends(personal_workspace),
+        connection: Any = Depends(db_connection),
+    ):
+        content = payload.content.strip()
+        if len(content) > settings.chat_max_input_chars:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "message_too_large", "message": f"Messages are limited to {settings.chat_max_input_chars} characters."},
+            )
+        chats = ChatRepository(connection)
+        session = chats.get_session(workspace_id=workspace, session_id=session_id)
+        if session is None or session.account_id != access.account_id:
+            raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Conversation not found."})
+
+        # Persist the user message before invoking external models so retries never
+        # lose user input. The assistant reply is committed only after completion.
+        chats.append_message(workspace_id=workspace, session_id=session_id, role="user", content=content)
+        try:
+            retriever = chat_retriever_from_settings(
+                settings=settings,
+                repository=KnowledgeRepository(connection),
+            )
+            agent = AgnoChatAgentService(
+                config=OpenAIChatConfig(api_key=settings.model_api_key or "", model_id=settings.chat_model_id),
+                retriever=retriever,
+                reader=DatabaseContractReader(connection),
+            )
+            history = [
+                {"role": message.role, "content": message.content}
+                for message in chats.list_messages(workspace_id=workspace, session_id=session_id)[-13:-1]
+                if message.role in {"user", "assistant"}
+            ]
+            answer = agent.answer(
+                workspace_id=workspace,
+                user_id=access.account_id,
+                session_id=session_id,
+                message=content,
+                history=history,
+            )
+            sources = chat_source_cards(
+                connection=connection,
+                workspace_id=workspace,
+                evidence_sources=answer.sources,
+            )
+            assistant_message = chats.append_message(
+                workspace_id=workspace,
+                session_id=session_id,
+                role="assistant",
+                content=answer.content,
+                citations=sources,
+                model_provider="openai",
+                model_name=settings.chat_model_id,
+                metadata={"citation_labels": list(answer.citations), "retrieval_count": len(sources)},
+            )
+        except Exception as exc:
+            logger.exception("Contract chat failed for session %s", session_id)
+            raise HTTPException(
+                status_code=502,
+                detail={"code": "chat_generation_failed", "message": "Samvid could not complete that contract answer."},
+            ) from exc
+
+        def event_stream() -> Iterator[str]:
+            if sources:
+                yield _sse_event("message.sources", {"type": "message.sources", "sources": sources})
+            for fragment in _stream_fragments(answer.content):
+                yield _sse_event("message.delta", {"type": "message.delta", "delta": fragment})
+            yield _sse_event(
+                "message.completed",
+                {"type": "message.completed", "message": chat_message_response(assistant_message)},
+            )
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     @router.get("/contracts")
     def list_contracts(
         search: str | None = Query(default=None),
         review_status: str | None = Query(default=None),
         signing_status: SigningRequestStatus | None = Query(default=None),
+        workspace: str = Depends(personal_workspace),
         connection: Any = Depends(db_connection),
     ) -> list[dict[str, Any]]:
         signing = SigningRepository(connection)
-        rows = _list_contract_rows(connection, workspace_id=workspace_id(), search=search, review_status=review_status)
-        summaries = signing.signing_summary_for_contracts(workspace_id=workspace_id(), contract_ids=[row["id"] for row in rows])
+        rows = _list_contract_rows(connection, workspace_id=workspace, search=search, review_status=review_status)
+        summaries = signing.signing_summary_for_contracts(workspace_id=workspace, contract_ids=[row["id"] for row in rows])
         response = [_contract_list_item(row, summaries.get(row["id"])) for row in rows]
         if signing_status is not None:
             response = [item for item in response if item["signing_summary"]["status"] == signing_status.value]
@@ -95,6 +342,7 @@ def create_api_router(settings: Settings):
     def upload_contract(
         request: Request,
         file: UploadFile = File(...),
+        workspace: str = Depends(personal_workspace),
         connection: Any = Depends(db_connection),
     ) -> dict[str, Any]:
         suffix = Path(file.filename or "contract").suffix
@@ -120,7 +368,7 @@ def create_api_router(settings: Settings):
             )
             arguments = {
                 "file_path": temp_path,
-                "workspace_id": workspace_id(),
+                "workspace_id": workspace,
                 "email_thread_id": f"samvid-upload-{uuid4()}",
                 "requested_by": actor_email(request),
                 "declared_mime_type": file.content_type,
@@ -140,12 +388,20 @@ def create_api_router(settings: Settings):
     def upload_contract_from_blob(
         request: Request,
         payload: ContractBlobUpload,
+        workspace: str = Depends(personal_workspace),
         connection: Any = Depends(db_connection),
     ) -> dict[str, Any]:
         if settings.document_storage_backend != "vercel_blob":
             raise HTTPException(
                 status_code=409,
                 detail={"code": "blob_storage_disabled", "message": "Direct Blob uploads are not enabled."},
+            )
+
+        expected_prefix = f"contracts/{workspace}/"
+        if not payload.pathname.startswith(expected_prefix):
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "blob_not_found", "message": "Uploaded document was not found."},
             )
 
         storage = document_storage_from_settings(settings)
@@ -156,6 +412,11 @@ def create_api_router(settings: Settings):
                 status_code=404,
                 detail={"code": "blob_not_found", "message": "Uploaded document was not found."},
             ) from exc
+        if not metadata.object_key.startswith(expected_prefix):
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "blob_not_found", "message": "Uploaded document was not found."},
+            )
         if metadata.size_bytes > settings.max_file_size_mb * 1024 * 1024:
             raise HTTPException(
                 status_code=413,
@@ -178,7 +439,7 @@ def create_api_router(settings: Settings):
             )
             arguments = {
                 "file_path": temp_path,
-                "workspace_id": workspace_id(),
+                "workspace_id": workspace,
                 "email_thread_id": f"samvid-upload-{uuid4()}",
                 "requested_by": actor_email(request),
                 "declared_mime_type": metadata.content_type or payload.content_type,
@@ -199,14 +460,18 @@ def create_api_router(settings: Settings):
             temp_path.unlink(missing_ok=True)
 
     @router.get("/contracts/{contract_id}")
-    def get_contract(contract_id: str, connection: Any = Depends(db_connection)) -> dict[str, Any]:
+    def get_contract(
+        contract_id: str,
+        workspace: str = Depends(personal_workspace),
+        connection: Any = Depends(db_connection),
+    ) -> dict[str, Any]:
         signing = SigningRepository(connection)
-        row = _get_contract_row(connection, workspace_id=workspace_id(), contract_id=contract_id)
+        row = _get_contract_row(connection, workspace_id=workspace, contract_id=contract_id)
         if row is None:
             raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Contract not found."})
         review = _review_from_row(row)
-        requests = signing.list_contract_requests(workspace_id=workspace_id(), contract_id=contract_id)
-        summary = signing.signing_summary_for_contracts(workspace_id=workspace_id(), contract_ids=[contract_id]).get(contract_id)
+        requests = signing.list_contract_requests(workspace_id=workspace, contract_id=contract_id)
+        summary = signing.signing_summary_for_contracts(workspace_id=workspace, contract_ids=[contract_id]).get(contract_id)
         return {
             **_contract_list_item(row, summary),
             "current_version": {
@@ -224,8 +489,12 @@ def create_api_router(settings: Settings):
         }
 
     @router.get("/contracts/{contract_id}/document")
-    def get_document(contract_id: str, connection: Any = Depends(db_connection)):
-        row = _get_contract_row(connection, workspace_id=workspace_id(), contract_id=contract_id)
+    def get_document(
+        contract_id: str,
+        workspace: str = Depends(personal_workspace),
+        connection: Any = Depends(db_connection),
+    ):
+        row = _get_contract_row(connection, workspace_id=workspace, contract_id=contract_id)
         if row is None or not row["s3_object_key"]:
             raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Document not found."})
         try:
@@ -248,12 +517,13 @@ def create_api_router(settings: Settings):
         request: Request,
         contract_id: str,
         payload: SigningRequestCreate,
+        workspace: str = Depends(personal_workspace),
         connection: Any = Depends(db_connection),
     ) -> dict[str, Any]:
         try:
             signing = SigningRepository(connection)
             request = signing.create_request(
-                workspace_id=workspace_id(),
+                workspace_id=workspace,
                 contract_id=contract_id,
                 payload=payload,
                 actor_email=actor_email(request),
@@ -266,11 +536,12 @@ def create_api_router(settings: Settings):
     @router.get("/contracts/{contract_id}/signing-requests")
     def list_contract_signing_requests(
         contract_id: str,
+        workspace: str = Depends(personal_workspace),
         connection: Any = Depends(db_connection),
     ) -> list[dict[str, Any]]:
         try:
             signing = SigningRepository(connection)
-            requests = signing.list_contract_requests(workspace_id=workspace_id(), contract_id=contract_id)
+            requests = signing.list_contract_requests(workspace_id=workspace, contract_id=contract_id)
         except SigningError as exc:
             raise _http_signing_error(exc) from exc
         return [request.model_dump(mode="json") for request in requests]
@@ -278,10 +549,11 @@ def create_api_router(settings: Settings):
     @router.get("/signing-requests")
     def list_signing_requests(
         status: SigningRequestStatus | None = Query(default=None),
+        workspace: str = Depends(personal_workspace),
         connection: Any = Depends(db_connection),
     ) -> list[dict[str, Any]]:
         signing = SigningRepository(connection)
-        requests = signing.list_requests(workspace_id=workspace_id(), status=status)
+        requests = signing.list_requests(workspace_id=workspace, status=status)
         return [request.model_dump(mode="json") for request in requests]
 
     @router.post("/signing-requests/{request_id}/signers")
@@ -289,12 +561,13 @@ def create_api_router(settings: Settings):
         request: Request,
         request_id: str,
         payload: SignerCreate,
+        workspace: str = Depends(personal_workspace),
         connection: Any = Depends(db_connection),
     ) -> dict[str, Any]:
         try:
             signing = SigningRepository(connection)
             request = signing.add_signer(
-                workspace_id=workspace_id(),
+                workspace_id=workspace,
                 request_id=request_id,
                 signer=payload,
                 actor_email=actor_email(request),
@@ -309,12 +582,13 @@ def create_api_router(settings: Settings):
         request: Request,
         signer_id: str,
         payload: SignerStatusEventCreate,
+        workspace: str = Depends(personal_workspace),
         connection: Any = Depends(db_connection),
     ) -> dict[str, Any]:
         try:
             signing = SigningRepository(connection)
             request = signing.append_event(
-                workspace_id=workspace_id(),
+                workspace_id=workspace,
                 signer_id=signer_id,
                 payload=payload,
                 actor_email=actor_email(request),
@@ -323,6 +597,203 @@ def create_api_router(settings: Settings):
         except SigningError as exc:
             raise _http_signing_error(exc) from exc
         return request.model_dump(mode="json")
+
+    @router.get("/admin/users")
+    def list_admin_users(
+        search: str | None = Query(default=None),
+        state: str | None = Query(default=None),
+        page: int = Query(default=1, ge=1),
+        _admin: VerifiedAccountResolution = Depends(super_admin),
+        connection: Any = Depends(db_connection),
+    ) -> dict[str, Any]:
+        page_size = 50
+        accounts, total = UserAccountRepository(connection).list_accounts(
+            state=state,
+            search=search,
+            limit=page_size,
+            offset=(page - 1) * page_size,
+        )
+        return {
+            "items": [_account_response(account) for account in accounts],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+    @router.get("/admin/users/{account_id}")
+    def get_admin_user(
+        account_id: str,
+        admin: VerifiedAccountResolution = Depends(super_admin),
+        connection: Any = Depends(db_connection),
+    ) -> dict[str, Any]:
+        accounts = UserAccountRepository(connection)
+        account = accounts.get_by_id(account_id)
+        if account is None:
+            raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Account not found."})
+        accounts.record_access_event(
+            actor_account_id=admin.account_id,
+            target_account_id=account.id,
+            workspace_id=account.personal_workspace_id,
+            event_type="admin.user.viewed",
+        )
+        return _account_response(account, include_subject=True)
+
+    @router.get("/admin/users/{account_id}/contracts")
+    def list_admin_user_contracts(
+        account_id: str,
+        search: str | None = Query(default=None),
+        review_status: str | None = Query(default=None),
+        signing_status: SigningRequestStatus | None = Query(default=None),
+        page: int = Query(default=1, ge=1),
+        admin: VerifiedAccountResolution = Depends(super_admin),
+        connection: Any = Depends(db_connection),
+    ) -> dict[str, Any]:
+        accounts = UserAccountRepository(connection)
+        account = accounts.get_by_id(account_id)
+        if account is None or account.role != "user" or not account.personal_workspace_id:
+            raise HTTPException(status_code=404, detail={"code": "not_found", "message": "User account not found."})
+        signing = SigningRepository(connection)
+        rows = _list_contract_rows(
+            connection,
+            workspace_id=account.personal_workspace_id,
+            search=search,
+            review_status=review_status,
+        )
+        summaries = signing.signing_summary_for_contracts(
+            workspace_id=account.personal_workspace_id,
+            contract_ids=[row["id"] for row in rows],
+        )
+        items = [_contract_list_item(row, summaries.get(row["id"])) for row in rows]
+        if signing_status is not None:
+            items = [item for item in items if item["signing_summary"]["status"] == signing_status.value]
+        page_size = 50
+        accounts.record_access_event(
+            actor_account_id=admin.account_id,
+            target_account_id=account.id,
+            workspace_id=account.personal_workspace_id,
+            event_type="admin.user_contracts.viewed",
+        )
+        return {
+            "items": items[(page - 1) * page_size : page * page_size],
+            "total": len(items),
+            "page": page,
+            "page_size": page_size,
+        }
+
+    @router.get("/admin/contracts/{contract_id}")
+    def get_admin_contract(
+        contract_id: str,
+        admin: VerifiedAccountResolution = Depends(super_admin),
+        connection: Any = Depends(db_connection),
+    ) -> dict[str, Any]:
+        row = _get_contract_row_any_workspace(connection, contract_id=contract_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Contract not found."})
+        accounts = UserAccountRepository(connection)
+        owner = accounts.get_by_workspace(str(row["workspace_id"]))
+        signing = SigningRepository(connection)
+        requests = signing.list_contract_requests(workspace_id=str(row["workspace_id"]), contract_id=contract_id)
+        summary = signing.signing_summary_for_contracts(
+            workspace_id=str(row["workspace_id"]),
+            contract_ids=[contract_id],
+        ).get(contract_id)
+        accounts.record_access_event(
+            actor_account_id=admin.account_id,
+            target_account_id=owner.id if owner else None,
+            workspace_id=str(row["workspace_id"]),
+            contract_id=contract_id,
+            event_type="admin.contract.viewed",
+        )
+        return _contract_detail_response(row, summary=summary, signing_requests=requests)
+
+    @router.get("/admin/contracts/{contract_id}/document")
+    def get_admin_document(
+        contract_id: str,
+        admin: VerifiedAccountResolution = Depends(super_admin),
+        connection: Any = Depends(db_connection),
+    ):
+        row = _get_contract_row_any_workspace(connection, contract_id=contract_id)
+        if row is None or not row["s3_object_key"]:
+            raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Document not found."})
+        accounts = UserAccountRepository(connection)
+        owner = accounts.get_by_workspace(str(row["workspace_id"]))
+        try:
+            content = document_storage_from_settings(settings).read_contract_file(row["s3_object_key"])
+        except (BlobError, FileNotFoundError) as exc:
+            raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Document not found."}) from exc
+        accounts.record_access_event(
+            actor_account_id=admin.account_id,
+            target_account_id=owner.id if owner else None,
+            workspace_id=str(row["workspace_id"]),
+            contract_id=contract_id,
+            event_type="admin.contract_document.viewed",
+        )
+        disposition = "inline" if row["mime_type"] == "application/pdf" else "attachment"
+        filename = str(row["original_filename"] or "contract")
+        return Response(
+            content=content,
+            media_type=row["mime_type"],
+            headers={"Content-Disposition": f"{disposition}; filename*=UTF-8''{quote(filename)}"},
+        )
+
+    @router.get("/admin/contracts/{contract_id}/signing")
+    def get_admin_contract_signing(
+        contract_id: str,
+        admin: VerifiedAccountResolution = Depends(super_admin),
+        connection: Any = Depends(db_connection),
+    ) -> list[dict[str, Any]]:
+        row = _get_contract_row_any_workspace(connection, contract_id=contract_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Contract not found."})
+        accounts = UserAccountRepository(connection)
+        owner = accounts.get_by_workspace(str(row["workspace_id"]))
+        requests = SigningRepository(connection).list_contract_requests(
+            workspace_id=str(row["workspace_id"]),
+            contract_id=contract_id,
+        )
+        accounts.record_access_event(
+            actor_account_id=admin.account_id,
+            target_account_id=owner.id if owner else None,
+            workspace_id=str(row["workspace_id"]),
+            contract_id=contract_id,
+            event_type="admin.contract_signing.viewed",
+        )
+        return [request.model_dump(mode="json") for request in requests]
+
+    @router.get("/admin/access-events")
+    def list_admin_access_events(
+        search: str | None = Query(default=None),
+        page: int = Query(default=1, ge=1),
+        _admin: VerifiedAccountResolution = Depends(super_admin),
+        connection: Any = Depends(db_connection),
+    ) -> dict[str, Any]:
+        page_size = 50
+        events = UserAccountRepository(connection).list_access_events(
+            search=search,
+            limit=page_size,
+            offset=(page - 1) * page_size,
+        )
+        return {
+            "items": [
+                {
+                    "id": event.id,
+                    "actor_account_id": event.actor_account_id,
+                    "actor_email": event.actor_email,
+                    "target_user_id": event.target_account_id,
+                    "target_user_email": event.target_user_email,
+                    "workspace_id": event.workspace_id,
+                    "contract_id": event.contract_id,
+                    "contract_title": event.contract_title,
+                    "event_type": event.event_type,
+                    "metadata": event.metadata,
+                    "created_at": str(event.created_at),
+                }
+                for event in events
+            ],
+            "total": len(events),
+            "page": page,
+            "page_size": page_size,
+        }
 
     return router
 
@@ -408,6 +879,81 @@ def _get_contract_row(connection: Any, *, workspace_id: str, contract_id: str) -
     return connection.execute(sql, (workspace_id, contract_id)).fetchone()
 
 
+def _get_contract_row_any_workspace(connection: Any, *, contract_id: str) -> Any | None:
+    is_postgres = connection.__class__.__module__.startswith("psycopg")
+    sql = """
+        SELECT
+            c.id,
+            c.workspace_id,
+            c.title,
+            c.status,
+            c.current_version_id,
+            c.created_by,
+            c.created_at,
+            c.updated_at,
+            cv.id AS version_id,
+            cv.original_filename,
+            cv.mime_type,
+            cv.size_bytes,
+            cv.sha256,
+            cv.s3_object_key,
+            cv.created_at AS version_created_at,
+            cr.review_json,
+            cr.status AS review_record_status
+        FROM contracts c
+        LEFT JOIN contract_versions cv ON cv.id = c.current_version_id
+        LEFT JOIN contract_reviews cr ON cr.contract_version_id = cv.id
+        WHERE c.id = ?
+        LIMIT 1
+    """
+    if is_postgres:
+        sql = sql.replace("?", "%s")
+    return connection.execute(sql, (contract_id,)).fetchone()
+
+
+def _contract_detail_response(
+    row: Any,
+    *,
+    summary: dict[str, Any] | None,
+    signing_requests: list[Any],
+) -> dict[str, Any]:
+    review = _review_from_row(row)
+    return {
+        **_contract_list_item(row, summary),
+        "current_version": {
+            "id": row["version_id"],
+            "original_filename": row["original_filename"],
+            "mime_type": row["mime_type"],
+            "size_bytes": row["size_bytes"],
+            "sha256": row["sha256"],
+            "created_at": row["version_created_at"],
+        }
+        if row["version_id"]
+        else None,
+        "review": review.model_dump(mode="json") if review else None,
+        "signing_requests": [request.model_dump(mode="json") for request in signing_requests],
+    }
+
+
+def _account_response(account: Any, *, include_subject: bool = False) -> dict[str, Any]:
+    response = {
+        "id": account.id,
+        "email": account.email,
+        "name": account.display_name or account.email.split("@", 1)[0],
+        "role": account.role,
+        "state": account.state,
+        "source": account.source,
+        "workspace_id": account.personal_workspace_id,
+        "contract_count": account.contract_count,
+        "claimed_at": str(account.claimed_at) if account.claimed_at else None,
+        "created_at": str(account.created_at),
+        "updated_at": str(account.updated_at),
+    }
+    if include_subject:
+        response["auth_subject"] = account.auth_subject
+    return response
+
+
 def _contract_list_item(row: Any, signing_summary: dict[str, Any] | None) -> dict[str, Any]:
     review = _review_from_row(row)
     risk_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
@@ -450,3 +996,23 @@ def _http_signing_error(exc: SigningError):
     from fastapi import HTTPException
 
     return HTTPException(status_code=exc.status_code, detail={"code": exc.code, "message": exc.message})
+
+
+def _sse_event(event: str, payload: dict[str, Any]) -> str:
+    return f"event: {event}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
+
+
+def _stream_fragments(content: str, *, max_chars: int = 80) -> Iterator[str]:
+    """Emit sentence-friendly chunks after the model response has been persisted."""
+    remaining = content.strip()
+    while remaining:
+        if len(remaining) <= max_chars:
+            yield remaining
+            return
+        split_at = max(remaining.rfind(" ", 0, max_chars), remaining.rfind("\n", 0, max_chars))
+        if split_at < 1:
+            split_at = max_chars
+        else:
+            split_at += 1
+        yield remaining[:split_at]
+        remaining = remaining[split_at:]

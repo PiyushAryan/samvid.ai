@@ -16,8 +16,46 @@ export type SamvidAuthUser = {
   image?: string | null;
 };
 
+export type SamvidAccountRole = "user" | "super_admin";
+export type SamvidAccountState = "active" | "unclaimed";
+
+export type SamvidAccount = {
+  id: string;
+  role: SamvidAccountRole;
+  state: SamvidAccountState;
+  workspace_id: string | null;
+};
+
+export type AuthMeResponse = {
+  user: {
+    subject: string;
+    email: string;
+    name: string;
+    email_verified: boolean;
+  };
+  account: SamvidAccount;
+};
+
+let currentAccount: SamvidAccount | null = null;
+
+export function setCurrentAccount(account: SamvidAccount | null) {
+  currentAccount = account;
+}
+
+export function getCurrentAccount() {
+  return currentAccount;
+}
+
+export function defaultRouteForAccount(account: SamvidAccount | null | undefined) {
+  return account?.role === "super_admin" ? "/admin" : "/contracts";
+}
+
+export function canAccountAccessPath(account: SamvidAccount, path: string) {
+  return account.role === "super_admin" ? path.startsWith("/admin") : !path.startsWith("/admin");
+}
+
 export type WorkspaceAccessResult =
-  | { status: "allowed" }
+  | { status: "allowed"; profile: AuthMeResponse }
   | { status: "unauthenticated"; message: string }
   | { status: "denied"; message: string }
   | { status: "error"; message: string };
@@ -61,7 +99,11 @@ export async function checkWorkspaceAccess(token: string): Promise<WorkspaceAcce
     const response = await fetch("/api/auth/me", {
       headers: { Authorization: `Bearer ${token}` }
     });
-    if (response.ok) return { status: "allowed" };
+    if (response.ok) {
+      const profile = await response.json() as AuthMeResponse;
+      setCurrentAccount(profile.account);
+      return { status: "allowed", profile };
+    }
 
     let message = response.statusText || "Workspace access could not be verified.";
     try {
@@ -72,10 +114,17 @@ export async function checkWorkspaceAccess(token: string): Promise<WorkspaceAcce
       // Keep the status text when the API does not return JSON.
     }
 
-    if (response.status === 401) return { status: "unauthenticated", message };
-    if (response.status === 403) return { status: "denied", message };
+    if (response.status === 401) {
+      setCurrentAccount(null);
+      return { status: "unauthenticated", message };
+    }
+    if (response.status === 403) {
+      setCurrentAccount(null);
+      return { status: "denied", message };
+    }
     return { status: "error", message };
   } catch {
+    setCurrentAccount(null);
     return { status: "error", message: "Samvid could not verify workspace access. Try again." };
   }
 }

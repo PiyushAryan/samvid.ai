@@ -64,7 +64,7 @@ test("routes an unverified session back to email verification", async () => {
   expect(authMocks.checkWorkspaceAccess).not.toHaveBeenCalled();
 });
 
-test("shows a dedicated state when the backend allowlist rejects the account", async () => {
+test("shows a dedicated state when account provisioning rejects access", async () => {
   authMocks.getAuthSession.mockResolvedValue({
     user: { id: "u1", email: "asha@example.com", name: "Asha", emailVerified: true },
     session: { token: "token" }
@@ -76,7 +76,7 @@ test("shows a dedicated state when the backend allowlist rejects the account", a
 
   renderProtectedRoute();
 
-  expect(await screen.findByRole("heading", { name: "This account is not authorized." })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "This account is not available." })).toBeInTheDocument();
   expect(screen.getByText(/does not have access/)).toBeInTheDocument();
   expect(screen.queryByText("Private workspace")).not.toBeInTheDocument();
 });
@@ -86,7 +86,13 @@ test("renders the workspace only after backend authorization succeeds", async ()
     user: { id: "u1", email: "asha@example.com", name: "Asha", emailVerified: true },
     session: { token: "token" }
   });
-  authMocks.checkWorkspaceAccess.mockResolvedValue({ status: "allowed" });
+  authMocks.checkWorkspaceAccess.mockResolvedValue({
+    status: "allowed",
+    profile: {
+      user: { subject: "u1", email: "asha@example.com", name: "Asha", email_verified: true },
+      account: { id: "account-1", role: "user", state: "active", workspace_id: "user-1" }
+    }
+  });
 
   renderProtectedRoute();
 

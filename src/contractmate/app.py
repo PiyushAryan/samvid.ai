@@ -22,7 +22,7 @@ from contractmate.security.control_plane import authorize_control_plane_request
 from contractmate.security.neon_auth import NeonAuthenticationError, NeonAuthorizationError, NeonJWTVerifier
 from contractmate.settings import Settings
 from contractmate.tools.document_storage import document_storage_from_settings
-from contractmate.workers.queue import RabbitMQContractQueue
+from contractmate.workers.queue import RabbitMQContractQueue, RabbitMQKnowledgeQueue
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,6 @@ def create_app(settings: Settings | None = None):
             jwks_url=settings.neon_auth_jwks_url,
             issuer=settings.neon_auth_issuer,
             audience=settings.neon_auth_audience,
-            allowed_emails=settings.neon_auth_allowed_emails,
             require_email_verified=settings.neon_auth_require_email_verified,
             clock_skew_seconds=settings.neon_auth_clock_skew_seconds,
         )
@@ -161,6 +160,7 @@ def create_app(settings: Settings | None = None):
                 "enabled": settings.contract_processing_mode == "rabbitmq",
                 "exchange": settings.rabbitmq_exchange,
                 "review_queue": settings.rabbitmq_review_queue,
+                "knowledge_index_queue": settings.rabbitmq_knowledge_index_queue,
                 "retry_queue": settings.rabbitmq_retry_queue,
                 "dlq": settings.rabbitmq_dlq,
                 "retry_ttl_ms": settings.rabbitmq_retry_ttl_ms,
@@ -285,6 +285,7 @@ def _check_runtime_dependencies(settings: Settings) -> None:
     document_storage_from_settings(settings).check_ready()
     if settings.contract_processing_mode == "rabbitmq":
         RabbitMQContractQueue.from_settings(settings).check_ready()
+        RabbitMQKnowledgeQueue.from_settings(settings).check_ready()
     settings.inbound_attachment_dir.mkdir(parents=True, exist_ok=True)
     with NamedTemporaryFile(prefix=".samvid-ready-", dir=settings.inbound_attachment_dir):
         pass
