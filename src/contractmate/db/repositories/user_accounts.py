@@ -172,12 +172,18 @@ class UserAccountRepository:
                         UPDATE user_accounts
                         SET auth_subject = COALESCE(?, auth_subject),
                             display_name = COALESCE(?, display_name),
-                            state = ?, claimed_at = CASE WHEN ? IS NOT NULL THEN COALESCE(claimed_at, CURRENT_TIMESTAMP) ELSE claimed_at END,
+                            state = ?, claimed_at = CASE WHEN ? THEN COALESCE(claimed_at, CURRENT_TIMESTAMP) ELSE claimed_at END,
                             updated_at = CURRENT_TIMESTAMP
                         WHERE id = ?
                         """
                     ),
-                    (auth_subject, display_name, "active" if auth_subject else existing.state, auth_subject, existing.id),
+                    (
+                        auth_subject,
+                        display_name,
+                        "active" if auth_subject else existing.state,
+                        auth_subject is not None,
+                        existing.id,
+                    ),
                 )
                 return self._require_by_id(existing.id)
 
