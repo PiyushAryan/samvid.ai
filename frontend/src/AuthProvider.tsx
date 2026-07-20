@@ -8,7 +8,6 @@ import {
   isNeonAuthConfigured,
   type SamvidAuthUser
 } from "./auth";
-import { Skeleton } from "./components/ui/skeleton";
 
 type WorkspaceAccessStatus = "idle" | "checking" | "allowed" | "unverified" | "denied" | "error";
 
@@ -22,6 +21,27 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+function getLoadingTheme(): "light" | "dark" {
+  const savedTheme = window.localStorage.getItem("samvid-theme");
+  if (savedTheme === "light" || savedTheme === "dark") return savedTheme;
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+export function AuthRouteLoading({ label }: { label: string }) {
+  const theme = getLoadingTheme();
+
+  return (
+    <main className="auth-route-loading" data-theme={theme} aria-label={label} aria-busy="true">
+      <img
+        className="auth-route-loading-logo"
+        src={theme === "dark" ? "/favicon-dark.svg" : "/favicon-light.svg"}
+        alt=""
+        aria-hidden="true"
+      />
+    </main>
+  );
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SamvidAuthUser | null>(null);
@@ -121,12 +141,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   const location = useLocation();
 
   if (isLoading || accessStatus === "checking") {
-    return (
-      <main className="auth-route-loading" aria-label="Loading your workspace" aria-busy="true">
-        <Skeleton className="auth-route-loading-mark" />
-        <Skeleton className="auth-route-loading-line" />
-      </main>
-    );
+    return <AuthRouteLoading label="Loading your workspace" />;
   }
   if (!user) {
     const returnTo = `${location.pathname}${location.search}`;
@@ -161,12 +176,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     );
   }
   if (accessStatus !== "allowed") {
-    return (
-      <main className="auth-route-loading" aria-label="Verifying workspace access" aria-busy="true">
-        <Skeleton className="auth-route-loading-mark" />
-        <Skeleton className="auth-route-loading-line" />
-      </main>
-    );
+    return <AuthRouteLoading label="Verifying workspace access" />;
   }
   return children;
 }

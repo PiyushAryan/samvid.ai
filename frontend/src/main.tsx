@@ -5,8 +5,7 @@ import React, { lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import { Navigate, NavLink, Route, BrowserRouter as Router, Routes, useSearchParams } from "react-router-dom";
 import { TooltipProvider } from "./components/ui/tooltip";
-import { Skeleton } from "./components/ui/skeleton";
-import { AuthProvider, RequireAuth, useAuth } from "./AuthProvider";
+import { AuthProvider, AuthRouteLoading, RequireAuth, useAuth } from "./AuthProvider";
 import { safeInternalPath } from "./auth";
 
 const LandingPage = lazy(() => import("./Home").then((module) => ({ default: module.LandingPage })));
@@ -33,12 +32,7 @@ function AuthRoute() {
       : "sign-in";
 
   if (isLoading) {
-    return (
-      <main className="auth-route-loading" aria-label="Checking your session" aria-busy="true">
-        <Skeleton className="auth-route-loading-mark" />
-        <Skeleton className="auth-route-loading-line" />
-      </main>
-    );
+    return <AuthRouteLoading label="Checking your session" />;
   }
   if (user && initialView !== "reset-password" && !allowAuthScreen) {
     if (!user.emailVerified) {

@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, expect, test, vi } from "vitest";
 
-import { AuthProvider, RequireAuth } from "./AuthProvider";
+import { AuthProvider, AuthRouteLoading, RequireAuth } from "./AuthProvider";
 
 const authMocks = vi.hoisted(() => ({
   getAuthSession: vi.fn(),
@@ -39,7 +39,17 @@ function renderProtectedRoute() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.localStorage.clear();
   authMocks.signOut.mockResolvedValue({});
+});
+
+test("uses the saved theme favicon while authentication is loading", () => {
+  window.localStorage.setItem("samvid-theme", "dark");
+
+  render(<AuthRouteLoading label="Checking your session" />);
+
+  expect(screen.getByRole("main", { name: "Checking your session" })).toHaveAttribute("data-theme", "dark");
+  expect(document.querySelector(".auth-route-loading-logo")).toHaveAttribute("src", "/favicon-dark.svg");
 });
 
 test("routes an unverified session back to email verification", async () => {
