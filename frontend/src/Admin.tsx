@@ -63,6 +63,8 @@ export function AdminShell() {
   const navigate = useNavigate();
   const reducedMotion = useReducedMotion();
   const transition = reducedMotion ? { duration: 0 } : { duration: 0.28, ease: [0.22, 1, 0.36, 1] as const };
+  const adminName = user?.name || "Samvid admin";
+  const adminEmail = user?.email || "";
 
   useEffect(() => {
     window.localStorage.setItem("samvid-theme", theme);
@@ -96,7 +98,7 @@ export function AdminShell() {
               aria-hidden={collapsed}
             >
               <strong>Samvid</strong>
-              <small className="brand-caption">Platform oversight</small>
+              <small className="brand-caption">Platform Overview</small>
             </motion.span>
           </Link>
           <button
@@ -124,8 +126,8 @@ export function AdminShell() {
         <div className="admin-sidebar-footer">
           {!collapsed && (
             <div className="admin-sidebar-identity">
-              <span>{user?.name || "Samvid admin"}</span>
-              <small>{user?.email}</small>
+              <span title={adminName}>{adminName}</span>
+              {adminEmail && <small title={adminEmail}>{adminEmail}</small>}
             </div>
           )}
           <div className="admin-sidebar-actions">
