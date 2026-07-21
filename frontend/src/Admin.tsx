@@ -89,7 +89,13 @@ export function AdminShell() {
       <aside className="sidebar admin-sidebar">
         <div className="sidebar-brand-row">
           <Link to="/admin" className="brand" aria-label="Samvid administration">
-            <span className="brand-mark" aria-hidden="true">S</span>
+            <img
+              className="brand-mark brand-mark-image"
+              src={theme === "dark" ? "/favicon-dark.svg" : "/favicon-light.svg"}
+              alt=""
+              aria-hidden="true"
+
+            />
             <motion.span
               className="brand-copy"
               initial={false}
