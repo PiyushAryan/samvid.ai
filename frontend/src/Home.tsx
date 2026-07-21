@@ -23,7 +23,7 @@ const previewSteps: Array<{ id: PreviewStepId; number: string; label: string; ti
     id: "intake",
     number: "01",
     label: "Inbox",
-    title: "One E-mail replaces five tools",
+    title: "One E-mail three tools",
     copy: "Forward any deal. It comes back reviewed, flagged, and ready to sign."
   },
   {
