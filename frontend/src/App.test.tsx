@@ -248,8 +248,12 @@ test("workspace view slider switches between console and loads chat history", as
 
   expect(chatsOption).toHaveAttribute("aria-pressed", "true");
   expect(consoleOption).toHaveAttribute("aria-pressed", "false");
-  expect(within(container).getByRole("heading", { name: "Hello, Piyush Aryan" })).toBeInTheDocument();
+  expect(within(container).getByRole("heading", { name: "Hello, Piyush" })).toBeInTheDocument();
   expect(within(container).getByText("find anything about your contracts")).toBeInTheDocument();
+  fireEvent.click(within(container).getByRole("button", { name: "What changed in my latest contract?" }));
+  expect(within(container).getByRole("textbox", { name: "Ask about a contract" })).toHaveValue(
+    "What changed in my latest contract?"
+  );
   const chatHistory = await within(container).findByRole("region", { name: "Chat history" });
   expect(within(chatHistory).getByRole("button", { name: "New chat" })).toBeInTheDocument();
   expect(await within(chatHistory).findByRole("button", { name: "Vendor renewal terms" })).toBeInTheDocument();

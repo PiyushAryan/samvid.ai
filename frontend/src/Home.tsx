@@ -155,7 +155,7 @@ export function LandingPage() {
             style={{ x: prefersReducedMotion ? 0 : smoothBrandX }}
           >
             <div className="landing-brand-text">
-              <span className="landing-brand-name">Samvid</span>
+              <span className="landing-brand-name">samvid</span>
               <span className="landing-brand-tag">Intelligence</span>
             </div>
           </MotionLink>

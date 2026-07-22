@@ -501,7 +501,7 @@ export function ChatsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const activeChatId = searchParams.get("chat");
-  const accountName = user?.name || "there";
+  const accountName = user?.name?.trim().split(/\s+/)[0] || "there";
   const [draft, setDraft] = useState("");
   const [liveConversation, setLiveConversation] = useState<{ sessionId: string; messages: ChatMessage[] } | null>(null);
   const [isSending, setIsSending] = useState(false);
@@ -607,7 +607,6 @@ export function ChatsPage() {
     <section className="ai-chat-page" aria-labelledby="ai-chat-title">
       <div className="ai-chat-content">
         <header className="ai-chat-header">
-          <p className="ai-chat-eyebrow">Samvid AI</p>
           <h1 id="ai-chat-title">Hello, {accountName}</h1>
           <p>{activeChatId && sessionQuery.data ? sessionQuery.data.title : "find anything about your contracts"}</p>
         </header>
@@ -655,12 +654,7 @@ export function ChatsPage() {
               </article>
             ))}
           </div>
-        ) : (
-          <div className="ai-chat-empty-state">
-            <MessageCircleMore className="ai-chat-empty-icon" size={22} aria-hidden="true" />
-            <p>Ask about risks, obligations, parties, dates, or any clause across your contracts.</p>
-          </div>
-        )}
+        ) : null}
 
         <form
           className="ai-chat-composer"
@@ -702,6 +696,23 @@ export function ChatsPage() {
             {announcement}
           </p>
         </form>
+
+        {!activeChatId && messages.length === 0 && (
+          <div className="ai-chat-suggestions" aria-label="Suggested questions">
+            <p>Try asking</p>
+            <div>
+              {[
+                "What changed in my latest contract?",
+                "Which contracts renew in the next 90 days?",
+                "Summarize the risks in this agreement."
+              ].map((suggestion) => (
+                <button key={suggestion} type="button" onClick={() => setDraft(suggestion)}>
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );

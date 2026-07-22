@@ -68,7 +68,7 @@
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   column-gap: 0;
   align-items: center;
-  height: 80px;
+  height: 74px;
   font-family: var(--lp-font-mono);
   position: sticky;
   top: 0;
@@ -125,7 +125,7 @@
 .landing-brand-name {
   font-family: "Geist Pixel Circle", var(--lp-font-mono);
   font-weight: 900;
-  font-size: 40px;
+  font-size: 32px;
   letter-spacing: 0;
   line-height: 1.1;
   color: var(--lp-text-primary);
@@ -231,7 +231,7 @@
   position: relative;
   isolation: isolate;
   width: 100vw;
-  min-height: calc(100svh - 80px);
+  min-height: calc(100svh - 74px);
   margin-left: calc(50% - 50vw);
   padding: 92px 24px 60px;
   text-align: center;
@@ -245,7 +245,7 @@
 .hero-section::after {
   content: "";
   position: absolute;
-  inset: -80px 0 0;
+  inset: -74px 0 0;
   pointer-events: none;
 }
 
@@ -3146,11 +3146,11 @@
   .landing-header {
     grid-template-columns: minmax(0, 1fr) auto;
     column-gap: 10px;
-    height: 68px;
+    height: 64px;
   }
 
   .hero-section {
-    min-height: calc(100svh - 68px);
+    min-height: calc(100svh - 64px);
   }
 
   .hero-heading {
@@ -3163,7 +3163,7 @@
 
   .hero-section::before,
   .hero-section::after {
-    top: -68px;
+    top: -64px;
     bottom: 0;
   }
 
