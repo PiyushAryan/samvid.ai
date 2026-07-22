@@ -87,6 +87,12 @@ def test_super_admin_is_oversight_only_and_can_be_bound(repository: UserAccountR
     assert bound.state == "active"
     assert bound.auth_subject == "neon-admin"
     assert bound.personal_workspace_id is None
+
+    repeated_bootstrap = repository.bootstrap_super_admin(email="admin@samvid.online")
+
+    assert repeated_bootstrap.id == bound.id
+    assert repeated_bootstrap.auth_subject == "neon-admin"
+    assert repeated_bootstrap.state == "active"
     with pytest.raises(UserAccountConflictError):
         repository.provision_inbound_user(email="admin@samvid.online")
 

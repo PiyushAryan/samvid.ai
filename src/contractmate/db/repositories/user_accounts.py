@@ -164,7 +164,7 @@ class UserAccountRepository:
             if existing:
                 if existing.role != "super_admin":
                     raise UserAccountConflictError("A personal account already uses the super-admin email")
-                if existing.auth_subject not in (None, auth_subject):
+                if auth_subject is not None and existing.auth_subject not in (None, auth_subject):
                     raise UserAccountConflictError("Super-admin email is already bound to another identity")
                 self.connection.execute(
                     self._sql(
