@@ -98,6 +98,23 @@ def test_delivery_service_marks_success_and_does_not_reprocess_email(connection:
     assert repository.status() == {"sent": 1}
 
 
+def test_delivery_service_skips_intent_deleted_after_claim(connection: sqlite3.Connection) -> None:
+    class CancelledAfterClaimRepository(OutboundEmailOutboxRepository):
+        def claim_due(self, *, limit: int = 25, lease_seconds: int = 120):
+            claimed = super().claim_due(limit=limit, lease_seconds=lease_seconds)
+            for item in claimed:
+                self.connection.execute("DELETE FROM outbound_email_outbox WHERE id = ?", (item.id,))
+            self.connection.commit()
+            return claimed
+
+    repository = CancelledAfterClaimRepository(connection)
+    repository.enqueue(_intent("review", "message-cancelled:review"))
+    sender = _Sender()
+
+    assert OutboundEmailDeliveryService(repository=repository, sender=sender).drain_once() == 0
+    assert sender.messages == []
+
+
 def _intent(message_type: str, key: str) -> OutboundEmailIntent:
     return OutboundEmailIntent(
         workspace_id="workspace-1",

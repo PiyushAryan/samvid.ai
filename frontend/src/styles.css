@@ -180,7 +180,6 @@ p {
   background-repeat: no-repeat;
   background-size: cover;
   content: "";
-  opacity: 0.30;
 }
 
 .app-shell[data-theme="dark"] .workspace-main::before {
@@ -807,6 +806,7 @@ p {
 
 .primary,
 .secondary,
+.destructive,
 .icon-button {
   display: inline-flex;
   min-height: 38px;
@@ -848,14 +848,35 @@ p {
   color: var(--text);
 }
 
+.destructive {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.destructive:hover {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}
+
+.page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .primary:active,
 .secondary:active,
+.destructive:active,
 .icon-button:active {
   transform: translateY(1px);
 }
 
 .primary:disabled,
 .secondary:disabled,
+.destructive:disabled,
 .icon-button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
@@ -1765,6 +1786,37 @@ textarea.field-control {
   margin-top: 16px;
 }
 
+.delete-contract-warning {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  color: var(--text);
+}
+
+.delete-contract-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--danger-border);
+  border-radius: 7px;
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.delete-contract-warning strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.delete-contract-warning p {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
 .state,
 .empty {
   display: flex;
@@ -2425,6 +2477,14 @@ textarea.field-control {
     flex-direction: column;
     align-items: stretch;
     gap: 14px;
+  }
+
+  .page-header-actions {
+    justify-content: stretch;
+  }
+
+  .page-header-actions > * {
+    flex: 1 1 auto;
   }
 
   .toolbar-control,

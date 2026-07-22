@@ -7,7 +7,11 @@ from typing import Any, BinaryIO
 from urllib.parse import quote
 from uuid import uuid4
 
-from contractmate.db.repositories.contracts import ContractRepository
+from contractmate.db.repositories.contracts import (
+    ContractDeletionConflict,
+    ContractDeletionNotFound,
+    ContractRepository,
+)
 from contractmate.db.repositories.chat import ChatMessage as PersistedChatMessage
 from contractmate.db.repositories.chat import ChatRepository, ChatSession
 from contractmate.db.repositories.knowledge import KnowledgeRepository
@@ -31,7 +35,7 @@ from contractmate.parsers.pdfmuse_parser import PdfMuseDocumentParser
 from contractmate.services.contract_processing import _ocr_backend_from_settings
 from contractmate.workers.queue import RabbitMQContractQueue
 from contractmate.workflows.states import WorkflowState
-from vercel.blob.errors import BlobError
+from vercel.blob.errors import BlobError, BlobNotFoundError
 
 
 logger = logging.getLogger(__name__)
@@ -659,6 +663,54 @@ def create_api_router(settings: Settings):
             "review": review.model_dump(mode="json") if review else None,
             "signing_requests": [request.model_dump(mode="json") for request in requests],
         }
+
+    @router.delete("/contracts/{contract_id}", status_code=204)
+    def delete_contract(
+        request: Request,
+        response: Response,
+        contract_id: str,
+        access: VerifiedAccountResolution = Depends(account_access),
+        workspace: str = Depends(personal_workspace),
+        connection: Any = Depends(db_connection),
+    ) -> None:
+        require_admission(operation="mutation", account_id=access.account_id, response=response)
+        storage = document_storage_from_settings(settings)
+
+        def delete_objects(object_keys) -> None:
+            for object_key in object_keys:
+                try:
+                    storage.delete_contract_file(object_key)
+                except (BlobNotFoundError, FileNotFoundError):
+                    # Deletion is idempotent when a previous attempt removed the file
+                    # but its database transaction did not commit.
+                    continue
+
+        try:
+            ContractRepository(connection).delete_contract(
+                workspace_id=workspace,
+                contract_id=contract_id,
+                deleted_by=actor_email(request),
+                delete_objects=delete_objects,
+            )
+        except ContractDeletionNotFound as exc:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "not_found", "message": "Contract not found."},
+            ) from exc
+        except ContractDeletionConflict as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "contract_processing", "message": str(exc)},
+            ) from exc
+        except BlobError as exc:
+            logger.exception("Contract %s could not be removed from document storage", contract_id)
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "code": "storage_delete_failed",
+                    "message": "The document could not be deleted from storage. Try again.",
+                },
+            ) from exc
 
     @router.get("/contracts/{contract_id}/document")
     def get_document(

@@ -254,6 +254,13 @@ class OutboundEmailOutboxRepository:
         ).fetchone()
         return self._item_from_row(row) if row is not None else None
 
+    def is_sending(self, *, outbox_id: str) -> bool:
+        row = self.connection.execute(
+            self._sql("SELECT 1 FROM outbound_email_outbox WHERE id = ? AND status = 'sending'"),
+            (outbox_id,),
+        ).fetchone()
+        return row is not None
+
     def status(self) -> dict[str, int]:
         rows = self.connection.execute(
             "SELECT status, COUNT(*) AS count FROM outbound_email_outbox GROUP BY status ORDER BY status"

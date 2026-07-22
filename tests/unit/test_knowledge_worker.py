@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import sqlite3
+from types import SimpleNamespace
 
 import pytest
 
 from contractmate.db.models import SQLITE_SCHEMA_SQL
 from contractmate.schemas.contracts import ContractReview
 from contractmate.schemas.documents import DocumentPage, ParsedDocument
-from contractmate.workers.knowledge_worker import _load_index_inputs
+from contractmate.settings import Settings
+from contractmate.workers.knowledge_worker import KnowledgeIndexWorker, _load_index_inputs
 
 
 def _connection() -> sqlite3.Connection:
@@ -101,3 +103,41 @@ def test_load_index_inputs_returns_matching_contract_version() -> None:
         assert review.contract_id == "contract-a"
     finally:
         connection.close()
+
+
+def test_worker_acknowledges_index_job_for_deleted_contract(monkeypatch) -> None:
+    connection = _connection()
+    monkeypatch.setattr("contractmate.workers.knowledge_worker.connect", lambda _database_url: connection)
+
+    class Delivery:
+        def __init__(self) -> None:
+            self.job = SimpleNamespace(
+                job_id="job-deleted",
+                workspace_id="workspace-1",
+                contract_id="contract-deleted",
+                contract_version_id="version-deleted",
+                attempt=1,
+            )
+            self.acked = False
+            self.retried = False
+
+        def ack(self) -> None:
+            self.acked = True
+
+        def retry(self) -> None:
+            self.retried = True
+
+    delivery = Delivery()
+    worker = KnowledgeIndexWorker(
+        settings=Settings(
+            database_url="sqlite:///:memory:",
+            contract_processing_mode="rabbitmq",
+            fireworks_api_key="test-key",
+        ),
+        queue=None,  # type: ignore[arg-type]
+    )
+
+    worker._process_delivery(delivery)
+
+    assert delivery.acked
+    assert not delivery.retried

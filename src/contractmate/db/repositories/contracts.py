@@ -2,13 +2,35 @@ from __future__ import annotations
 
 import json
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator, Sequence
 from uuid import uuid4
 
 from contractmate.schemas.actions import Approval, ProposedAction
 from contractmate.schemas.contracts import ContractReview
 from contractmate.schemas.documents import ParsedDocument
 from contractmate.workflows.states import WorkflowState
+
+
+class ContractDeletionError(ValueError):
+    """Base error for a contract that cannot be deleted."""
+
+
+class ContractDeletionNotFound(ContractDeletionError):
+    """Raised when a contract does not belong to the requested workspace."""
+
+
+class ContractDeletionConflict(ContractDeletionError):
+    """Raised while a contract still has active background processing."""
+
+
+_ACTIVE_PROCESSING_STATES = {
+    WorkflowState.RECEIVED.value,
+    WorkflowState.VALIDATING.value,
+    WorkflowState.QUEUED.value,
+    WorkflowState.PARSING.value,
+    WorkflowState.ANALYSING.value,
+    WorkflowState.VALIDATING_EVIDENCE.value,
+}
 
 
 class ContractRepository:
@@ -94,6 +116,154 @@ class ContractRepository:
             ),
             (contract_id, contract_version_id),
         ).fetchone()
+
+    def delete_contract(
+        self,
+        *,
+        workspace_id: str,
+        contract_id: str,
+        deleted_by: str,
+        delete_objects: Callable[[Sequence[str]], None],
+    ) -> tuple[str, ...]:
+        """Delete a completed contract and all content-bearing dependent records.
+
+        Object deletion runs while the contract row is locked. If storage rejects
+        the operation, the database transaction rolls back and the contract stays
+        visible so the user can retry.
+        """
+
+        lock_suffix = " FOR UPDATE" if self.is_postgres else ""
+        with self._transaction(immediate=not self.is_postgres):
+            contract = self.connection.execute(
+                self._sql(
+                    f"""
+                    SELECT id, email_thread_id, status
+                    FROM contracts
+                    WHERE workspace_id = ? AND id = ?{lock_suffix}
+                    """
+                ),
+                (workspace_id, contract_id),
+            ).fetchone()
+            if contract is None:
+                raise ContractDeletionNotFound("Contract not found.")
+            if str(contract["status"]) in _ACTIVE_PROCESSING_STATES:
+                raise ContractDeletionConflict("Wait for contract review processing to finish before deleting it.")
+
+            version_rows = self.connection.execute(
+                self._sql("SELECT id, s3_object_key FROM contract_versions WHERE contract_id = ?"),
+                (contract_id,),
+            ).fetchall()
+            version_ids = [str(row["id"]) for row in version_rows]
+            object_keys = tuple(
+                dict.fromkeys(str(row["s3_object_key"]) for row in version_rows if row["s3_object_key"])
+            )
+            run_ids = self._select_ids_for_contract(
+                table="contract_processing_runs",
+                workspace_id=workspace_id,
+                contract_id=contract_id,
+            )
+            action_rows = self.connection.execute(
+                self._sql("SELECT id FROM proposed_actions WHERE contract_id = ?"),
+                (contract_id,),
+            ).fetchall()
+            action_ids = [str(row["id"]) for row in action_rows]
+            request_ids = self._select_ids_for_contract(
+                table="signing_requests",
+                workspace_id=workspace_id,
+                contract_id=contract_id,
+            )
+            signer_ids = self._select_ids(
+                table="signers",
+                column="signing_request_id",
+                values=request_ids,
+            )
+            chat_session_ids = self._contract_chat_session_ids(
+                workspace_id=workspace_id,
+                contract_id=contract_id,
+            )
+
+            delete_objects(object_keys)
+
+            self._delete_by_ids("contract_processing_stages", "processing_run_id", run_ids)
+            self.connection.execute(
+                self._sql("DELETE FROM contract_processing_runs WHERE workspace_id = ? AND contract_id = ?"),
+                (workspace_id, contract_id),
+            )
+            self._delete_by_ids("approvals", "proposed_action_id", action_ids)
+            self.connection.execute(
+                self._sql("DELETE FROM proposed_actions WHERE contract_id = ?"),
+                (contract_id,),
+            )
+            self._delete_by_ids("signer_status_events", "signer_id", signer_ids)
+            self._delete_by_ids("signers", "signing_request_id", request_ids)
+            self.connection.execute(
+                self._sql("DELETE FROM signing_requests WHERE workspace_id = ? AND contract_id = ?"),
+                (workspace_id, contract_id),
+            )
+            self._delete_by_ids("chat_messages", "session_id", chat_session_ids)
+            self._delete_by_ids("chat_sessions", "id", chat_session_ids)
+            for table in ("knowledge_chunks", "knowledge_index_outbox", "knowledge_indexes"):
+                self.connection.execute(
+                    self._sql(f"DELETE FROM {table} WHERE workspace_id = ? AND contract_id = ?"),
+                    (workspace_id, contract_id),
+                )
+            self.connection.execute(
+                self._sql("DELETE FROM outbound_email_outbox WHERE workspace_id = ? AND contract_id = ?"),
+                (workspace_id, contract_id),
+            )
+            self._delete_by_ids("parsed_documents", "contract_version_id", version_ids)
+            self._delete_by_ids("contract_reviews", "contract_version_id", version_ids)
+            self.connection.execute(
+                self._sql("DELETE FROM audit_events WHERE workspace_id = ? AND contract_id = ?"),
+                (workspace_id, contract_id),
+            )
+            self.connection.execute(
+                self._sql(
+                    "UPDATE platform_access_events SET contract_id = NULL WHERE workspace_id = ? AND contract_id = ?"
+                ),
+                (workspace_id, contract_id),
+            )
+            self.connection.execute(
+                self._sql("DELETE FROM contract_versions WHERE contract_id = ?"),
+                (contract_id,),
+            )
+            deleted = self.connection.execute(
+                self._sql("DELETE FROM contracts WHERE workspace_id = ? AND id = ?"),
+                (workspace_id, contract_id),
+            )
+            if deleted.rowcount != 1:
+                raise ContractDeletionNotFound("Contract not found.")
+
+            self.connection.execute(
+                self._sql(
+                    """
+                    INSERT INTO audit_events(
+                        id, workspace_id, contract_id, actor_type, actor_id, event_type, metadata_json
+                    ) VALUES (?, ?, NULL, 'user', ?, 'contract.deleted', ?)
+                    """
+                ),
+                (
+                    str(uuid4()),
+                    workspace_id,
+                    deleted_by,
+                    json.dumps({"deleted_contract_id": contract_id, "version_count": len(version_ids)}),
+                ),
+            )
+            email_thread_id = str(contract["email_thread_id"])
+            self.connection.execute(
+                self._sql(
+                    """
+                    DELETE FROM email_threads
+                    WHERE workspace_id = ? AND id = ?
+                      AND NOT EXISTS (
+                          SELECT 1 FROM contracts
+                          WHERE workspace_id = ? AND email_thread_id = ?
+                      )
+                    """
+                ),
+                (workspace_id, email_thread_id, workspace_id, email_thread_id),
+            )
+        return object_keys
 
     def save_parsed_document(self, *, contract_version_id: str, parsed_document: ParsedDocument) -> str:
         parsed_id = str(uuid4())
@@ -368,14 +538,65 @@ class ContractRepository:
                 (str(uuid4()), str(approval.proposed_action_id), approval.decision.value, approval.decided_by, approval.comment),
             )
 
+    def _select_ids_for_contract(self, *, table: str, workspace_id: str, contract_id: str) -> list[str]:
+        rows = self.connection.execute(
+            self._sql(f"SELECT id FROM {table} WHERE workspace_id = ? AND contract_id = ?"),
+            (workspace_id, contract_id),
+        ).fetchall()
+        return [str(row["id"]) for row in rows]
+
+    def _select_ids(self, *, table: str, column: str, values: Sequence[str]) -> list[str]:
+        if not values:
+            return []
+        placeholders = ", ".join("?" for _ in values)
+        rows = self.connection.execute(
+            self._sql(f"SELECT id FROM {table} WHERE {column} IN ({placeholders})"),
+            tuple(values),
+        ).fetchall()
+        return [str(row["id"]) for row in rows]
+
+    def _delete_by_ids(self, table: str, column: str, values: Sequence[str]) -> None:
+        if not values:
+            return
+        placeholders = ", ".join("?" for _ in values)
+        self.connection.execute(
+            self._sql(f"DELETE FROM {table} WHERE {column} IN ({placeholders})"),
+            tuple(values),
+        )
+
+    def _contract_chat_session_ids(self, *, workspace_id: str, contract_id: str) -> list[str]:
+        session_ids = {
+            str(row["id"])
+            for row in self.connection.execute(
+                self._sql("SELECT id FROM chat_sessions WHERE workspace_id = ? AND contract_id = ?"),
+                (workspace_id, contract_id),
+            ).fetchall()
+        }
+        rows = self.connection.execute(
+            self._sql("SELECT session_id, citations FROM chat_messages WHERE workspace_id = ?"),
+            (workspace_id,),
+        ).fetchall()
+        for row in rows:
+            raw_citations = row["citations"]
+            citations = json.loads(raw_citations) if isinstance(raw_citations, str) else list(raw_citations or [])
+            if any(
+                str(citation.get("contract_id")) == contract_id
+                for citation in citations
+                if isinstance(citation, dict)
+            ):
+                session_ids.add(str(row["session_id"]))
+        return sorted(session_ids)
+
     def _sql(self, statement: str) -> str:
         if not self.is_postgres:
             return statement
         return statement.replace("?", "%s")
 
     @contextmanager
-    def _transaction(self) -> Iterator[None]:
+    def _transaction(self, *, immediate: bool = False) -> Iterator[None]:
         try:
+            if immediate and not self.is_postgres:
+                self.connection.execute("BEGIN IMMEDIATE")
             yield
         except Exception:
             self.connection.rollback()

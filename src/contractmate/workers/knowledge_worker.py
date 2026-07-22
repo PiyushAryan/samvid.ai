@@ -20,6 +20,10 @@ from contractmate.workers.queue import RabbitMQKnowledgeQueue
 logger = logging.getLogger(__name__)
 
 
+class KnowledgeIndexInputNotFound(ValueError):
+    """The contract was removed after its indexing job was published."""
+
+
 @dataclass
 class KnowledgeIndexWorker:
     settings: Settings
@@ -101,6 +105,13 @@ class KnowledgeIndexWorker:
                 parsed_document=parsed,
                 review_json=review,
             )
+        except KnowledgeIndexInputNotFound:
+            logger.info(
+                "Knowledge index job %s was cancelled because contract %s no longer exists",
+                delivery.job.job_id,
+                delivery.job.contract_id,
+            )
+            delivery.ack()
         except Exception as exc:
             logger.exception(
                 "Knowledge index job %s failed on attempt %s",
@@ -143,7 +154,9 @@ def _load_index_inputs(
         (contract_version_id, workspace_id, contract_id),
     ).fetchone()
     if row is None:
-        raise ValueError("Validated parsed document and review were not found in the expected workspace.")
+        raise KnowledgeIndexInputNotFound(
+            "Validated parsed document and review were not found in the expected workspace."
+        )
     parsed_json = row["content_json"]
     review_json = row["review_json"]
     parsed = ParsedDocument.model_validate_json(parsed_json) if isinstance(parsed_json, str) else ParsedDocument.model_validate(parsed_json)

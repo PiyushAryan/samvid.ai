@@ -60,6 +60,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     }
     throw new ApiError(response.status, payload);
   }
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -73,6 +74,12 @@ export function listContracts(filters: { search?: string; reviewStatus?: string;
 
 export function getContract(contractId: string) {
   return request<ContractDetail>(`/api/contracts/${contractId}`);
+}
+
+export function deleteContract(contractId: string) {
+  return request<void>(`/api/contracts/${encodeURIComponent(contractId)}`, {
+    method: "DELETE"
+  });
 }
 
 function collectionItems<T>(response: T[] | { items: T[] }): T[] {

@@ -21,6 +21,7 @@ import {
   Component,
   SquarePen,
   Sun,
+  Trash2,
   Upload,
   UserPlus,
   X
@@ -35,6 +36,7 @@ import {
   appendSignerEvent,
   createChatSession,
   createSigningRequest,
+  deleteContract,
   getChatSession,
   getContract,
   getContractDocument,
@@ -803,6 +805,9 @@ export function ContractsPage() {
 export function ContractDetailPage() {
   const { contractId } = useParams();
   const [params, setParams] = useSearchParams();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const tab = params.get("tab") || "review";
   const contractQuery = useQuery({
     queryKey: ["contract", contractId],
@@ -828,15 +833,20 @@ export function ContractDetailPage() {
               eyebrow="Contract"
               title={contractQuery.data.title}
               action={
-                <a
-                  className={secondaryButton}
-                  href={documentUrl || undefined}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-disabled={!documentUrl}
-                >
-                  Open original <ArrowUpRight size={15} />
-                </a>
+                <div className="page-header-actions">
+                  <a
+                    className={secondaryButton}
+                    href={documentUrl || undefined}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-disabled={!documentUrl}
+                  >
+                    Open original <ArrowUpRight size={15} />
+                  </a>
+                  <button className="destructive" type="button" onClick={() => setDeleteOpen(true)}>
+                    <Trash2 size={15} aria-hidden="true" /> Delete
+                  </button>
+                </div>
               }
             />
             <div className="tabs" role="tablist">
@@ -862,10 +872,64 @@ export function ContractDetailPage() {
               />
             )}
             {tab === "signing" && <SigningTab contract={contractQuery.data} />}
+            {deleteOpen && (
+              <DeleteContractDialog
+                contract={contractQuery.data}
+                onClose={() => setDeleteOpen(false)}
+                onDeleted={() => {
+                  queryClient.removeQueries({ queryKey: ["contract", contractId] });
+                  queryClient.removeQueries({ queryKey: ["contract-document", contractId] });
+                  queryClient.invalidateQueries({ queryKey: ["contracts"] });
+                  queryClient.invalidateQueries({ queryKey: ["signing-requests"] });
+                  queryClient.invalidateQueries({ queryKey: ["chat-sessions"] });
+                  navigate("/contracts", { replace: true });
+                }}
+              />
+            )}
           </>
         )}
       </QueryState>
     </section>
+  );
+}
+
+function DeleteContractDialog({
+  contract,
+  onClose,
+  onDeleted
+}: {
+  contract: ContractDetail;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const mutation = useMutation({
+    mutationFn: () => deleteContract(contract.id),
+    onSuccess: onDeleted
+  });
+
+  return (
+    <Dialog title="Delete contract" onClose={onClose}>
+      <div className="delete-contract-warning">
+        <span className="delete-contract-icon" aria-hidden="true"><Trash2 size={18} /></span>
+        <div>
+          <strong>This permanently removes {contract.title}.</strong>
+          <p>
+            The original document, review, extracted knowledge, signing history, and contract-linked conversations
+            will be deleted. This action cannot be undone.
+          </p>
+        </div>
+      </div>
+      <div className="dialog-actions">
+        <button className={secondaryButton} type="button" onClick={onClose} disabled={mutation.isPending}>
+          Cancel
+        </button>
+        <button className="destructive" type="button" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+          {mutation.isPending ? <Loader2 className="spin" size={16} /> : <Trash2 size={16} />}
+          Permanently delete
+        </button>
+      </div>
+      <MutationError mutation={mutation} />
+    </Dialog>
   );
 }
 

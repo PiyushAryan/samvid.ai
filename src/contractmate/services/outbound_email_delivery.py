@@ -42,6 +42,9 @@ class OutboundEmailDeliveryService:
     def drain_once(self, *, limit: int = 25) -> int:
         sent = 0
         for item in self.repository.claim_due(limit=limit, lease_seconds=self.lease_seconds):
+            if not self.repository.is_sending(outbox_id=item.id):
+                logger.info("Skipping cancelled outbound email %s", item.id)
+                continue
             try:
                 self.sender.send(self._message(item))
             except Exception as exc:

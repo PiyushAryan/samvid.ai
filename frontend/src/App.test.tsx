@@ -3,11 +3,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactNode } from "react";
 import { beforeEach, expect, test, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { AppShell, ChatsPage, ContractsTableSkeleton, ContractTable, ReviewTab, Timeline } from "./App";
+import { AppShell, ChatsPage, ContractDetailPage, ContractsTableSkeleton, ContractTable, ReviewTab, Timeline } from "./App";
 import { LandingPage } from "./Home";
 import * as api from "./api";
 import { TooltipProvider } from "./components/ui/tooltip";
-import type { ChatSession, ChatSessionSummary, ContractListItem, ContractReview, SigningRequest } from "./types";
+import type { ChatSession, ChatSessionSummary, ContractDetail, ContractListItem, ContractReview, SigningRequest } from "./types";
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -16,6 +16,9 @@ vi.mock("./api", async (importOriginal) => {
     listChatSessions: vi.fn(),
     createChatSession: vi.fn(),
     getChatSession: vi.fn(),
+    getContract: vi.fn(),
+    getContractDocument: vi.fn(),
+    deleteContract: vi.fn(),
     streamChatMessage: vi.fn()
   };
 });
@@ -79,6 +82,29 @@ const chatSession: ChatSession = {
   ]
 };
 
+const contractDetail: ContractDetail = {
+  id: "contract-delete",
+  title: "Vendor agreement",
+  review_status: "review_ready",
+  created_by: "user@example.com",
+  created_at: "2026-07-20T09:00:00Z",
+  updated_at: "2026-07-20T09:05:00Z",
+  current_version_id: null,
+  current_version: null,
+  original_filename: "vendor-agreement.pdf",
+  mime_type: "application/pdf",
+  risk_counts: { critical: 0, high: 1, medium: 0, low: 0 },
+  signing_summary: {
+    active_request_id: null,
+    status: "not_started",
+    required_signed: 0,
+    required_total: 0,
+    signer_total: 0
+  },
+  review: null,
+  signing_requests: []
+};
+
 beforeEach(() => {
   vi.mocked(api.listChatSessions).mockResolvedValue(chatSessions);
   vi.mocked(api.getChatSession).mockResolvedValue(chatSession);
@@ -90,6 +116,9 @@ beforeEach(() => {
     updated_at: "2026-07-20T10:00:00Z",
     messages: []
   });
+  vi.mocked(api.getContract).mockResolvedValue(contractDetail);
+  vi.mocked(api.getContractDocument).mockResolvedValue(new Blob());
+  vi.mocked(api.deleteContract).mockResolvedValue(undefined);
   vi.mocked(api.streamChatMessage).mockResolvedValue(undefined);
 });
 
@@ -151,6 +180,29 @@ test("contract listing renders signing counters and risk counts", () => {
   expect(screen.getByRole("link", { name: "Vendor agreement" })).toBeInTheDocument();
   expect(screen.getByText("In Progress")).toBeInTheDocument();
   expect(screen.getByText("1/2 required")).toBeInTheDocument();
+});
+
+test("contract owner confirms permanent deletion and returns to the list", async () => {
+  render(
+    <QueryProvider>
+      <MemoryRouter initialEntries={["/contracts/contract-delete"]}>
+        <Routes>
+          <Route path="/contracts/:contractId" element={<ContractDetailPage />} />
+          <Route path="/contracts" element={<div>Contract list</div>} />
+        </Routes>
+      </MemoryRouter>
+    </QueryProvider>
+  );
+
+  expect(await screen.findByRole("heading", { name: "Vendor agreement" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+  const dialog = screen.getByRole("dialog", { name: "Delete contract" });
+  expect(within(dialog).getByText(/original document, review, extracted knowledge/i)).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Permanently delete" }));
+
+  await waitFor(() => expect(api.deleteContract).toHaveBeenCalledWith("contract-delete"));
+  expect(await screen.findByText("Contract list")).toBeInTheDocument();
 });
 
 test("sidebar control toggles its collapsed state", () => {

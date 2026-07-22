@@ -4,10 +4,12 @@ from types import SimpleNamespace
 
 import pytest
 
+from contractmate.db.repositories.contracts import ContractRepository
 from contractmate.db.repositories.user_accounts import UserAccountRepository
 from contractmate.db.session import connect
 from contractmate.security.neon_auth import NeonAuthPrincipal, NeonJWTVerifier
 from contractmate.settings import Settings
+from contractmate.workflows.states import WorkflowState
 
 
 @pytest.fixture
@@ -107,3 +109,91 @@ def test_private_contracts_are_isolated_and_super_admin_reads_are_audited(privat
     assert events.json()["items"][0]["target_user_email"] == "user-b@example.com"
 
     assert client.post("/api/contracts", headers=_headers("admin")).status_code == 403
+
+
+def test_owner_can_permanently_delete_contract_and_document(private_api) -> None:
+    client = private_api.client
+    settings = private_api.settings
+    assert client.get("/api/auth/me", headers=_headers("user-a")).status_code == 200
+    assert client.get("/api/auth/me", headers=_headers("user-b")).status_code == 200
+
+    connection = connect(settings.database_url)
+    try:
+        accounts = UserAccountRepository(connection)
+        user_a = accounts.get_by_email("user-a@example.com")
+        assert user_a is not None and user_a.personal_workspace_id
+        object_key = f"{user_a.personal_workspace_id}/aa/agreement.txt"
+        stored_file = settings.local_storage_dir / object_key
+        stored_file.parent.mkdir(parents=True, exist_ok=True)
+        stored_file.write_text("Confidential agreement", encoding="utf-8")
+        repository = ContractRepository(connection)
+        contract_id, _ = repository.create_contract_with_version(
+            workspace_id=user_a.personal_workspace_id,
+            email_thread_id="upload-thread",
+            title="Confidential agreement",
+            original_filename="agreement.txt",
+            mime_type="text/plain",
+            size_bytes=22,
+            sha256="a" * 64,
+            object_key=object_key,
+            uploaded_by=user_a.email,
+        )
+        repository.update_contract_status(contract_id, WorkflowState.REVIEW_READY)
+    finally:
+        connection.close()
+
+    hidden_delete = client.delete(f"/api/contracts/{contract_id}", headers=_headers("user-b"))
+    assert hidden_delete.status_code == 404
+    assert stored_file.exists()
+
+    deleted = client.delete(f"/api/contracts/{contract_id}", headers=_headers("user-a"))
+    assert deleted.status_code == 204
+    assert deleted.content == b""
+    assert not stored_file.exists()
+    assert client.get(f"/api/contracts/{contract_id}", headers=_headers("user-a")).status_code == 404
+
+    connection = connect(settings.database_url)
+    try:
+        event = connection.execute(
+            "SELECT contract_id, event_type, metadata_json FROM audit_events WHERE event_type = ?",
+            ("contract.deleted",),
+        ).fetchone()
+        assert event is not None
+        assert event["contract_id"] is None
+        assert contract_id in str(event["metadata_json"])
+    finally:
+        connection.close()
+
+
+def test_active_contract_cannot_be_deleted(private_api) -> None:
+    client = private_api.client
+    settings = private_api.settings
+    assert client.get("/api/auth/me", headers=_headers("user-a")).status_code == 200
+
+    connection = connect(settings.database_url)
+    try:
+        account = UserAccountRepository(connection).get_by_email("user-a@example.com")
+        assert account is not None and account.personal_workspace_id
+        object_key = f"{account.personal_workspace_id}/bb/queued.txt"
+        stored_file = settings.local_storage_dir / object_key
+        stored_file.parent.mkdir(parents=True, exist_ok=True)
+        stored_file.write_text("Queued agreement", encoding="utf-8")
+        contract_id, _ = ContractRepository(connection).create_contract_with_version(
+            workspace_id=account.personal_workspace_id,
+            email_thread_id="queued-thread",
+            title="Queued agreement",
+            original_filename="queued.txt",
+            mime_type="text/plain",
+            size_bytes=16,
+            sha256="b" * 64,
+            object_key=object_key,
+            uploaded_by=account.email,
+        )
+        ContractRepository(connection).update_contract_status(contract_id, WorkflowState.QUEUED)
+    finally:
+        connection.close()
+
+    response = client.delete(f"/api/contracts/{contract_id}", headers=_headers("user-a"))
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "contract_processing"
+    assert stored_file.exists()
