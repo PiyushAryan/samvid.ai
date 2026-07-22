@@ -114,7 +114,7 @@ function SidebarChatHistory({
         <SquarePen size={16} aria-hidden="true" />
         <span>New chat</span>
       </button>
-      <h2 id="sidebar-chat-history-title">Recent</h2>
+      <h2 id="sidebar-chat-history-title" className="sr-only">Chat history</h2>
       {sessionsQuery.isPending ? (
         <div className="sidebar-chat-loading" role="status" aria-label="Loading chat history">
           {[0, 1, 2].map((item) => <Skeleton key={item} className="sidebar-chat-skeleton" />)}
@@ -127,7 +127,7 @@ function SidebarChatHistory({
       ) : sessionsQuery.data.length === 0 ? (
         <p className="sidebar-chat-empty">No conversations yet</p>
       ) : (
-        <ol className="sidebar-chat-list">
+        <ul className="sidebar-chat-list">
           {sessionsQuery.data.map((session) => (
             <li key={session.id}>
               <button
@@ -140,7 +140,7 @@ function SidebarChatHistory({
               </button>
             </li>
           ))}
-        </ol>
+        </ul>
       )}
     </section>
   );
@@ -244,7 +244,7 @@ export function AppShell() {
       className={cx("app-shell", sidebarCollapsed && "sidebar-collapsed")}
       data-theme={theme}
       initial={false}
-      animate={{ "--sidebar-width": sidebarCollapsed ? "68px" : "232px" }}
+      animate={{ "--sidebar-width": sidebarCollapsed ? "68px" : "248px" }}
       transition={sidebarTransition}
     >
       <aside className="sidebar">
