@@ -22,6 +22,7 @@ from contractmate.services.account_access import (
     SuperAdminInboundRejectedError,
 )
 from contractmate.services.email_ingestion import EmailIngestionService
+from contractmate.services.rate_limiting import RateLimitPolicy, UpstashRateLimiter, default_rate_limit_policy
 from contractmate.settings import Settings
 
 
@@ -52,7 +53,7 @@ class ResendWebhookEnvelope(BaseModel):
 class ResendInboundResult(BaseModel):
     event_id: str
     email_id: str
-    status: Literal["processed", "ignored", "duplicate", "processing"]
+    status: Literal["processed", "ignored", "duplicate", "processing", "rate_limited"]
     processed_attachments: int = 0
     ignored_attachments: list[str] = Field(default_factory=list)
 
@@ -148,12 +149,14 @@ class ResendInboundService:
         ingestion_service: EmailIngestionService,
         client: ResendReceivingClient,
         account_access: AccountAccessService | None = None,
+        rate_limiter: UpstashRateLimiter | None = None,
     ) -> None:
         self.settings = settings
         self.event_repository = event_repository
         self.ingestion_service = ingestion_service
         self.client = client
         self.account_access = account_access
+        self.rate_limiter = rate_limiter
 
     @classmethod
     def local(cls, settings: Settings) -> "ResendInboundService":
@@ -172,6 +175,7 @@ class ResendInboundService:
             ingestion_service=EmailIngestionService.local(settings),
             client=ResendReceivingClient(settings.resend_api_key or ""),
             account_access=account_access,
+            rate_limiter=UpstashRateLimiter(settings),
         )
 
     def process(self, event: ResendWebhookEvent, *, event_id: str, payload_hash: str) -> ResendInboundResult:
@@ -203,6 +207,48 @@ class ResendInboundService:
                 self.event_repository.mark_completed(email_id)
                 return ResendInboundResult(event_id=event_id, email_id=email_id, status="ignored")
 
+            attachments_to_download, ignored = self._supported_attachments(email_id)
+            if not attachments_to_download:
+                self.event_repository.mark_completed(email_id)
+                return ResendInboundResult(
+                    event_id=event_id,
+                    email_id=email_id,
+                    status="ignored",
+                    ignored_attachments=ignored,
+                )
+
+            # Known users share the same review budget as browser uploads. Unknown
+            # senders use a tighter pre-provisioning budget so a public receiving
+            # address cannot be abused to create unlimited dormant accounts.
+            existing_account = (
+                self.account_access.repository.get_by_email(sender)
+                if self.account_access is not None
+                else None
+            )
+            if self.rate_limiter is not None:
+                policy = (
+                    default_rate_limit_policy("review")
+                    if existing_account is not None
+                    and existing_account.role == "user"
+                    and existing_account.state == "active"
+                    else RateLimitPolicy("inbound-email", hourly_limit=2, daily_limit=5)
+                )
+                decision = self.rate_limiter.consume(
+                    policy,
+                    existing_account.id if policy.operation == "review" else sender,
+                    units=len(attachments_to_download),
+                )
+                if decision.reason == "unavailable" and not decision.allowed:
+                    raise RuntimeError("Inbound rate-limit admission is unavailable")
+                if not decision.allowed:
+                    self.event_repository.mark_completed(email_id)
+                    return ResendInboundResult(
+                        event_id=event_id,
+                        email_id=email_id,
+                        status="rate_limited",
+                        ignored_attachments=ignored,
+                    )
+
             workspace_id = self.settings.email_workspace_id
             if self.account_access is not None:
                 try:
@@ -214,15 +260,7 @@ class ResendInboundService:
                     return ResendInboundResult(event_id=event_id, email_id=email_id, status="ignored")
             self.event_repository.update_workspace(email_id, workspace_id)
 
-            attachments, ignored, temporary_files = self._download_supported_attachments(email_id)
-            if not attachments:
-                self.event_repository.mark_completed(email_id)
-                return ResendInboundResult(
-                    event_id=event_id,
-                    email_id=email_id,
-                    status="ignored",
-                    ignored_attachments=ignored,
-                )
+            attachments, downloaded_ignored, temporary_files = self._download_supported_attachments(attachments_to_download)
 
             reply_to = next(
                 (
@@ -258,7 +296,7 @@ class ResendInboundService:
                 email_id=email_id,
                 status="processed",
                 processed_attachments=len(ingestion_result.processed),
-                ignored_attachments=ignored + ingestion_result.ignored_attachments,
+                ignored_attachments=ignored + downloaded_ignored + ingestion_result.ignored_attachments,
             )
         except Exception:
             if claimed:
@@ -271,10 +309,32 @@ class ResendInboundService:
     def close(self) -> None:
         self.ingestion_service.close()
         self.event_repository.connection.close()
+        if self.rate_limiter is not None:
+            self.rate_limiter.close()
+
+    def _supported_attachments(self, email_id: str) -> tuple[list[dict[str, Any]], list[str]]:
+        supported: list[dict[str, Any]] = []
+        ignored: list[str] = []
+        max_bytes = self.settings.max_file_size_mb * 1024 * 1024
+        for attachment in self.client.list_attachments(email_id):
+            filename = Path(str(attachment.get("filename") or "unnamed-attachment")).name
+            mime_type = str(attachment.get("content_type") or "").partition(";")[0].strip().casefold()
+            expected_suffix = SUPPORTED_ATTACHMENTS.get(mime_type)
+            if (
+                attachment.get("content_disposition") != "attachment"
+                or not expected_suffix
+                or Path(filename).suffix.casefold() != expected_suffix
+                or int(attachment.get("size") or 0) > max_bytes
+                or len(supported) >= MAX_ATTACHMENTS_PER_EMAIL
+            ):
+                ignored.append(filename)
+                continue
+            supported.append(attachment)
+        return supported, ignored
 
     def _download_supported_attachments(
         self,
-        email_id: str,
+        attachments_to_download: list[dict[str, Any]],
     ) -> tuple[list[EmailAttachment], list[str], list[Path]]:
         downloaded: list[EmailAttachment] = []
         ignored: list[str] = []
@@ -283,22 +343,11 @@ class ResendInboundService:
         self.settings.inbound_attachment_dir.mkdir(parents=True, exist_ok=True)
 
         try:
-            for attachment in self.client.list_attachments(email_id):
+            for attachment in attachments_to_download:
                 filename = Path(str(attachment.get("filename") or "unnamed-attachment")).name
                 mime_type = str(attachment.get("content_type") or "").partition(";")[0].strip().casefold()
                 expected_suffix = SUPPORTED_ATTACHMENTS.get(mime_type)
-                if (
-                    attachment.get("content_disposition") != "attachment"
-                    or not expected_suffix
-                    or Path(filename).suffix.casefold() != expected_suffix
-                ):
-                    ignored.append(filename)
-                    continue
-                if len(downloaded) >= MAX_ATTACHMENTS_PER_EMAIL:
-                    ignored.append(filename)
-                    continue
-                size = int(attachment.get("size") or 0)
-                if size > max_bytes:
+                if not expected_suffix:
                     ignored.append(filename)
                     continue
 

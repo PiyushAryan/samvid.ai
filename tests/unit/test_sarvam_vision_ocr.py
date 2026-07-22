@@ -1,4 +1,6 @@
 import json
+import threading
+import time
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -72,6 +74,25 @@ def test_sarvam_ocr_rejects_partial_results(tmp_path: Path) -> None:
         ).extract(pdf_path, parsed_document=_ocr_required_document())
 
 
+def test_sarvam_ocr_processes_chunks_concurrently_and_preserves_page_order(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "scanned-contract.pdf"
+    writer = PdfWriter()
+    for _ in range(21):
+        writer.add_blank_page(width=612, height=792)
+    with pdf_path.open("wb") as output:
+        writer.write(output)
+
+    tracker = _ConcurrencyTracker()
+    result = SarvamVisionOCR(
+        api_key="sarvam-key",
+        max_concurrency=2,
+        client_factory=lambda **_kwargs: _ConcurrentFakeClient(tracker),
+    ).extract(pdf_path, parsed_document=_ocr_required_document())
+
+    assert tracker.max_active == 2
+    assert [page.page_number for page in result.pages] == list(range(1, 22))
+
+
 class _FakeClient:
     def __init__(self, jobs: list["_FakeJob"], *, fixed_job: "_FakeJob | None" = None) -> None:
         self.document_intelligence = self
@@ -112,6 +133,41 @@ class _FakeJob:
         }
         with zipfile.ZipFile(output_path, "w") as archive:
             archive.writestr("result.json", json.dumps(payload))
+
+
+class _ConcurrencyTracker:
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.active = 0
+        self.max_active = 0
+
+
+class _ConcurrentFakeClient:
+    def __init__(self, tracker: _ConcurrencyTracker) -> None:
+        self.document_intelligence = self
+        self.tracker = tracker
+
+    def create_job(self, *, language: str, output_format: str) -> "_ConcurrentFakeJob":
+        assert language == "en-IN"
+        assert output_format == "md"
+        return _ConcurrentFakeJob(self.tracker)
+
+
+class _ConcurrentFakeJob(_FakeJob):
+    def __init__(self, tracker: _ConcurrencyTracker) -> None:
+        super().__init__()
+        self.tracker = tracker
+
+    def wait_until_complete(self, *, timeout: float):
+        with self.tracker.lock:
+            self.tracker.active += 1
+            self.tracker.max_active = max(self.tracker.max_active, self.tracker.active)
+        try:
+            time.sleep(0.02)
+        finally:
+            with self.tracker.lock:
+                self.tracker.active -= 1
+        return super().wait_until_complete(timeout=timeout)
 
 
 def _ocr_required_document() -> ParsedDocument:

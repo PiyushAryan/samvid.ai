@@ -303,19 +303,22 @@ class ContractRepository:
             outbox_id = str(persisted_outbox["id"])
         return review_id, outbox_id
 
-    def get_contract_review(self, contract_id: str) -> ContractReview | None:
+    def get_contract_review(self, contract_id: str, *, contract_version_id: str | None = None) -> ContractReview | None:
+        version_clause = "AND cr.contract_version_id = ?" if contract_version_id else ""
+        parameters: tuple[str, ...] = (contract_id, contract_version_id) if contract_version_id else (contract_id,)
         row = self.connection.execute(
             self._sql(
-                """
+                f"""
             SELECT cr.review_json
             FROM contract_reviews cr
             JOIN contract_versions cv ON cv.id = cr.contract_version_id
             WHERE cv.contract_id = ?
+            {version_clause}
             ORDER BY cr.created_at DESC
             LIMIT 1
             """
             ),
-            (contract_id,),
+            parameters,
         ).fetchone()
         if not row:
             return None

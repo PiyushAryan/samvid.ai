@@ -1,10 +1,13 @@
 from pathlib import Path
 
+import pytest
+
 from contractmate.agents.agno_contract_reviewer import AgnoContractReviewAgent
 from contractmate.ocr.sarvam_vision import SarvamVisionOCR
 from contractmate.schemas.documents import DocumentPage, DocumentSpan, ParsedDocument
 from contractmate.schemas.contracts import ContractReview, ContractRisk, Evidence, RiskSeverity
 from contractmate.services.contract_processing import ContractProcessingService
+from contractmate.db.repositories.processing_runs import ProcessingRunRepository
 from contractmate.settings import Settings
 from contractmate.workers.queue import InMemoryContractQueue
 from contractmate.workflows.states import WorkflowState
@@ -141,6 +144,39 @@ def test_queued_contract_is_reviewed_from_durable_storage(monkeypatch, tmp_path:
     assert result.status is WorkflowState.REVIEW_READY
     assert result.review is not None
     assert result.review.risks[0].title == "Unlimited liability"
+
+
+def test_enqueue_failure_marks_processing_run_failed(tmp_path: Path) -> None:
+    contract = tmp_path / "queue-failure.txt"
+    contract.write_text("A valid contract document.", encoding="utf-8")
+    settings = Settings(
+        database_url=f"sqlite:///{tmp_path / 'contractmate.db'}",
+        local_storage_dir=tmp_path / "files",
+        model_api_key="test-key",
+    )
+    service = ContractProcessingService.local(settings)
+    try:
+        with pytest.raises(RuntimeError, match="broker unavailable"):
+            service.enqueue_local_file(
+                queue=_FailingQueue(),
+                file_path=contract,
+                workspace_id="workspace-1",
+                email_thread_id="samvid-upload-test",
+                requested_by="user@example.com",
+            )
+
+        runs = ProcessingRunRepository(service.repository.connection).list_recent()
+        assert len(runs) == 1
+        assert runs[0].status == "failed"
+        assert runs[0].failure_stage == "queue"
+        assert runs[0].failure_error == "broker unavailable"
+    finally:
+        service.close()
+
+
+class _FailingQueue:
+    def enqueue(self, **_kwargs):
+        raise RuntimeError("broker unavailable")
 
 
 def _fake_contract_review(self, *, contract_id, parsed_document) -> ContractReview:

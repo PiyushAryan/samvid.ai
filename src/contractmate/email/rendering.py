@@ -15,6 +15,52 @@ SEVERITY_COLORS = {
 }
 
 
+def render_receipt_email_text(
+    *,
+    attachment_count: int,
+    recipient_name: str | None = None,
+    recipient_address: str | None = None,
+) -> str:
+    name = email_recipient_name(recipient_name, recipient_address)
+    document_label = "document" if attachment_count == 1 else "documents"
+    return "\n".join(
+        [
+            f"Hi {name},",
+            "",
+            f"Samvid received {attachment_count} contract {document_label} and started the review.",
+            "We will reply in this thread when the review is ready.",
+            "",
+            "Thanks,",
+            "Samvid",
+            "",
+            "Sent via Samvid",
+        ]
+    )
+
+
+def render_receipt_email_html(
+    *,
+    attachment_count: int,
+    recipient_name: str | None = None,
+    recipient_address: str | None = None,
+) -> str:
+    name = escape(email_recipient_name(recipient_name, recipient_address))
+    document_label = "document" if attachment_count == 1 else "documents"
+    return (
+        '<!doctype html><html><body style="margin:0;padding:0;background:#f4f6f5;font-family:Arial,sans-serif;color:#14201e">'
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6f5"><tr><td align="center" style="padding:28px 16px">'
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;border:1px solid #dfe5e3;border-radius:8px;background:#ffffff">'
+        '<tr><td style="padding:22px 28px;border-bottom:1px solid #e7ecea"><strong style="font-size:18px;color:#14201e">Samvid</strong>'
+        '<span style="float:right;color:#0d9488;font-size:12px;font-weight:700;text-transform:uppercase">Contract review</span></td></tr>'
+        '<tr><td style="padding:30px 28px"><p style="margin:0 0 18px;font-size:16px;line-height:1.6">Hi '
+        f'{name},</p><h1 style="margin:0 0 10px;font-size:24px;line-height:1.3;color:#14201e">Your review is underway.</h1>'
+        '<p style="margin:0;color:#56625f;font-size:14px;line-height:1.6">'
+        f"Samvid received {attachment_count} contract {document_label}. We will reply in this thread when the review is ready.</p>"
+        '<p style="margin:28px 0 0;color:#56625f;font-size:13px;line-height:1.6">Thanks,<br><strong style="color:#14201e">Samvid</strong><br><br>Sent via Samvid</p>'
+        '</td></tr></table></td></tr></table></body></html>'
+    )
+
+
 def render_review_email_text(
     review: ContractReview,
     *,

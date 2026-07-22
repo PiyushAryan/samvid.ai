@@ -44,3 +44,4 @@ class OutboundEmailMessage(BaseModel):
     html: str | None = None
     in_reply_to: str | None = None
     references: str | None = None
+    idempotency_key: str | None = None

@@ -4,6 +4,7 @@ import json
 import re
 import tempfile
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -36,6 +37,7 @@ class SarvamVisionOCR:
     api_key: str
     language: str = "en-IN"
     timeout_seconds: int = 600
+    max_concurrency: int = 2
     client_factory: Callable[..., Any] = field(default=SarvamAI, repr=False)
 
     parser_name = "sarvam-vision"
@@ -54,9 +56,19 @@ class SarvamVisionOCR:
                 work_dir = Path(work_dir_value)
                 chunks = self._split_pdf(file_path, work_dir)
                 pages: list[DocumentPage] = []
-                for chunk_index, (chunk_path, page_offset) in enumerate(chunks, start=1):
-                    archive_path = work_dir / f"sarvam-output-{chunk_index}.zip"
-                    pages.extend(self._process_chunk(chunk_path, archive_path, page_offset=page_offset))
+                worker_count = min(max(self.max_concurrency, 1), len(chunks))
+                with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="sarvam-ocr") as executor:
+                    futures = [
+                        executor.submit(
+                            self._process_chunk,
+                            chunk_path,
+                            work_dir / f"sarvam-output-{chunk_index}.zip",
+                            page_offset=page_offset,
+                        )
+                        for chunk_index, (chunk_path, page_offset) in enumerate(chunks, start=1)
+                    ]
+                    for future in futures:
+                        pages.extend(future.result())
         except OCRProcessingError:
             raise
         except Exception as exc:

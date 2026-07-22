@@ -27,7 +27,11 @@ class EmailSender:
             headers = _thread_headers(message)
             if headers:
                 payload["headers"] = headers
-            resend.Emails.send(payload)
+            options = {"idempotency_key": message.idempotency_key} if message.idempotency_key else None
+            if options is None:
+                resend.Emails.send(payload)
+            else:
+                resend.Emails.send(payload, options)
             return
 
         if not self.settings.smtp_host:

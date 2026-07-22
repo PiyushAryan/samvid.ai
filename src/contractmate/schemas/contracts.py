@@ -70,3 +70,7 @@ class ContractBlobUpload(BaseModel):
         if not filename or "/" in filename or "\\" in filename or filename in {".", ".."}:
             raise ValueError("original_filename must be a plain filename")
         return filename
+
+
+class BlobUploadAuthorization(BaseModel):
+    pathname: str = Field(min_length=12, max_length=1024, pattern=r"^contracts/")

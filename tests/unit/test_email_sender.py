@@ -51,6 +51,22 @@ def test_email_sender_adds_thread_headers_to_resend(monkeypatch) -> None:
     }
 
 
+def test_email_sender_passes_resend_idempotency_key_as_send_option(monkeypatch) -> None:
+    calls: list[tuple[dict, dict]] = []
+    monkeypatch.setattr("resend.Emails.send", lambda payload, options: calls.append((payload, options)))
+    message = OutboundEmailMessage(
+        from_address="contracts@samvid.online",
+        to_address="sender@example.com",
+        subject="Re: Agreement",
+        text="Review ready",
+        idempotency_key="review:job-1",
+    )
+
+    EmailSender(Settings(resend_api_key="re_test")).send(message)
+
+    assert calls[0][1] == {"idempotency_key": "review:job-1"}
+
+
 def test_email_sender_adds_thread_headers_to_smtp(monkeypatch) -> None:
     smtp = _FakeSMTP()
     monkeypatch.setattr("smtplib.SMTP", lambda *_args, **_kwargs: smtp)

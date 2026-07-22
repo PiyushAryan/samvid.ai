@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -20,6 +21,9 @@ class Settings(BaseModel):
     neon_auth_clock_skew_seconds: int = Field(default=30, ge=0, le=300)
     samvid_super_admin_email: str | None = None
     allowed_hosts: tuple[str, ...] = ("localhost", "127.0.0.1", "testserver")
+    upstash_redis_rest_url: str | None = None
+    upstash_redis_rest_token: str | None = None
+    rate_limit_mode: Literal["observe", "enforce"] = "observe"
     resend_inbound_enabled: bool = False
     resend_webhook_secret: str | None = None
     resend_inbound_recipients: tuple[str, ...] = ()
@@ -72,6 +76,7 @@ class Settings(BaseModel):
     sarvam_api_key: str | None = None
     sarvam_ocr_language: str = "en-IN"
     sarvam_ocr_timeout_seconds: int = Field(default=600, ge=1)
+    sarvam_ocr_max_concurrency: int = Field(default=2, ge=1, le=4)
     enable_tracing: bool = True
     auto_send_review_email: bool = True
     os_security_key: str | None = None
@@ -141,6 +146,10 @@ class Settings(BaseModel):
             errors.append("CONTRACT_PROCESSING_MODE must be 'sync' or 'rabbitmq'")
         if self.contract_processing_mode == "rabbitmq" and not self.rabbitmq_url:
             errors.append("RABBITMQ_URL is required when CONTRACT_PROCESSING_MODE=rabbitmq")
+        if self.rate_limit_mode == "enforce" and not (
+            self.upstash_redis_rest_url and self.upstash_redis_rest_token
+        ):
+            errors.append("UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required when RATE_LIMIT_MODE=enforce")
         if not self.inbound_attachment_dir.is_absolute():
             errors.append("INBOUND_ATTACHMENT_DIR must be an absolute writable path")
         if errors:
@@ -174,6 +183,9 @@ class Settings(BaseModel):
             neon_auth_clock_skew_seconds=int(os.getenv("NEON_AUTH_CLOCK_SKEW_SECONDS", "30")),
             samvid_super_admin_email=os.getenv("SAMVID_SUPER_ADMIN_EMAIL") or None,
             allowed_hosts=csv_env("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver"),
+            upstash_redis_rest_url=os.getenv("UPSTASH_REDIS_REST_URL") or None,
+            upstash_redis_rest_token=os.getenv("UPSTASH_REDIS_REST_TOKEN") or None,
+            rate_limit_mode=os.getenv("RATE_LIMIT_MODE", "observe").casefold(),
             resend_inbound_enabled=bool_env("RESEND_INBOUND_ENABLED", False),
             resend_webhook_secret=os.getenv("RESEND_WEBHOOK_SECRET") or None,
             resend_inbound_recipients=csv_env("RESEND_INBOUND_RECIPIENTS", ""),
@@ -228,6 +240,7 @@ class Settings(BaseModel):
             sarvam_api_key=os.getenv("SARVAM_API_KEY") or None,
             sarvam_ocr_language=os.getenv("SARVAM_OCR_LANGUAGE", "en-IN"),
             sarvam_ocr_timeout_seconds=int(os.getenv("SARVAM_OCR_TIMEOUT_SECONDS", "600")),
+            sarvam_ocr_max_concurrency=int(os.getenv("SARVAM_OCR_MAX_CONCURRENCY", "2")),
             enable_tracing=bool_env("ENABLE_TRACING", True),
             auto_send_review_email=bool_env("AUTO_SEND_REVIEW_EMAIL", True),
             os_security_key=os.getenv("OS_SECURITY_KEY") or None,

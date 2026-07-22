@@ -260,6 +260,82 @@ CREATE TABLE IF NOT EXISTS audit_events (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS contract_processing_runs (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    contract_id TEXT NOT NULL,
+    contract_version_id TEXT NOT NULL,
+    job_id TEXT,
+    source TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed')),
+    outcome TEXT,
+    queued_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    worker_started_at TEXT,
+    completed_at TEXT,
+    failure_stage TEXT,
+    failure_error TEXT,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS ix_processing_runs_contract_created
+ON contract_processing_runs(workspace_id, contract_id, created_at);
+
+CREATE INDEX IF NOT EXISTS ix_processing_runs_status_queued
+ON contract_processing_runs(status, queued_at);
+
+CREATE TABLE IF NOT EXISTS contract_processing_stages (
+    id TEXT PRIMARY KEY,
+    processing_run_id TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('running', 'succeeded', 'failed', 'skipped')),
+    started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TEXT,
+    duration_ms INTEGER CHECK (duration_ms IS NULL OR duration_ms >= 0),
+    outcome TEXT,
+    error TEXT,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    UNIQUE(processing_run_id, stage)
+);
+
+CREATE INDEX IF NOT EXISTS ix_processing_stages_run_started
+ON contract_processing_stages(processing_run_id, started_at);
+
+CREATE TABLE IF NOT EXISTS outbound_email_outbox (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    contract_id TEXT,
+    contract_version_id TEXT,
+    thread_key TEXT NOT NULL,
+    thread_position INTEGER NOT NULL CHECK (thread_position >= 1),
+    message_type TEXT NOT NULL CHECK (message_type IN ('receipt', 'review')),
+    to_address TEXT NOT NULL,
+    from_address TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    text_body TEXT NOT NULL,
+    html_body TEXT,
+    in_reply_to TEXT,
+    references_header TEXT,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'sending', 'sent', 'failed')),
+    attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+    next_attempt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    lease_expires_at TEXT,
+    last_error TEXT,
+    sent_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(thread_key, thread_position)
+);
+
+CREATE INDEX IF NOT EXISTS ix_outbound_email_outbox_delivery
+ON outbound_email_outbox(status, next_attempt_at, lease_expires_at);
+
+CREATE INDEX IF NOT EXISTS ix_outbound_email_outbox_thread
+ON outbound_email_outbox(thread_key, thread_position, status);
+
 CREATE TABLE IF NOT EXISTS signing_requests (
     id TEXT PRIMARY KEY,
     workspace_id TEXT NOT NULL,
@@ -577,6 +653,82 @@ CREATE TABLE IF NOT EXISTS audit_events (
     metadata_json JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS contract_processing_runs (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    contract_id TEXT NOT NULL,
+    contract_version_id TEXT NOT NULL,
+    job_id TEXT,
+    source TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed')),
+    outcome TEXT,
+    queued_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    worker_started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    failure_stage TEXT,
+    failure_error TEXT,
+    metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS ix_processing_runs_contract_created
+ON contract_processing_runs(workspace_id, contract_id, created_at);
+
+CREATE INDEX IF NOT EXISTS ix_processing_runs_status_queued
+ON contract_processing_runs(status, queued_at);
+
+CREATE TABLE IF NOT EXISTS contract_processing_stages (
+    id TEXT PRIMARY KEY,
+    processing_run_id TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('running', 'succeeded', 'failed', 'skipped')),
+    started_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMPTZ,
+    duration_ms INTEGER CHECK (duration_ms IS NULL OR duration_ms >= 0),
+    outcome TEXT,
+    error TEXT,
+    metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    UNIQUE(processing_run_id, stage)
+);
+
+CREATE INDEX IF NOT EXISTS ix_processing_stages_run_started
+ON contract_processing_stages(processing_run_id, started_at);
+
+CREATE TABLE IF NOT EXISTS outbound_email_outbox (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    contract_id TEXT,
+    contract_version_id TEXT,
+    thread_key TEXT NOT NULL,
+    thread_position INTEGER NOT NULL CHECK (thread_position >= 1),
+    message_type TEXT NOT NULL CHECK (message_type IN ('receipt', 'review')),
+    to_address TEXT NOT NULL,
+    from_address TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    text_body TEXT NOT NULL,
+    html_body TEXT,
+    in_reply_to TEXT,
+    references_header TEXT,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'sending', 'sent', 'failed')),
+    attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+    next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    lease_expires_at TIMESTAMPTZ,
+    last_error TEXT,
+    sent_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(thread_key, thread_position)
+);
+
+CREATE INDEX IF NOT EXISTS ix_outbound_email_outbox_delivery
+ON outbound_email_outbox(status, next_attempt_at, lease_expires_at);
+
+CREATE INDEX IF NOT EXISTS ix_outbound_email_outbox_thread
+ON outbound_email_outbox(thread_key, thread_position, status);
 
 CREATE TABLE IF NOT EXISTS signing_requests (
     id TEXT PRIMARY KEY,

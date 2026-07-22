@@ -38,7 +38,17 @@ class KnowledgeIndexWorker:
         stop_requested: Callable[[], bool] = lambda: False,
     ) -> None:
         self.queue.declare_topology()
-        logger.info("Knowledge index worker is polling queue %s", self.queue.topology.queue)
+        logger.info("Knowledge index worker is consuming queue %s", self.queue.topology.queue)
+        consume = getattr(self.queue, "consume", None)
+        if callable(consume):
+            consume(
+                self._process_delivery,
+                stop_requested=stop_requested,
+                reconnect_delay_seconds=poll_interval_seconds,
+            )
+            logger.info("Knowledge index worker stopped")
+            return
+
         while not stop_requested():
             try:
                 processed = self.run_once()
@@ -56,6 +66,10 @@ class KnowledgeIndexWorker:
         delivery = self.queue.receive(prefetch_count=1)
         if delivery is None:
             return False
+        self._process_delivery(delivery)
+        return True
+
+    def _process_delivery(self, delivery) -> None:
         connection: Any | None = None
         try:
             if self.settings.auto_initialize_database:
@@ -104,7 +118,6 @@ class KnowledgeIndexWorker:
         finally:
             if connection is not None:
                 connection.close()
-        return True
 
 
 def _load_index_inputs(

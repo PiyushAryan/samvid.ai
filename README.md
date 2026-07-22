@@ -230,9 +230,16 @@ Set `CONTRACT_PROCESSING_MODE=rabbitmq` for the API and start a separate worker:
 CONTRACT_PROCESSING_MODE=rabbitmq uv run contractmate worker
 ```
 
-Keep `RABBITMQ_HEARTBEAT_SECONDS` longer than the slowest expected OCR or model
-operation. Failed jobs move through the TTL retry queue and reach the dead-letter
-queue after `RABBITMQ_MAX_ATTEMPTS`.
+Production Compose runs three small, independent services: `contract-worker`
+for review jobs, `knowledge-index-worker` for chat indexing, and
+`delivery-worker` for durable outbound email and index-outbox delivery.
+
+Long-running review and knowledge consumers disable AMQP heartbeats because
+their synchronous OCR and model calls can exceed a heartbeat interval. Their
+reconnect loops recover failed TCP connections when the next broker operation
+runs. Short-lived publisher connections still use `RABBITMQ_HEARTBEAT_SECONDS`.
+Failed jobs move through the TTL retry queue and reach the dead-letter queue
+after `RABBITMQ_MAX_ATTEMPTS`.
 
 ## Configuration
 
@@ -271,10 +278,16 @@ DOCUMENT_STORAGE_BACKEND=vercel_blob
 CONTRACT_PROCESSING_MODE=rabbitmq
 RABBITMQ_URL=<CloudAMQP amqps URL>
 
+# Start in observe mode, then enforce once dashboards show expected traffic.
+UPSTASH_REDIS_REST_URL=https://<your-upstash-endpoint>
+UPSTASH_REDIS_REST_TOKEN=<secret>
+RATE_LIMIT_MODE=observe
+
 OPENAI_API_KEY=<secret>
 ENABLE_OCR=true
 OCR_PROVIDER=sarvam
 SARVAM_API_KEY=<secret>
+SARVAM_OCR_MAX_CONCURRENCY=2
 
 RESEND_INBOUND_ENABLED=true
 RESEND_WEBHOOK_SECRET=<Resend signing secret>
@@ -283,6 +296,12 @@ RESEND_API_KEY=<secret>
 EMAIL_FROM_ADDRESS=contracts@samvid.online
 AUTO_SEND_REVIEW_EMAIL=true
 ```
+
+Upstash is used only by the API for distributed admission control. It applies
+per-account limits to chat, reads, mutations, review uploads, and inbound
+email. Redis keys contain SHA-256 account or sender identifiers only; contract
+content is never written to Redis. Use `observe` to measure limits without
+blocking requests, then switch to `enforce` after verification.
 
 Apply schema changes from a trusted environment using the direct Neon URL
 before deploying the API:
@@ -320,6 +339,7 @@ CONTRACT_PROCESSING_MODE=rabbitmq
 RABBITMQ_URL=<CloudAMQP amqps URL>
 OPENAI_API_KEY=<secret>
 SARVAM_API_KEY=<secret>
+SARVAM_OCR_MAX_CONCURRENCY=2
 RESEND_API_KEY=<secret>
 EMAIL_FROM_ADDRESS=contracts@samvid.online
 AUTO_SEND_REVIEW_EMAIL=true
@@ -454,6 +474,7 @@ docker compose -f docker-compose.worker.yml pull
 docker compose -f docker-compose.worker.yml up -d --no-build --force-recreate
 docker compose -f docker-compose.worker.yml ps
 docker compose -f docker-compose.worker.yml logs --tail=100 contract-worker
+docker compose -f docker-compose.worker.yml logs --tail=100 delivery-worker
 ```
 
 Pin an immutable release when reproducibility is required:
@@ -494,6 +515,7 @@ Follow worker logs:
 
 ```bash
 docker compose -f docker-compose.worker.yml logs -f --tail=200 contract-worker
+docker compose -f docker-compose.worker.yml logs -f --tail=200 delivery-worker
 ```
 
 Validate production images locally:

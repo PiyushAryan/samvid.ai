@@ -24,7 +24,7 @@ def test_worker_acknowledges_successful_review() -> None:
 
 def test_worker_marks_terminal_failure_before_dead_lettering() -> None:
     service = _FakeProcessingService(error=RuntimeError("model unavailable"))
-    delivery = _FakeDelivery(_job(attempt=3))
+    delivery = _FakeDelivery(_job(attempt=3, processing_run_id="run-1"))
     worker = ContractWorker(
         settings=Settings(),
         queue=_FakeQueue(delivery, max_attempts=3),
@@ -34,7 +34,7 @@ def test_worker_marks_terminal_failure_before_dead_lettering() -> None:
     assert worker.run_once()
 
     assert delivery.retried
-    assert service.failed == [("contract-1", "workspace-1", "model unavailable")]
+    assert service.failed == [("contract-1", "workspace-1", "model unavailable", "run-1")]
     assert service.closed
 
 
@@ -62,12 +62,35 @@ def test_worker_stops_before_polling_when_shutdown_is_requested() -> None:
     assert queue.receive_count == 0
 
 
-def test_worker_sends_review_as_threaded_reply(monkeypatch) -> None:
-    sent = []
-    monkeypatch.setattr(
-        "contractmate.workers.contract_worker.EmailSender.send",
-        lambda _sender, message: sent.append(message),
+def test_worker_uses_long_lived_consumer_when_queue_supports_it() -> None:
+    service = _FakeProcessingService()
+    delivery = _FakeDelivery(_job())
+    queue = _ConsumingQueue(delivery)
+    worker = ContractWorker(
+        settings=Settings(),
+        queue=queue,
+        processing_service_factory=lambda _settings: service,
     )
+
+    worker.run_forever()
+
+    assert queue.consume_count == 1
+    assert queue.receive_count == 0
+    assert delivery.acked
+    assert service.closed
+
+
+def test_worker_sends_review_as_threaded_reply(monkeypatch) -> None:
+    queued = []
+
+    class _Outbox:
+        def __init__(self, _connection) -> None:
+            pass
+
+        def enqueue(self, intent) -> None:
+            queued.append(intent)
+
+    monkeypatch.setattr("contractmate.workers.contract_worker.OutboundEmailOutboxRepository", _Outbox)
     worker = ContractWorker(
         settings=Settings(
             email_from_address="onboarding@resend.dev",
@@ -101,20 +124,21 @@ def test_worker_sends_review_as_threaded_reply(monkeypatch) -> None:
         message="Contract review is ready.",
     )
 
-    worker._send_review_email(job, result)
+    worker._queue_review_email(_ServiceWithConnection(), job, result)
 
-    assert sent[0].to_address == "replies@example.com"
-    assert sent[0].subject == "Re: Please review"
-    assert sent[0].text.startswith("Hi Contract Sender,")
-    assert "https://samvid-ai.vercel.app/contracts/contract-1" in sent[0].text
-    assert sent[0].html is not None
-    assert "Open contract in Samvid" in sent[0].html
-    assert "Sent via Samvid" in sent[0].html
-    assert sent[0].in_reply_to == "<message@example.com>"
-    assert sent[0].references == "<earlier@example.com> <message@example.com>"
+    assert queued[0].to_address == "replies@example.com"
+    assert queued[0].subject == "Re: Please review"
+    assert queued[0].text_body.startswith("Hi Contract Sender,")
+    assert "https://samvid-ai.vercel.app/contracts/contract-1" in queued[0].text_body
+    assert queued[0].html_body is not None
+    assert "Open contract in Samvid" in queued[0].html_body
+    assert "Sent via Samvid" in queued[0].html_body
+    assert queued[0].in_reply_to == "<message@example.com>"
+    assert queued[0].references == "<earlier@example.com> <message@example.com>"
+    assert queued[0].idempotency_key == "review:job-1"
 
 
-def _job(*, attempt: int = 1) -> ContractReviewJob:
+def _job(*, attempt: int = 1, processing_run_id: str | None = None) -> ContractReviewJob:
     return ContractReviewJob(
         job_id="job-1",
         contract_id="contract-1",
@@ -123,6 +147,7 @@ def _job(*, attempt: int = 1) -> ContractReviewJob:
         email_thread_id="thread-1",
         requested_by="reviewer@example.com",
         attempt=attempt,
+        processing_run_id=processing_run_id,
     )
 
 
@@ -143,6 +168,19 @@ class _FakeQueue:
         return delivery
 
 
+class _ConsumingQueue(_FakeQueue):
+    def __init__(self, delivery) -> None:
+        super().__init__(delivery)
+        self.consume_count = 0
+
+    def consume(self, on_delivery, *, stop_requested, reconnect_delay_seconds: float) -> None:
+        self.consume_count += 1
+        assert reconnect_delay_seconds == 1.0
+        delivery, self.delivery = self.delivery, None
+        assert delivery is not None
+        on_delivery(delivery)
+
+
 class _FakeDelivery:
     def __init__(self, job: ContractReviewJob) -> None:
         self.job = job
@@ -159,10 +197,17 @@ class _FakeDelivery:
 class _FakeProcessingService:
     def __init__(self, *, error: Exception | None = None) -> None:
         self.error = error
-        self.failed: list[tuple[str, str, str]] = []
+        self.failed: list[tuple[str, str, str, str | None]] = []
         self.closed = False
 
-    def review_stored_contract(self, *, contract_id: str, contract_version_id: str, workspace_id: str):
+    def review_stored_contract(
+        self,
+        *,
+        contract_id: str,
+        contract_version_id: str,
+        workspace_id: str,
+        processing_run_id: str | None = None,
+    ):
         if self.error:
             raise self.error
         return ContractProcessingResult(
@@ -172,8 +217,22 @@ class _FakeProcessingService:
             message="Contract review is ready.",
         )
 
-    def mark_analysis_failed(self, *, contract_id: str, workspace_id: str, error: str) -> None:
-        self.failed.append((contract_id, workspace_id, error))
+    def mark_analysis_failed(
+        self,
+        *,
+        contract_id: str,
+        workspace_id: str,
+        error: str,
+        processing_run_id: str | None = None,
+    ) -> None:
+        self.failed.append((contract_id, workspace_id, error, processing_run_id))
 
     def close(self) -> None:
         self.closed = True
+
+
+class _ServiceWithConnection:
+    class _Repository:
+        connection = object()
+
+    repository = _Repository()

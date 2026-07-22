@@ -78,6 +78,7 @@ def test_production_settings_accept_neon_auth_without_basic_password(tmp_path) -
 
 def test_auto_initialize_database_can_be_disabled_from_env(monkeypatch) -> None:
     monkeypatch.setenv("AUTO_INITIALIZE_DATABASE", "false")
+    monkeypatch.setenv("RATE_LIMIT_MODE", "observe")
 
     settings = Settings.from_env()
 

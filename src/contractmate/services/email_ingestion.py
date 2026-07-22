@@ -9,6 +9,8 @@ from pydantic import BaseModel
 from contractmate.email.interface import EmailSender
 from contractmate.email.messages import InboundEmailMessage, OutboundEmailMessage
 from contractmate.email.rendering import render_review_email_html, render_review_email_text
+from contractmate.email.rendering import render_receipt_email_html, render_receipt_email_text
+from contractmate.db.repositories.outbound_email_outbox import OutboundEmailIntent, OutboundEmailOutboxRepository
 from contractmate.services.contract_processing import ContractProcessingResult, ContractProcessingService
 from contractmate.settings import Settings
 from contractmate.workers.queue import ContractQueue, RabbitMQContractQueue
@@ -29,11 +31,13 @@ class EmailIngestionService:
         processing_service: ContractProcessingService,
         sender: EmailSender,
         queue: ContractQueue | None = None,
+        email_outbox: OutboundEmailOutboxRepository | None = None,
     ) -> None:
         self.settings = settings
         self.processing_service = processing_service
         self.sender = sender
         self.queue = queue
+        self.email_outbox = email_outbox
 
     @classmethod
     def local(cls, settings: Settings) -> "EmailIngestionService":
@@ -42,11 +46,13 @@ class EmailIngestionService:
             if settings.contract_processing_mode == "rabbitmq"
             else None
         )
+        processing_service = ContractProcessingService.local(settings)
         return cls(
             settings=settings,
-            processing_service=ContractProcessingService.local(settings),
+            processing_service=processing_service,
             sender=EmailSender(settings),
             queue=queue,
+            email_outbox=OutboundEmailOutboxRepository(processing_service.repository.connection),
         )
 
     def process_inbound_email(
@@ -58,6 +64,8 @@ class EmailIngestionService:
     ) -> EmailIngestionResult:
         processed: list[ContractProcessingResult] = []
         ignored: list[str] = []
+        if send_response and self.queue is not None and message.attachments and self.email_outbox is not None:
+            self._queue_receipt(message, workspace_id=workspace_id or self.settings.email_workspace_id)
         for attachment in message.attachments:
             attachment_path = self._materialize_attachment(message, attachment.filename, attachment.content_base64, attachment.local_path)
             try:
@@ -149,6 +157,33 @@ class EmailIngestionService:
                 html=html_parts[0] if len(results) == 1 and len(html_parts) == 1 else None,
                 in_reply_to=message.original_message_id,
                 references=message.references,
+            )
+        )
+
+    def _queue_receipt(self, message: InboundEmailMessage, *, workspace_id: str) -> None:
+        assert self.email_outbox is not None
+        recipient = message.response_address or message.from_address
+        self.email_outbox.enqueue(
+            OutboundEmailIntent(
+                workspace_id=workspace_id,
+                thread_key=message.email_thread_id,
+                message_type="receipt",
+                to_address=recipient,
+                from_address=self.settings.email_from_address,
+                subject=_reply_subject(message.subject),
+                text_body=render_receipt_email_text(
+                    attachment_count=len(message.attachments),
+                    recipient_name=message.from_name,
+                    recipient_address=recipient,
+                ),
+                html_body=render_receipt_email_html(
+                    attachment_count=len(message.attachments),
+                    recipient_name=message.from_name,
+                    recipient_address=recipient,
+                ),
+                in_reply_to=message.original_message_id,
+                references=message.references,
+                idempotency_key=f"receipt:{message.message_id}",
             )
         )
 

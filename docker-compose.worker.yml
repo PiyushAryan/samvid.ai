@@ -6,8 +6,8 @@ services:
     init: true
     env_file:
       - ${WORKER_ENV_FILE:-.env.worker}
-    mem_limit: 1536m
-    cpus: 1.5
+    mem_limit: 1024m
+    cpus: 1.25
     stop_grace_period: 5m
     tmpfs:
       - /tmp:size=384m,mode=1777
@@ -25,11 +25,30 @@ services:
     command: ["contractmate", "knowledge-worker", "--poll-interval", "1"]
     env_file:
       - ${WORKER_ENV_FILE:-.env.worker}
-    mem_limit: 1536m
-    cpus: 1.5
+    mem_limit: 512m
+    cpus: 0.5
     stop_grace_period: 5m
     tmpfs:
       - /tmp:size=384m,mode=1777
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  delivery-worker:
+    image: ${WORKER_IMAGE:-ghcr.io/piyusharyan/samvid-contract-worker:latest}
+    pull_policy: always
+    restart: unless-stopped
+    init: true
+    command: ["contractmate", "delivery-worker", "--poll-interval", "1"]
+    env_file:
+      - ${WORKER_ENV_FILE:-.env.worker}
+    mem_limit: 256m
+    cpus: 0.25
+    stop_grace_period: 2m
+    tmpfs:
+      - /tmp:size=128m,mode=1777
     logging:
       driver: json-file
       options:

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import logging
+import time
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import uuid4
@@ -19,6 +22,9 @@ KNOWLEDGE_INDEX_RETRY_ROUTING_KEY = "contract.knowledge-index.retry"
 KNOWLEDGE_INDEX_DEAD_ROUTING_KEY = "contract.knowledge-index.dead"
 
 
+logger = logging.getLogger(__name__)
+
+
 @dataclass(frozen=True)
 class ContractReviewJob:
     job_id: str
@@ -33,6 +39,7 @@ class ContractReviewJob:
     in_reply_to: str | None = None
     references: str | None = None
     send_review_email: bool = False
+    processing_run_id: str | None = None
     attempt: int = 1
 
     def to_message(self) -> dict:
@@ -55,6 +62,7 @@ class ContractReviewJob:
                     "original_subject": self.original_subject,
                     "in_reply_to": self.in_reply_to,
                     "references": self.references,
+                    "processing_run_id": self.processing_run_id,
                 }.items()
                 if value is not None
             }
@@ -76,6 +84,7 @@ class ContractReviewJob:
             in_reply_to=str(message["in_reply_to"]) if message.get("in_reply_to") else None,
             references=str(message["references"]) if message.get("references") else None,
             send_review_email=bool(message.get("send_review_email", False)),
+            processing_run_id=str(message["processing_run_id"]) if message.get("processing_run_id") else None,
             attempt=int(message.get("attempt", 1)),
         )
 
@@ -169,6 +178,7 @@ class ContractQueue(Protocol):
         in_reply_to: str | None = None,
         references: str | None = None,
         send_review_email: bool = False,
+        processing_run_id: str | None = None,
     ) -> ContractReviewJob:
         ...
 
@@ -191,6 +201,7 @@ class InMemoryContractQueue:
         in_reply_to: str | None = None,
         references: str | None = None,
         send_review_email: bool = False,
+        processing_run_id: str | None = None,
     ) -> ContractReviewJob:
         job = ContractReviewJob(
             job_id=str(uuid4()),
@@ -205,6 +216,7 @@ class InMemoryContractQueue:
             in_reply_to=in_reply_to,
             references=references,
             send_review_email=send_review_email,
+            processing_run_id=processing_run_id,
         )
         self._jobs.append(job)
         return job
@@ -227,6 +239,8 @@ class RabbitMQContractQueue:
         self.rabbitmq_url = rabbitmq_url
         self.topology = topology
         self.heartbeat_seconds = heartbeat_seconds
+        self._consumer_connection = None
+        self._consumer_channel = None
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "RabbitMQContractQueue":
@@ -263,6 +277,7 @@ class RabbitMQContractQueue:
         in_reply_to: str | None = None,
         references: str | None = None,
         send_review_email: bool = False,
+        processing_run_id: str | None = None,
     ) -> ContractReviewJob:
         job = ContractReviewJob(
             job_id=str(uuid4()),
@@ -277,6 +292,7 @@ class RabbitMQContractQueue:
             in_reply_to=in_reply_to,
             references=references,
             send_review_email=send_review_email,
+            processing_run_id=processing_run_id,
         )
         self.publish(job, routing_key=self.topology.review_routing_key)
         return job
@@ -287,22 +303,19 @@ class RabbitMQContractQueue:
             channel = connection.channel()
             self._declare_topology(channel)
             channel.confirm_delivery()
-            self._publish_on_channel(channel, job, routing_key=routing_key)
+            if self._publish_on_channel(channel, job, routing_key=routing_key) is False:
+                raise RuntimeError("RabbitMQ did not confirm contract review job publication")
         finally:
             connection.close()
 
     def receive(self, *, prefetch_count: int = 1) -> "RabbitMQDelivery | None":
-        connection = self._connection()
+        connection, channel = self._ensure_consumer(prefetch_count=prefetch_count)
         try:
-            channel = connection.channel()
-            self._declare_topology(channel)
-            channel.basic_qos(prefetch_count=prefetch_count)
             method_frame, _, body = channel.basic_get(
                 queue=self.topology.review_queue,
                 auto_ack=False,
             )
             if method_frame is None:
-                connection.close()
                 return None
             message = json.loads(body.decode("utf-8"))
             return RabbitMQDelivery(
@@ -311,15 +324,111 @@ class RabbitMQContractQueue:
                 channel=channel,
                 delivery_tag=method_frame.delivery_tag,
                 job=ContractReviewJob.from_message(message),
+                close_connection_on_finish=False,
             )
+        except Exception:
+            self.close_consumer()
+            raise
+
+    def consume(
+        self,
+        on_delivery: Callable[["RabbitMQDelivery"], None],
+        *,
+        stop_requested: Callable[[], bool] = lambda: False,
+        reconnect_delay_seconds: float = 1.0,
+    ) -> None:
+        """Consume review jobs on one long-lived manual-ack channel.
+
+        A worker processes deliveries synchronously.  The broker's prefetch of one
+        therefore keeps at most one unacknowledged review assigned to the worker.
+        Connection failures close the channel and retry with bounded backoff.
+        """
+
+        delay = max(reconnect_delay_seconds, 0.1)
+        while not stop_requested():
+            try:
+                connection, channel = self._ensure_consumer(prefetch_count=1)
+
+                def _callback(_channel, method, _properties, body) -> None:
+                    try:
+                        message = json.loads(body.decode("utf-8"))
+                        delivery = RabbitMQDelivery(
+                            queue=self,
+                            connection=connection,
+                            channel=channel,
+                            delivery_tag=method.delivery_tag,
+                            job=ContractReviewJob.from_message(message),
+                            close_connection_on_finish=False,
+                        )
+                        on_delivery(delivery)
+                    except Exception:
+                        logger.exception("Could not process RabbitMQ review delivery")
+                        try:
+                            channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+                        except Exception:
+                            logger.exception("Could not requeue RabbitMQ review delivery")
+
+                consumer_tag = channel.basic_consume(
+                    queue=self.topology.review_queue,
+                    on_message_callback=_callback,
+                    auto_ack=False,
+                )
+                logger.info("Consuming contract review jobs from %s", self.topology.review_queue)
+                while not stop_requested() and not getattr(connection, "is_closed", False):
+                    connection.process_data_events(time_limit=1)
+                if not getattr(channel, "is_closed", False):
+                    channel.basic_cancel(consumer_tag)
+                delay = max(reconnect_delay_seconds, 0.1)
+            except KeyboardInterrupt:
+                return
+            except Exception:
+                logger.exception("RabbitMQ review consumer disconnected; reconnecting in %.1fs", delay)
+                time.sleep(delay)
+                delay = min(delay * 2, 30.0)
+            finally:
+                self.close_consumer()
+
+    def close_consumer(self) -> None:
+        connection, self._consumer_connection = self._consumer_connection, None
+        self._consumer_channel = None
+        if connection is not None and not getattr(connection, "is_closed", False):
+            connection.close()
+
+    def _ensure_consumer(self, *, prefetch_count: int) -> tuple[object, object]:
+        connection = self._consumer_connection
+        channel = self._consumer_channel
+        if (
+            connection is not None
+            and channel is not None
+            and not getattr(connection, "is_closed", False)
+            and not getattr(channel, "is_closed", False)
+        ):
+            return connection, channel
+
+        self.close_consumer()
+        connection = self._connection(heartbeat_seconds=0)
+        try:
+            channel = connection.channel()
+            self._declare_topology(channel)
+            channel.basic_qos(prefetch_count=prefetch_count)
+            channel.confirm_delivery()
+            setattr(channel, "_contractmate_confirms_enabled", True)
         except Exception:
             connection.close()
             raise
+        self._consumer_connection = connection
+        self._consumer_channel = channel
+        return connection, channel
 
-    def _connection(self):
+    def _connection(self, *, heartbeat_seconds: int | None = None):
         pika = self._pika()
         parameters = pika.URLParameters(self.rabbitmq_url)
-        parameters.heartbeat = self.heartbeat_seconds
+        # BlockingConnection callbacks run on pika's I/O thread. A review can
+        # synchronously wait for OCR or an LLM longer than the configured AMQP
+        # heartbeat, and calling process_data_events from another thread is not
+        # safe. Consumer connections therefore disable AMQP heartbeats; TCP
+        # failures still raise and the consumer reconnect loop handles them.
+        parameters.heartbeat = self.heartbeat_seconds if heartbeat_seconds is None else heartbeat_seconds
         parameters.blocked_connection_timeout = 30
         return pika.BlockingConnection(parameters)
 
@@ -354,7 +463,7 @@ class RabbitMQContractQueue:
 
     def _publish_on_channel(self, channel, job: ContractReviewJob, *, routing_key: str) -> None:
         pika = self._pika()
-        channel.basic_publish(
+        return channel.basic_publish(
             exchange=self.topology.exchange,
             routing_key=routing_key,
             body=json.dumps(job.to_message()).encode("utf-8"),
@@ -365,6 +474,14 @@ class RabbitMQContractQueue:
             ),
             mandatory=True,
         )
+
+    def _publish_confirmed_on_channel(self, channel, job: ContractReviewJob, *, routing_key: str) -> None:
+        if not getattr(channel, "_contractmate_confirms_enabled", False):
+            channel.confirm_delivery()
+            setattr(channel, "_contractmate_confirms_enabled", True)
+        published = self._publish_on_channel(channel, job, routing_key=routing_key)
+        if published is False:
+            raise RuntimeError("RabbitMQ did not confirm republished contract review job")
 
     def _pika(self):
         try:
@@ -381,12 +498,13 @@ class RabbitMQDelivery:
     channel: object
     delivery_tag: int
     job: ContractReviewJob
+    close_connection_on_finish: bool = True
 
     def ack(self) -> None:
         try:
             self.channel.basic_ack(delivery_tag=self.delivery_tag)
         finally:
-            self.connection.close()
+            self._close_connection_if_needed()
 
     def retry(self) -> None:
         if self.job.attempt >= self.queue.topology.max_attempts:
@@ -405,27 +523,32 @@ class RabbitMQDelivery:
             in_reply_to=self.job.in_reply_to,
             references=self.job.references,
             send_review_email=self.job.send_review_email,
+            processing_run_id=self.job.processing_run_id,
             attempt=self.job.attempt + 1,
         )
         try:
-            self.queue._publish_on_channel(
+            self.queue._publish_confirmed_on_channel(
                 self.channel,
                 retry_job,
                 routing_key=self.queue.topology.retry_routing_key,
             )
             self.channel.basic_ack(delivery_tag=self.delivery_tag)
         finally:
-            self.connection.close()
+            self._close_connection_if_needed()
 
     def dead_letter(self) -> None:
         try:
-            self.queue._publish_on_channel(
+            self.queue._publish_confirmed_on_channel(
                 self.channel,
                 self.job,
                 routing_key=self.queue.topology.dead_routing_key,
             )
             self.channel.basic_ack(delivery_tag=self.delivery_tag)
         finally:
+            self._close_connection_if_needed()
+
+    def _close_connection_if_needed(self) -> None:
+        if self.close_connection_on_finish:
             self.connection.close()
 
 
@@ -436,6 +559,8 @@ class RabbitMQKnowledgeQueue:
         self.rabbitmq_url = rabbitmq_url
         self.topology = topology
         self.heartbeat_seconds = heartbeat_seconds
+        self._consumer_connection = None
+        self._consumer_channel = None
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "RabbitMQKnowledgeQueue":
@@ -474,19 +599,16 @@ class RabbitMQKnowledgeQueue:
             channel = connection.channel()
             self._declare_topology(channel)
             channel.confirm_delivery()
-            self._publish_on_channel(channel, job, routing_key=routing_key)
+            if self._publish_on_channel(channel, job, routing_key=routing_key) is False:
+                raise RuntimeError("RabbitMQ did not confirm knowledge index job publication")
         finally:
             connection.close()
 
     def receive(self, *, prefetch_count: int = 1) -> "RabbitMQKnowledgeDelivery | None":
-        connection = self._connection()
+        connection, channel = self._ensure_consumer(prefetch_count=prefetch_count)
         try:
-            channel = connection.channel()
-            self._declare_topology(channel)
-            channel.basic_qos(prefetch_count=prefetch_count)
             method_frame, _, body = channel.basic_get(queue=self.topology.queue, auto_ack=False)
             if method_frame is None:
-                connection.close()
                 return None
             message = json.loads(body.decode("utf-8"))
             return RabbitMQKnowledgeDelivery(
@@ -495,18 +617,102 @@ class RabbitMQKnowledgeQueue:
                 channel=channel,
                 delivery_tag=method_frame.delivery_tag,
                 job=KnowledgeIndexJob.from_message(message),
+                close_connection_on_finish=False,
             )
+        except Exception:
+            self.close_consumer()
+            raise
+
+    def consume(
+        self,
+        on_delivery: Callable[["RabbitMQKnowledgeDelivery"], None],
+        *,
+        stop_requested: Callable[[], bool] = lambda: False,
+        reconnect_delay_seconds: float = 1.0,
+    ) -> None:
+        delay = max(reconnect_delay_seconds, 0.1)
+        while not stop_requested():
+            try:
+                connection, channel = self._ensure_consumer(prefetch_count=1)
+
+                def _callback(_channel, method, _properties, body) -> None:
+                    try:
+                        message = json.loads(body.decode("utf-8"))
+                        delivery = RabbitMQKnowledgeDelivery(
+                            queue=self,
+                            connection=connection,
+                            channel=channel,
+                            delivery_tag=method.delivery_tag,
+                            job=KnowledgeIndexJob.from_message(message),
+                            close_connection_on_finish=False,
+                        )
+                        on_delivery(delivery)
+                    except Exception:
+                        logger.exception("Could not process RabbitMQ knowledge-index delivery")
+                        try:
+                            channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+                        except Exception:
+                            logger.exception("Could not requeue RabbitMQ knowledge-index delivery")
+
+                consumer_tag = channel.basic_consume(
+                    queue=self.topology.queue,
+                    on_message_callback=_callback,
+                    auto_ack=False,
+                )
+                logger.info("Consuming knowledge index jobs from %s", self.topology.queue)
+                while not stop_requested() and not getattr(connection, "is_closed", False):
+                    connection.process_data_events(time_limit=1)
+                if not getattr(channel, "is_closed", False):
+                    channel.basic_cancel(consumer_tag)
+                delay = max(reconnect_delay_seconds, 0.1)
+            except KeyboardInterrupt:
+                return
+            except Exception:
+                logger.exception("RabbitMQ knowledge consumer disconnected; reconnecting in %.1fs", delay)
+                time.sleep(delay)
+                delay = min(delay * 2, 30.0)
+            finally:
+                self.close_consumer()
+
+    def close_consumer(self) -> None:
+        connection, self._consumer_connection = self._consumer_connection, None
+        self._consumer_channel = None
+        if connection is not None and not getattr(connection, "is_closed", False):
+            connection.close()
+
+    def _ensure_consumer(self, *, prefetch_count: int) -> tuple[object, object]:
+        connection = self._consumer_connection
+        channel = self._consumer_channel
+        if (
+            connection is not None
+            and channel is not None
+            and not getattr(connection, "is_closed", False)
+            and not getattr(channel, "is_closed", False)
+        ):
+            return connection, channel
+
+        self.close_consumer()
+        connection = self._connection(heartbeat_seconds=0)
+        try:
+            channel = connection.channel()
+            self._declare_topology(channel)
+            channel.basic_qos(prefetch_count=prefetch_count)
+            channel.confirm_delivery()
+            setattr(channel, "_contractmate_confirms_enabled", True)
         except Exception:
             connection.close()
             raise
+        self._consumer_connection = connection
+        self._consumer_channel = channel
+        return connection, channel
 
-    def _connection(self):
+    def _connection(self, *, heartbeat_seconds: int | None = None):
         try:
             import pika
         except ModuleNotFoundError as exc:
             raise RuntimeError("Install the 'rabbitmq' extra to use RabbitMQ.") from exc
         parameters = pika.URLParameters(self.rabbitmq_url)
-        parameters.heartbeat = self.heartbeat_seconds
+        parameters.heartbeat = self.heartbeat_seconds if heartbeat_seconds is None else heartbeat_seconds
         parameters.blocked_connection_timeout = 30
         return pika.BlockingConnection(parameters)
 
@@ -531,12 +737,12 @@ class RabbitMQKnowledgeQueue:
         channel.queue_declare(queue=self.topology.dlq, durable=True)
         channel.queue_bind(queue=self.topology.dlq, exchange=self.topology.exchange, routing_key=self.topology.dead_routing_key)
 
-    def _publish_on_channel(self, channel, job: KnowledgeIndexJob, *, routing_key: str) -> None:
+    def _publish_on_channel(self, channel, job: KnowledgeIndexJob, *, routing_key: str):
         try:
             import pika
         except ModuleNotFoundError as exc:
             raise RuntimeError("Install the 'rabbitmq' extra to use RabbitMQ.") from exc
-        channel.basic_publish(
+        return channel.basic_publish(
             exchange=self.topology.exchange,
             routing_key=routing_key,
             body=json.dumps(job.to_message()).encode("utf-8"),
@@ -548,6 +754,14 @@ class RabbitMQKnowledgeQueue:
             mandatory=True,
         )
 
+    def _publish_confirmed_on_channel(self, channel, job: KnowledgeIndexJob, *, routing_key: str) -> None:
+        if not getattr(channel, "_contractmate_confirms_enabled", False):
+            channel.confirm_delivery()
+            setattr(channel, "_contractmate_confirms_enabled", True)
+        published = self._publish_on_channel(channel, job, routing_key=routing_key)
+        if published is False:
+            raise RuntimeError("RabbitMQ did not confirm republished knowledge index job")
+
 
 @dataclass
 class RabbitMQKnowledgeDelivery:
@@ -556,12 +770,13 @@ class RabbitMQKnowledgeDelivery:
     channel: object
     delivery_tag: int
     job: KnowledgeIndexJob
+    close_connection_on_finish: bool = True
 
     def ack(self) -> None:
         try:
             self.channel.basic_ack(delivery_tag=self.delivery_tag)
         finally:
-            self.connection.close()
+            self._close_connection_if_needed()
 
     def retry(self) -> None:
         if self.job.attempt >= self.queue.topology.max_attempts:
@@ -575,14 +790,26 @@ class RabbitMQKnowledgeDelivery:
             attempt=self.job.attempt + 1,
         )
         try:
-            self.queue._publish_on_channel(self.channel, retry_job, routing_key=self.queue.topology.retry_routing_key)
+            self.queue._publish_confirmed_on_channel(
+                self.channel,
+                retry_job,
+                routing_key=self.queue.topology.retry_routing_key,
+            )
             self.channel.basic_ack(delivery_tag=self.delivery_tag)
         finally:
-            self.connection.close()
+            self._close_connection_if_needed()
 
     def dead_letter(self) -> None:
         try:
-            self.queue._publish_on_channel(self.channel, self.job, routing_key=self.queue.topology.dead_routing_key)
+            self.queue._publish_confirmed_on_channel(
+                self.channel,
+                self.job,
+                routing_key=self.queue.topology.dead_routing_key,
+            )
             self.channel.basic_ack(delivery_tag=self.delivery_tag)
         finally:
+            self._close_connection_if_needed()
+
+    def _close_connection_if_needed(self) -> None:
+        if self.close_connection_on_finish:
             self.connection.close()

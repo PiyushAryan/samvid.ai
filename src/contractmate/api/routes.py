@@ -11,15 +11,17 @@ from contractmate.db.repositories.contracts import ContractRepository
 from contractmate.db.repositories.chat import ChatMessage as PersistedChatMessage
 from contractmate.db.repositories.chat import ChatRepository, ChatSession
 from contractmate.db.repositories.knowledge import KnowledgeRepository
+from contractmate.db.repositories.processing_runs import ProcessingRunRepository
 from contractmate.db.repositories.signing import SigningConflict, SigningError, SigningNotFound, SigningRepository
 from contractmate.db.repositories.user_accounts import UserAccountRepository
 from contractmate.db.session import connect
-from contractmate.schemas.contracts import ContractBlobUpload, ContractReview
+from contractmate.schemas.contracts import BlobUploadAuthorization, ContractBlobUpload, ContractReview
 from contractmate.schemas.chat import ChatMessageCreate, ChatSessionCreate
 from contractmate.schemas.signing import SignerCreate, SignerStatusEventCreate, SigningRequestCreate, SigningRequestStatus
 from contractmate.services.audit_service import AuditService
 from contractmate.services.contract_processing import ContractProcessingService
 from contractmate.services.review_service import ReviewService
+from contractmate.services.rate_limiting import UpstashRateLimiter, default_rate_limit_policy
 from contractmate.services.account_access import AccountAccessError, AccountAccessService, VerifiedAccountResolution
 from contractmate.services.chat_agent import AgnoChatAgentService, ChatEvidenceSource, OpenAIChatConfig
 from contractmate.services.chat_runtime import DatabaseContractReader, chat_retriever_from_settings
@@ -50,6 +52,7 @@ def create_api_router(settings: Settings):
         if settings.contract_processing_mode == "rabbitmq"
         else None
     )
+    rate_limiter = UpstashRateLimiter(settings)
 
     def db_connection() -> Iterator[Any]:
         connection = connect(settings.database_url)
@@ -97,10 +100,60 @@ def create_api_router(settings: Settings):
             )
         return access.workspace_id
 
+    def read_workspace(
+        response: Response,
+        access: VerifiedAccountResolution = Depends(account_access),
+    ) -> str:
+        require_admission(operation="read", account_id=access.account_id, response=response)
+        return personal_workspace(access)
+
     def super_admin(access: VerifiedAccountResolution = Depends(account_access)) -> VerifiedAccountResolution:
         if access.role != "super_admin":
             raise HTTPException(status_code=403, detail={"code": "super_admin_required", "message": "Super-admin access is required."})
         return access
+
+    def rate_limit_headers(decision) -> dict[str, str]:
+        remaining_values = [
+            value
+            for value in (decision.minute_remaining, decision.hourly_remaining, decision.daily_remaining)
+            if value is not None
+        ]
+        remaining = min(remaining_values) if remaining_values else None
+        headers: dict[str, str] = {}
+        if remaining is not None:
+            headers["RateLimit-Remaining"] = str(remaining)
+        if decision.retry_after_seconds:
+            headers["Retry-After"] = str(decision.retry_after_seconds)
+            headers["RateLimit-Reset"] = str(decision.retry_after_seconds)
+        return headers
+
+    def require_admission(
+        *,
+        operation: str,
+        account_id: str,
+        response: Response | None = None,
+    ) -> dict[str, str]:
+        decision = rate_limiter.consume(default_rate_limit_policy(operation), account_id)
+        headers = rate_limit_headers(decision)
+        if decision.reason == "unavailable" and not decision.allowed:
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "rate_limit_unavailable", "message": "Request admission is temporarily unavailable."},
+                headers=headers,
+            )
+        if not decision.allowed:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "code": "rate_limit_exceeded",
+                    "message": "This operation has reached its current limit.",
+                    "retry_after_seconds": decision.retry_after_seconds,
+                },
+                headers=headers,
+            )
+        if response is not None:
+            response.headers.update(headers)
+        return headers
 
     def chat_session_response(
         session: ChatSession,
@@ -201,7 +254,7 @@ def create_api_router(settings: Settings):
     @router.get("/chats")
     def list_chats(
         access: VerifiedAccountResolution = Depends(account_access),
-        workspace: str = Depends(personal_workspace),
+        workspace: str = Depends(read_workspace),
         connection: Any = Depends(db_connection),
     ) -> list[dict[str, Any]]:
         repository = ChatRepository(connection)
@@ -211,10 +264,12 @@ def create_api_router(settings: Settings):
     @router.post("/chats")
     def create_chat(
         payload: ChatSessionCreate,
+        response: Response,
         access: VerifiedAccountResolution = Depends(account_access),
         workspace: str = Depends(personal_workspace),
         connection: Any = Depends(db_connection),
     ) -> dict[str, Any]:
+        require_admission(operation="mutation", account_id=access.account_id, response=response)
         try:
             repository = ChatRepository(connection)
             session = repository.create_session(
@@ -231,7 +286,7 @@ def create_api_router(settings: Settings):
     def get_chat(
         session_id: str,
         access: VerifiedAccountResolution = Depends(account_access),
-        workspace: str = Depends(personal_workspace),
+        workspace: str = Depends(read_workspace),
         connection: Any = Depends(db_connection),
     ) -> dict[str, Any]:
         repository = ChatRepository(connection)
@@ -248,6 +303,7 @@ def create_api_router(settings: Settings):
         workspace: str = Depends(personal_workspace),
         connection: Any = Depends(db_connection),
     ):
+        admission_headers = require_admission(operation="chat", account_id=access.account_id)
         content = payload.content.strip()
         if len(content) > settings.chat_max_input_chars:
             raise HTTPException(
@@ -319,15 +375,50 @@ def create_api_router(settings: Settings):
         return StreamingResponse(
             event_stream(),
             media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", **admission_headers},
         )
+
+    @router.post("/uploads/authorize")
+    def authorize_blob_upload(
+        payload: BlobUploadAuthorization,
+        response: Response,
+        access: VerifiedAccountResolution = Depends(account_access),
+        workspace: str = Depends(personal_workspace),
+    ) -> dict[str, Any]:
+        expected_prefix = f"contracts/{workspace}/"
+        if not payload.pathname.startswith(expected_prefix):
+            raise HTTPException(status_code=404, detail={"code": "blob_not_found", "message": "Upload path was not found."})
+        decision = rate_limiter.reserve_upload(
+            policy=default_rate_limit_policy("review"),
+            identifier=access.account_id,
+            pathname=payload.pathname,
+        )
+        headers = rate_limit_headers(decision)
+        if decision.reason == "unavailable" and not decision.allowed:
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "rate_limit_unavailable", "message": "Upload admission is temporarily unavailable."},
+                headers=headers,
+            )
+        if not decision.allowed:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "code": "rate_limit_exceeded",
+                    "message": "Contract review limit reached.",
+                    "retry_after_seconds": decision.retry_after_seconds,
+                },
+                headers=headers,
+            )
+        response.headers.update(headers)
+        return {"status": "authorized", "rate_limit": {"remaining": decision.hourly_remaining, "retry_after_seconds": decision.retry_after_seconds}}
 
     @router.get("/contracts")
     def list_contracts(
         search: str | None = Query(default=None),
         review_status: str | None = Query(default=None),
         signing_status: SigningRequestStatus | None = Query(default=None),
-        workspace: str = Depends(personal_workspace),
+        workspace: str = Depends(read_workspace),
         connection: Any = Depends(db_connection),
     ) -> list[dict[str, Any]]:
         signing = SigningRepository(connection)
@@ -341,10 +432,17 @@ def create_api_router(settings: Settings):
     @router.post("/contracts")
     def upload_contract(
         request: Request,
+        response: Response,
         file: UploadFile = File(...),
+        access: VerifiedAccountResolution = Depends(account_access),
         workspace: str = Depends(personal_workspace),
         connection: Any = Depends(db_connection),
     ) -> dict[str, Any]:
+        admission_headers = require_admission(
+            operation="review",
+            account_id=access.account_id,
+            response=response,
+        )
         suffix = Path(file.filename or "contract").suffix
         with NamedTemporaryFile(prefix="samvid-upload-", suffix=suffix, delete=False) as tmp:
             temp_path = Path(tmp.name)
@@ -379,7 +477,7 @@ def create_api_router(settings: Settings):
                 else service.review_local_file(**arguments)
             )
             if result.status is WorkflowState.QUEUED:
-                return JSONResponse(status_code=202, content=result.model_dump(mode="json"))
+                return JSONResponse(status_code=202, content=result.model_dump(mode="json"), headers=admission_headers)
             return result.model_dump(mode="json")
         finally:
             temp_path.unlink(missing_ok=True)
@@ -388,6 +486,7 @@ def create_api_router(settings: Settings):
     def upload_contract_from_blob(
         request: Request,
         payload: ContractBlobUpload,
+        access: VerifiedAccountResolution = Depends(account_access),
         workspace: str = Depends(personal_workspace),
         connection: Any = Depends(db_connection),
     ) -> dict[str, Any]:
@@ -404,29 +503,64 @@ def create_api_router(settings: Settings):
                 detail={"code": "blob_not_found", "message": "Uploaded document was not found."},
             )
 
-        storage = document_storage_from_settings(settings)
-        try:
-            metadata = storage.stat_contract_file(payload.pathname)
-        except (BlobError, FileNotFoundError) as exc:
+        lease = rate_limiter.acquire_upload_reservation(
+            identifier=access.account_id,
+            pathname=payload.pathname,
+        )
+        lease_headers = (
+            {"Retry-After": str(lease.retry_after_seconds)}
+            if lease.retry_after_seconds
+            else {}
+        )
+        if lease.status == "unavailable" and not lease.allowed:
             raise HTTPException(
-                status_code=404,
-                detail={"code": "blob_not_found", "message": "Uploaded document was not found."},
-            ) from exc
-        if not metadata.object_key.startswith(expected_prefix):
-            raise HTTPException(
-                status_code=404,
-                detail={"code": "blob_not_found", "message": "Uploaded document was not found."},
+                status_code=503,
+                detail={"code": "rate_limit_unavailable", "message": "Upload admission is temporarily unavailable."},
+                headers=lease_headers,
             )
-        if metadata.size_bytes > settings.max_file_size_mb * 1024 * 1024:
+        if lease.status == "busy":
             raise HTTPException(
-                status_code=413,
-                detail={"code": "file_too_large", "message": f"File exceeds {settings.max_file_size_mb} MB limit."},
+                status_code=409,
+                detail={"code": "upload_processing", "message": "This upload is already being processed."},
+                headers=lease_headers,
+            )
+        if lease.status == "consumed":
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "upload_already_processed", "message": "This upload has already been processed."},
+            )
+        if not lease.allowed:
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "upload_authorization_missing", "message": "The upload authorization has expired. Upload the contract again."},
             )
 
-        suffix = Path(payload.original_filename).suffix
-        with NamedTemporaryFile(prefix="samvid-blob-", suffix=suffix, delete=False) as tmp:
-            temp_path = Path(tmp.name)
+        storage = document_storage_from_settings(settings)
+        lease_id = lease.lease_id
+        durable_success = False
+        temp_path: Path | None = None
         try:
+            try:
+                metadata = storage.stat_contract_file(payload.pathname)
+            except (BlobError, FileNotFoundError) as exc:
+                raise HTTPException(
+                    status_code=404,
+                    detail={"code": "blob_not_found", "message": "Uploaded document was not found."},
+                ) from exc
+            if not metadata.object_key.startswith(expected_prefix):
+                raise HTTPException(
+                    status_code=404,
+                    detail={"code": "blob_not_found", "message": "Uploaded document was not found."},
+                )
+            if metadata.size_bytes > settings.max_file_size_mb * 1024 * 1024:
+                raise HTTPException(
+                    status_code=413,
+                    detail={"code": "file_too_large", "message": f"File exceeds {settings.max_file_size_mb} MB limit."},
+                )
+
+            suffix = Path(payload.original_filename).suffix
+            with NamedTemporaryFile(prefix="samvid-blob-", suffix=suffix, delete=False) as tmp:
+                temp_path = Path(tmp.name)
             storage.download_contract_file(metadata.object_key, temp_path)
             service = ContractProcessingService(
                 settings=settings,
@@ -453,16 +587,54 @@ def create_api_router(settings: Settings):
             )
             if not result.contract_id:
                 storage.delete_contract_file(metadata.object_key)
+                if lease_id:
+                    rate_limiter.release_upload_reservation(
+                        identifier=access.account_id,
+                        pathname=payload.pathname,
+                        lease_id=lease_id,
+                    )
+                    lease_id = None
+            else:
+                durable_success = True
+                if lease_id and not rate_limiter.mark_upload_reservation_consumed(
+                    identifier=access.account_id,
+                    pathname=payload.pathname,
+                    lease_id=lease_id,
+                ):
+                    logger.error(
+                        "upload_reservation_finalize_failed",
+                        extra={
+                            "event": "upload_reservation_finalize_failed",
+                            "account_hash": rate_limiter.hash_identifier(access.account_id),
+                            "pathname_hash": rate_limiter.hash_identifier(payload.pathname),
+                        },
+                    )
             if result.status is WorkflowState.QUEUED:
                 return JSONResponse(status_code=202, content=result.model_dump(mode="json"))
             return result.model_dump(mode="json")
+        except Exception:
+            if lease_id and not durable_success and not rate_limiter.release_upload_reservation(
+                identifier=access.account_id,
+                pathname=payload.pathname,
+                lease_id=lease_id,
+            ):
+                logger.warning(
+                    "upload_reservation_release_failed",
+                    extra={
+                        "event": "upload_reservation_release_failed",
+                        "account_hash": rate_limiter.hash_identifier(access.account_id),
+                        "pathname_hash": rate_limiter.hash_identifier(payload.pathname),
+                    },
+                )
+            raise
         finally:
-            temp_path.unlink(missing_ok=True)
+            if temp_path is not None:
+                temp_path.unlink(missing_ok=True)
 
     @router.get("/contracts/{contract_id}")
     def get_contract(
         contract_id: str,
-        workspace: str = Depends(personal_workspace),
+        workspace: str = Depends(read_workspace),
         connection: Any = Depends(db_connection),
     ) -> dict[str, Any]:
         signing = SigningRepository(connection)
@@ -491,7 +663,7 @@ def create_api_router(settings: Settings):
     @router.get("/contracts/{contract_id}/document")
     def get_document(
         contract_id: str,
-        workspace: str = Depends(personal_workspace),
+        workspace: str = Depends(read_workspace),
         connection: Any = Depends(db_connection),
     ):
         row = _get_contract_row(connection, workspace_id=workspace, contract_id=contract_id)
@@ -517,9 +689,12 @@ def create_api_router(settings: Settings):
         request: Request,
         contract_id: str,
         payload: SigningRequestCreate,
+        response: Response,
+        access: VerifiedAccountResolution = Depends(account_access),
         workspace: str = Depends(personal_workspace),
         connection: Any = Depends(db_connection),
     ) -> dict[str, Any]:
+        require_admission(operation="mutation", account_id=access.account_id, response=response)
         try:
             signing = SigningRepository(connection)
             request = signing.create_request(
@@ -536,7 +711,7 @@ def create_api_router(settings: Settings):
     @router.get("/contracts/{contract_id}/signing-requests")
     def list_contract_signing_requests(
         contract_id: str,
-        workspace: str = Depends(personal_workspace),
+        workspace: str = Depends(read_workspace),
         connection: Any = Depends(db_connection),
     ) -> list[dict[str, Any]]:
         try:
@@ -549,7 +724,7 @@ def create_api_router(settings: Settings):
     @router.get("/signing-requests")
     def list_signing_requests(
         status: SigningRequestStatus | None = Query(default=None),
-        workspace: str = Depends(personal_workspace),
+        workspace: str = Depends(read_workspace),
         connection: Any = Depends(db_connection),
     ) -> list[dict[str, Any]]:
         signing = SigningRepository(connection)
@@ -561,9 +736,12 @@ def create_api_router(settings: Settings):
         request: Request,
         request_id: str,
         payload: SignerCreate,
+        response: Response,
+        access: VerifiedAccountResolution = Depends(account_access),
         workspace: str = Depends(personal_workspace),
         connection: Any = Depends(db_connection),
     ) -> dict[str, Any]:
+        require_admission(operation="mutation", account_id=access.account_id, response=response)
         try:
             signing = SigningRepository(connection)
             request = signing.add_signer(
@@ -582,9 +760,12 @@ def create_api_router(settings: Settings):
         request: Request,
         signer_id: str,
         payload: SignerStatusEventCreate,
+        response: Response,
+        access: VerifiedAccountResolution = Depends(account_access),
         workspace: str = Depends(personal_workspace),
         connection: Any = Depends(db_connection),
     ) -> dict[str, Any]:
+        require_admission(operation="mutation", account_id=access.account_id, response=response)
         try:
             signing = SigningRepository(connection)
             request = signing.append_event(
@@ -795,6 +976,32 @@ def create_api_router(settings: Settings):
             "page_size": page_size,
         }
 
+    @router.get("/admin/operations/latency")
+    def admin_processing_latency(
+        sample_size: int = Query(default=500, ge=1, le=2000),
+        _admin: VerifiedAccountResolution = Depends(super_admin),
+        connection: Any = Depends(db_connection),
+    ) -> dict[str, Any]:
+        """Read-only recent processing latency and outcome telemetry."""
+        runs = ProcessingRunRepository(connection).list_recent(limit=sample_size)
+        completed_ms = [
+            max(0, int((run.completed_at - run.queued_at).total_seconds() * 1000))
+            for run in runs
+            if run.queued_at is not None and run.completed_at is not None
+        ]
+        outcomes: dict[str, int] = {}
+        for run in runs:
+            outcomes[run.status] = outcomes.get(run.status, 0) + 1
+        return {
+            "sample_size": len(runs),
+            "outcomes": outcomes,
+            "end_to_end_ms": {
+                "p50": _percentile(completed_ms, 50),
+                "p95": _percentile(completed_ms, 95),
+                "max": max(completed_ms) if completed_ms else None,
+            },
+        }
+
     return router
 
 
@@ -805,6 +1012,14 @@ def _copy_upload_with_limit(source: BinaryIO, destination: BinaryIO, *, max_byte
         if copied > max_bytes:
             raise ValueError("upload exceeds configured size limit")
         destination.write(chunk)
+
+
+def _percentile(values: list[int], percentile: int) -> int | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    index = max(0, min(len(ordered) - 1, round((percentile / 100) * (len(ordered) - 1))))
+    return ordered[index]
 
 
 def _list_contract_rows(connection: Any, *, workspace_id: str, search: str | None, review_status: str | None) -> list[Any]:
