@@ -184,7 +184,6 @@ p {
 
 .app-shell[data-theme="dark"] .workspace-main::before {
   background-image: url("/blr-dark.webp");
-  opacity: 0.30;
 }
 
 .sidebar {
