@@ -10,6 +10,7 @@ import { defaultRouteForAccount, safeInternalPath } from "./auth";
 
 const LandingPage = lazy(() => import("./Home").then((module) => ({ default: module.LandingPage })));
 const ChangelogPage = lazy(() => import("./Changelog").then((module) => ({ default: module.ChangelogPage })));
+const BookDemoPage = lazy(() => import("./BookDemo").then((module) => ({ default: module.BookDemoPage })));
 const AppShell = lazy(() => import("./App").then((module) => ({ default: module.AppShell })));
 const ContractsPage = lazy(() => import("./App").then((module) => ({ default: module.ContractsPage })));
 const ChatsPage = lazy(() => import("./App").then((module) => ({ default: module.ChatsPage })));
@@ -70,6 +71,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               <Routes>
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/changelog" element={<ChangelogPage />} />
+                <Route path="/book-demo" element={<BookDemoPage />} />
                 <Route path="/auth" element={<AuthRoute />} />
                 <Route element={<RequireUser><AppShell /></RequireUser>}>
                   <Route path="/contracts" element={<ContractsPage />} />

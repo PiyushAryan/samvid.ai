@@ -175,7 +175,7 @@ export function LandingPage() {
             <Link to="/chats" className="btn-lp-secondary">
               Sign up
             </Link>
-            <a href="#workflow" className="btn-lp-primary">Book a Demo</a>
+            <Link to="/book-demo" className="btn-lp-primary">Book a Demo</Link>
           </motion.div>
         </header>
 

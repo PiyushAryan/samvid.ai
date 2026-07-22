@@ -63,7 +63,7 @@ export function ChangelogPage() {
 
           <div className="changelog-navbar-actions">
             <Link to="/chats" className="btn-lp-secondary">Sign up</Link>
-            <Link to="/chats" className="btn-lp-primary">Book a Demo</Link>
+            <Link to="/book-demo" className="btn-lp-primary">Book a Demo</Link>
           </div>
         </div>
       </header>
