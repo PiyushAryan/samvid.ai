@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, expect, test, vi } from "vitest";
 
@@ -97,4 +97,37 @@ test("renders the workspace only after backend authorization succeeds", async ()
   renderProtectedRoute();
 
   expect(await screen.findByText("Private workspace")).toBeInTheDocument();
+});
+
+test("keeps the workspace visible during a background session refresh", async () => {
+  authMocks.getAuthSession.mockResolvedValueOnce({
+    user: { id: "u1", email: "asha@example.com", name: "Asha", emailVerified: true },
+    session: { token: "token" }
+  });
+  authMocks.checkWorkspaceAccess.mockResolvedValueOnce({
+    status: "allowed",
+    profile: {
+      user: { subject: "u1", email: "asha@example.com", name: "Asha", email_verified: true },
+      account: { id: "account-1", role: "user", state: "active", workspace_id: "user-1" }
+    }
+  });
+
+  renderProtectedRoute();
+
+  expect(await screen.findByText("Private workspace")).toBeInTheDocument();
+
+  let resolveRefresh!: (value: unknown) => void;
+  authMocks.getAuthSession.mockReturnValueOnce(new Promise((resolve) => {
+    resolveRefresh = resolve;
+  }));
+  document.dispatchEvent(new Event("visibilitychange"));
+
+  await waitFor(() => expect(authMocks.getAuthSession).toHaveBeenCalledTimes(2));
+  expect(screen.getByText("Private workspace")).toBeInTheDocument();
+  expect(screen.queryByRole("main", { name: "Loading your workspace" })).not.toBeInTheDocument();
+
+  resolveRefresh({
+    user: { id: "u1", email: "asha@example.com", name: "Asha", emailVerified: true },
+    session: { token: "token" }
+  });
 });

@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
 import {
@@ -53,6 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [accessStatus, setAccessStatus] = useState<WorkspaceAccessStatus>("idle");
   const [accessMessage, setAccessMessage] = useState("");
+  const accessReadyRef = useRef(false);
+  const accessUserIdRef = useRef<string | null>(null);
 
   const refreshSession = useCallback(async () => {
     if (!isNeonAuthConfigured) {
@@ -60,6 +62,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccount(null);
       setCurrentAccount(null);
       setAccessStatus("idle");
+      accessReadyRef.current = false;
+      accessUserIdRef.current = null;
       setIsLoading(false);
       return;
     }
@@ -67,44 +71,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const session = await getAuthSession();
       const sessionUser = (session?.user as SamvidAuthUser | undefined) ?? null;
+      const canRefreshInBackground = Boolean(
+        sessionUser &&
+        accessReadyRef.current &&
+        accessUserIdRef.current === sessionUser.id
+      );
       setUser(sessionUser);
-      setAccount(null);
-      setCurrentAccount(null);
       setAccessMessage("");
 
       if (!sessionUser) {
+        setAccount(null);
+        setCurrentAccount(null);
         setAccessStatus("idle");
+        accessReadyRef.current = false;
+        accessUserIdRef.current = null;
         return;
       }
       if (!sessionUser.emailVerified) {
+        setAccount(null);
+        setCurrentAccount(null);
         setAccessStatus("unverified");
+        accessReadyRef.current = false;
+        accessUserIdRef.current = null;
         return;
       }
 
       const token = session?.session?.token;
       if (!token) {
         setUser(null);
+        setAccount(null);
+        setCurrentAccount(null);
         setAccessStatus("idle");
+        accessReadyRef.current = false;
+        accessUserIdRef.current = null;
         return;
       }
 
-      setAccessStatus("checking");
+      if (!canRefreshInBackground) {
+        setAccount(null);
+        setCurrentAccount(null);
+        setAccessStatus("checking");
+      }
       const access = await checkWorkspaceAccess(token);
       setAccessMessage("message" in access ? access.message : "");
       if (access.status === "unauthenticated") {
         setUser(null);
+        setAccount(null);
+        setCurrentAccount(null);
         setAccessStatus("idle");
+        accessReadyRef.current = false;
+        accessUserIdRef.current = null;
       } else if (access.status === "allowed") {
         setAccount(access.profile.account);
         setAccessStatus("allowed");
+        accessReadyRef.current = true;
+        accessUserIdRef.current = sessionUser.id;
       } else {
         setAccessStatus(access.status);
+        if (access.status === "denied" || access.status === "error") {
+          accessReadyRef.current = false;
+        }
       }
     } catch {
       setUser(null);
       setAccount(null);
       setCurrentAccount(null);
       setAccessStatus("idle");
+      accessReadyRef.current = false;
+      accessUserIdRef.current = null;
     } finally {
       setIsLoading(false);
     }
