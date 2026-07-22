@@ -268,7 +268,7 @@ ALLOWED_HOSTS=api.samvid.online,*.vercel.app
 AUTH_MODE=neon
 NEON_AUTH_URL=https://<neon-auth-host>/neondb/auth
 NEON_AUTH_REQUIRE_EMAIL_VERIFIED=true
-SAMVID_SUPER_ADMIN_EMAIL=admin@samvid.online
+SAMVID_SUPER_ADMIN_EMAIL=<verified super-admin email>
 
 DATABASE_URL=<pooled Neon PostgreSQL URL>
 DATABASE_URL_UNPOOLED=<direct Neon PostgreSQL URL>
@@ -308,7 +308,7 @@ before deploying the API:
 
 ```bash
 DATABASE_URL_UNPOOLED='<direct Neon PostgreSQL URL>' \
-SAMVID_SUPER_ADMIN_EMAIL='admin@samvid.online' \
+SAMVID_SUPER_ADMIN_EMAIL='<verified super-admin email>' \
 uv run contractmate migrate
 ```
 
