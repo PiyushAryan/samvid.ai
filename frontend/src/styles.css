@@ -1871,7 +1871,7 @@ textarea.field-control {
   min-height: calc(100vh - 19px);
   flex-direction: column;
   overflow: hidden;
-  background: color-mix(in srgb, var(--app-bg) 50%, transparent);
+  background: var(--app-bg);
 }
 
 .ai-chat-main {
@@ -2345,7 +2345,7 @@ textarea.field-control {
 }
 
 .app-shell[data-theme="dark"] .ai-chat-page {
-  background: color-mix(in srgb, var(--app-bg) 50%, transparent);
+  background: var(--app-bg);
 }
 
 .app-shell[data-theme="dark"] .ai-chat-composer {
