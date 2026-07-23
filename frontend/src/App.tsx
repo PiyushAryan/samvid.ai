@@ -689,7 +689,6 @@ export function ChatsPage() {
               aria-label="Send message"
             >
               {isSending ? <Loader2 className="spin" size={16} aria-hidden="true" /> : <Undo2 size={16} aria-hidden="true" />}
-              <span>{isSending ? "Thinking" : "Send"}</span>
             </button>
           </div>
           {streamError && <p className="ai-chat-stream-error" role="alert">{streamError}</p>}
