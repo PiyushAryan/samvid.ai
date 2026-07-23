@@ -692,9 +692,6 @@ export function ChatsPage() {
             </button>
           </div>
           {streamError && <p className="ai-chat-stream-error" role="alert">{streamError}</p>}
-          <p className="ai-chat-status" role="status" aria-live="polite">
-            {announcement}
-          </p>
         </form>
 
         {!activeChatId && messages.length === 0 && (
