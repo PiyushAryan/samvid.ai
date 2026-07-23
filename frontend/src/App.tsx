@@ -676,7 +676,7 @@ export function ChatsPage() {
               }
             }}
             placeholder="Ask a question about your contracts..."
-            rows={2}
+            rows={1}
             disabled={isSending || Boolean(activeChatId && sessionQuery.isPending)}
           />
 
