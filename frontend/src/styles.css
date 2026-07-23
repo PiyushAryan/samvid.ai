@@ -2237,6 +2237,7 @@ textarea.field-control {
   height: 34px;
   flex: none;
   cursor: pointer;
+  rotate: 90deg;
   align-items: center;
   justify-content: center;
   gap: 7px;
