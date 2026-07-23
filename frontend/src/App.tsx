@@ -24,7 +24,8 @@ import {
   Trash2,
   Upload,
   UserPlus,
-  X
+  X,
+  Undo2
 } from "lucide-react";
 import { FormEvent, KeyboardEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -687,7 +688,7 @@ export function ChatsPage() {
               disabled={!draft.trim() || isSending || Boolean(activeChatId && sessionQuery.isPending)}
               aria-label="Send message"
             >
-              {isSending ? <Loader2 className="spin" size={16} aria-hidden="true" /> : <Send size={16} aria-hidden="true" />}
+              {isSending ? <Loader2 className="spin" size={16} aria-hidden="true" /> : <Undo2 size={16} aria-hidden="true" />}
               <span>{isSending ? "Thinking" : "Send"}</span>
             </button>
           </div>
