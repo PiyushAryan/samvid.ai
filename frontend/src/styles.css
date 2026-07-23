@@ -2234,11 +2234,11 @@ textarea.field-control {
 .ai-chat-send,
 .ai-chat-send-button {
   display: inline-flex;
-  min-width: 76px;
+  min-width: 34px;
   height: 34px;
   flex: none;
   cursor: pointer;
-  rotate: -90deg;
+  rotate: 90deg;
   align-items: center;
   justify-content: center;
   gap: 7px;
@@ -2246,6 +2246,7 @@ textarea.field-control {
   border: 0;
   border-radius: 8px;
   background: var(--text);
+  transform: scaleX(-1);
   color: var(--surface);
   transition: opacity 150ms ease, transform 150ms ease, background-color 150ms ease;
 }
