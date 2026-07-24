@@ -12,7 +12,8 @@ import {
   Cpu,
   History,
   AlertTriangle,
-  Search
+  Search,
+  X
 } from "lucide-react";
 import "./home.css";
 
@@ -50,6 +51,7 @@ const previewDotTopByStep: Record<PreviewStepId, string> = {
 
 export function LandingPage() {
   const [activePreviewStep, setActivePreviewStep] = useState<PreviewStepId>("intake");
+  const [isSignupNudgeOpen, setIsSignupNudgeOpen] = useState(false);
   const [isPastHero, setIsPastHero] = useState(false);
   const [navShift, setNavShift] = useState(0);
   const [edgeShift, setEdgeShift] = useState(0);
@@ -122,6 +124,12 @@ export function LandingPage() {
 
     return unsubscribe;
   }, [demoScrollProgress, prefersReducedMotion]);
+
+  useEffect(() => {
+    if (!isSignupNudgeOpen) return;
+    const timeout = window.setTimeout(() => setIsSignupNudgeOpen(false), 6000);
+    return () => window.clearTimeout(timeout);
+  }, [isSignupNudgeOpen]);
 
   const activePreviewIndex = previewSteps.findIndex((step) => step.id === activePreviewStep);
   const activePreviewLabel = String(activePreviewIndex + 1).padStart(2, "0");
@@ -406,8 +414,29 @@ export function LandingPage() {
                             </motion.div>
                           </div>
                           <div className="preview-review-actions">
-                            <button type="button" className="secondary"><Sparkles size={14} /> Ask about a clause</button>
+                            <button type="button" className="secondary" onClick={() => setIsSignupNudgeOpen(true)}><Sparkles size={14} /> Ask about a clause</button>
                             <button type="button" className="primary" onClick={() => handlePreviewStepSelect("track")}>Send for signature <ArrowRight size={14} /></button>
+                            <AnimatePresence>
+                              {isSignupNudgeOpen && (
+                                <motion.aside
+                                  className="preview-signup-nudge"
+                                  aria-label="Sign up to use Samvid contract chat"
+                                  initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                                  exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                                  transition={prefersReducedMotion ? { duration: 0 } : { type: "spring", stiffness: 440, damping: 30 }}
+                                >
+                                  <button className="preview-signup-nudge-close" type="button" onClick={() => setIsSignupNudgeOpen(false)} aria-label="Dismiss sign-up prompt">
+                                    <X size={13} />
+                                  </button>
+                                  <strong>Sab yahin dekhoge kya?</strong>
+                                  <p>Sign up and ask Samvid about your own contracts.</p>
+                                  <Link to="/auth?view=sign-up&returnTo=%2Fchats" className="preview-signup-nudge-link">
+                                    Try the full experience <ArrowRight size={13} />
+                                  </Link>
+                                </motion.aside>
+                              )}
+                            </AnimatePresence>
                           </div>
                         </motion.div>
                       )}

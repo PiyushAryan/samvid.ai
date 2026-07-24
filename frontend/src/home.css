@@ -1332,6 +1332,7 @@
 }
 
 .preview-review-actions {
+  position: relative;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
@@ -1361,6 +1362,86 @@
   border-color: #111827;
   background: #111827;
   color: #fff;
+}
+
+.preview-signup-nudge {
+  position: absolute;
+  z-index: 8;
+  right: 0;
+  bottom: calc(100% + 9px);
+  display: grid;
+  width: min(258px, calc(100vw - 56px));
+  gap: 4px;
+  padding: 12px 34px 12px 12px;
+  border: 1px solid rgba(13, 148, 136, 0.28);
+  border-radius: 8px;
+  background: #fbfcf9;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.13), 0 2px 6px rgba(15, 23, 42, 0.06);
+  color: var(--lp-text-primary);
+  text-align: left;
+}
+
+.preview-signup-nudge::after {
+  position: absolute;
+  right: 28px;
+  bottom: -5px;
+  width: 9px;
+  height: 9px;
+  border-right: 1px solid rgba(13, 148, 136, 0.28);
+  border-bottom: 1px solid rgba(13, 148, 136, 0.28);
+  background: #fbfcf9;
+  content: "";
+  transform: rotate(45deg);
+}
+
+.preview-signup-nudge strong {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.preview-signup-nudge p {
+  margin: 0;
+  color: var(--lp-text-secondary);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.preview-signup-nudge-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  margin-top: 4px;
+  color: var(--lp-teal);
+  font-size: 10px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.preview-signup-nudge-link:hover {
+  color: #0f766e;
+}
+
+.preview-signup-nudge-close {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--lp-text-muted);
+}
+
+.preview-signup-nudge-close:hover {
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--lp-text-primary);
 }
 
 .preview-board-progress {
