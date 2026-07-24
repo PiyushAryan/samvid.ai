@@ -123,11 +123,12 @@ def render_review_email_html(
     party_html = ""
     if review.parties:
         items = "".join(
-            f"<li style=\"margin:0 0 6px\"><strong>{escape(party.name)}</strong>"
-            f"{f' &mdash; {escape(party.role)}' if party.role else ''}</li>"
+            '<div style="padding:8px 0;border-top:1px solid #e7ecea;color:#30403c;font-size:13px;line-height:1.45">'
+            f"<strong style=\"color:#14201e\">{escape(party.name)}</strong>"
+            f"{f' <span style=\"color:#6b7673\">&middot; {escape(party.role)}</span>' if party.role else ''}</div>"
             for party in review.parties
         )
-        party_html = _section("Parties", f'<ul style="margin:0;padding-left:20px;color:#34413f">{items}</ul>')
+        party_html = _section("Parties", f'<div style="border-bottom:1px solid #e7ecea">{items}</div>')
 
     terms_html = ""
     if review.key_terms:
@@ -141,7 +142,7 @@ def render_review_email_html(
         terms_html = _section(
             "Key terms",
             f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
-            f'style="border:1px solid #e7ecea;border-radius:6px">{rows}</table>',
+            f'style="border:1px solid #e7ecea;border-radius:6px;border-collapse:separate">{rows}</table>',
         )
 
     risk_sections: list[str] = []
@@ -149,21 +150,20 @@ def render_review_email_html(
         color, background, border = SEVERITY_COLORS[severity]
         for risk in risks_by_severity.get(severity, []):
             risk_sections.append(
-                '<div style="margin:0 0 14px;padding:18px;border:1px solid #dfe5e3;border-radius:6px;background:#ffffff">'
-                f'<span style="display:inline-block;margin-bottom:10px;padding:3px 7px;border:1px solid {border};'
-                f'border-radius:4px;background:{background};color:{color};font-size:11px;font-weight:700;'
-                f'text-transform:uppercase">{escape(severity.value)}</span>'
-                f'<h3 style="margin:0 0 8px;color:#14201e;font-size:16px;line-height:1.4">{escape(risk.title)}</h3>'
-                f'<p style="margin:0 0 10px;color:#43514e;font-size:14px;line-height:1.6">{escape(risk.explanation)}</p>'
-                f'<div style="margin:0 0 10px;padding:11px 13px;border-left:3px solid #0d9488;background:#f4f8f7;'
-                f'color:#43514e;font-size:13px;line-height:1.55"><strong>Page {risk.evidence.page_number}:</strong> '
-                f'&ldquo;{escape(risk.evidence.exact_text)}&rdquo;</div>'
-                f'<p style="margin:0;color:#263532;font-size:14px;line-height:1.6"><strong>Recommendation:</strong> '
+                f'<div style="margin:0 0 10px;padding:15px 16px;border:1px solid #dfe5e3;border-left:3px solid {color};'
+                'border-radius:6px;background:#ffffff">'
+                f'<div style="margin:0 0 9px;color:{color};font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase">'
+                f'{escape(severity.value)} risk &middot; Page {risk.evidence.page_number}</div>'
+                f'<h3 style="margin:0 0 6px;color:#14201e;font-size:15px;line-height:1.4">{escape(risk.title)}</h3>'
+                f'<p style="margin:0 0 10px;color:#43514e;font-size:13px;line-height:1.55">{escape(risk.explanation)}</p>'
+                f'<div style="margin:0 0 10px;padding:9px 11px;border-radius:4px;background:{background};'
+                f'color:#43514e;font-size:12px;line-height:1.5">&ldquo;{escape(risk.evidence.exact_text)}&rdquo;</div>'
+                f'<p style="margin:0;color:#263532;font-size:12px;line-height:1.55"><strong>Next step:</strong> '
                 f'{escape(risk.recommendation)}</p></div>'
             )
     findings_html = "".join(risk_sections) or (
-        '<p style="margin:0;color:#43514e;font-size:14px;line-height:1.6">'
-        "No evidence-grounded risks were identified.</p>"
+        '<div style="padding:14px 16px;border:1px solid #dfe5e3;border-radius:6px;background:#ffffff;'
+        'color:#43514e;font-size:13px;line-height:1.55">No evidence-grounded risks were identified.</div>'
     )
 
     limitations_html = ""
@@ -178,35 +178,37 @@ def render_review_email_html(
     if contract_url:
         safe_url = escape(contract_url, quote=True)
         action_html = (
-            '<div style="margin:28px 0">'
-            f'<a href="{safe_url}" style="display:inline-block;padding:11px 17px;border-radius:6px;'
-            'background:#0d9488;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none">'
-            "Open contract in Samvid</a></div>"
+            '<div style="margin:26px 0 0">'
+            f'<a href="{safe_url}" style="display:inline-block;padding:10px 14px;border-radius:6px;'
+            'background:#0d9488;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none">'
+            "Open contract in Samvid &rarr;</a></div>"
         )
 
     return (
-        '<!doctype html><html><body style="margin:0;padding:0;background:#f4f6f5;font-family:Arial,sans-serif;color:#14201e">'
-        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6f5">'
-        '<tr><td align="center" style="padding:28px 16px">'
+        '<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>'
+        '<body style="margin:0;padding:0;background:#f6f7f4;font-family:Arial,Helvetica,sans-serif;color:#14201e">'
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f6f7f4">'
+        '<tr><td align="center" style="padding:32px 16px">'
         '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
-        'style="max-width:640px;border:1px solid #dfe5e3;border-radius:8px;background:#ffffff">'
-        '<tr><td style="padding:22px 28px;border-bottom:1px solid #e7ecea">'
-        '<strong style="font-size:18px;color:#14201e">Samvid</strong>'
-        '<span style="float:right;color:#0d9488;font-size:12px;font-weight:700;text-transform:uppercase">Contract review</span>'
-        '</td></tr><tr><td style="padding:30px 28px">'
-        f'<p style="margin:0 0 18px;font-size:16px;line-height:1.6">Hi {name},</p>'
-        '<h1 style="margin:0 0 10px;font-size:24px;line-height:1.3;color:#14201e">Your contract review is ready.</h1>'
-        '<p style="margin:0 0 24px;color:#56625f;font-size:14px;line-height:1.6">'
-        "Samvid reviewed the document and organized the key terms, risks, and recommended next step below.</p>"
-        '<div style="margin:0 0 24px;padding:16px;border:1px solid #dfe5e3;border-radius:6px;background:#f8faf9">'
-        f'<div style="margin-bottom:8px;color:#6b7673;font-size:11px;font-weight:700;text-transform:uppercase">Contract type</div>'
-        f'<div style="margin-bottom:16px;font-size:15px;font-weight:700">{escape(review.contract_type)}</div>'
-        '<div style="margin-bottom:8px;color:#6b7673;font-size:11px;font-weight:700;text-transform:uppercase">Recommended next step</div>'
-        f'<div style="font-size:14px;line-height:1.6">{escape(review.recommended_next_action)}</div></div>'
+        'style="max-width:620px;border:1px solid #dfe5e3;border-radius:8px;background:#ffffff">'
+        '<tr><td style="height:3px;background:#0d9488;font-size:0;line-height:0">&nbsp;</td></tr>'
+        '<tr><td style="padding:19px 26px;border-bottom:1px solid #e7ecea">'
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>'
+        '<td style="color:#14201e;font-size:17px;font-weight:700">Samvid</td>'
+        '<td align="right" style="color:#0d9488;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase">Review ready</td>'
+        '</tr></table></td></tr><tr><td style="padding:28px 26px 10px">'
+        f'<p style="margin:0 0 16px;color:#30403c;font-size:15px;line-height:1.55">Hi {name},</p>'
+        '<h1 style="margin:0 0 8px;font-size:23px;line-height:1.25;color:#14201e">Your contract review is ready.</h1>'
+        '<p style="margin:0 0 22px;color:#66736f;font-size:13px;line-height:1.55">Here is the short version, with evidence kept close to every finding.</p>'
+        '<div style="margin:0 0 25px;padding:15px 16px;border:1px solid #dfe5e3;border-radius:6px;background:#f8faf9">'
+        '<div style="margin-bottom:5px;color:#75817d;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase">Document</div>'
+        f'<div style="margin-bottom:14px;color:#14201e;font-size:14px;font-weight:700">{escape(review.contract_type)}</div>'
+        '<div style="margin-bottom:5px;color:#75817d;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase">Recommended next step</div>'
+        f'<div style="color:#30403c;font-size:13px;line-height:1.55">{escape(review.recommended_next_action)}</div></div>'
         f'{party_html}{terms_html}{_section("Key findings", findings_html)}{limitations_html}{action_html}'
-        '<p style="margin:28px 0 0;color:#263532;font-size:14px;line-height:1.6">Thanks,<br><strong>Samvid</strong></p>'
-        '</td></tr><tr><td style="padding:16px 28px;border-top:1px solid #e7ecea;color:#7a8582;font-size:11px">'
-        "Sent via Samvid</td></tr></table></td></tr></table></body></html>"
+        '<p style="margin:26px 0 0;color:#43514e;font-size:13px;line-height:1.55">Thanks,<br><strong style="color:#14201e">Samvid</strong></p>'
+        '</td></tr><tr><td style="padding:15px 26px;border-top:1px solid #e7ecea;color:#7a8582;font-size:10px">'
+        "Sent via Samvid &middot; Contract intelligence that stays with the work</td></tr></table></td></tr></table></body></html>"
     )
 
 
@@ -227,7 +229,7 @@ def _risks_by_severity(review: ContractReview) -> dict[RiskSeverity, list]:
 
 def _section(title: str, content: str) -> str:
     return (
-        '<div style="margin:0 0 24px">'
-        f'<h2 style="margin:0 0 12px;color:#14201e;font-size:16px;line-height:1.4">{escape(title)}</h2>'
+        '<div style="margin:0 0 25px">'
+        f'<h2 style="margin:0 0 9px;color:#14201e;font-size:11px;font-weight:700;letter-spacing:0.08em;line-height:1.4;text-transform:uppercase">{escape(title)}</h2>'
         f"{content}</div>"
     )

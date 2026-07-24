@@ -205,8 +205,12 @@ export function LandingPage() {
               Forward a contract or upload it. Samvid reads every page, explains the risk, keeps every version organized, and records each signing handoff.
             </p>
             <div className="hero-actions">
-              <a href="#workflow" className="btn-lp-secondary">
-                See how it works
+              <a
+                href="mailto:contracts@samvid.online?subject=please%20review%20this&body=Hi%20Samvid%0Aplease%20review%20it."
+                className="btn-lp-secondary"
+                aria-label="Email a contract to Samvid"
+              >
+                Mail it. Chill.
               </a>
               <Link to="/chats" className="btn-lp-primary">
                 Open Workspace <ArrowRight size={15} />
