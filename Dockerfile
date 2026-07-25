@@ -33,7 +33,7 @@ RUN groupadd --system --gid 10001 samvid \
     && chown -R samvid:samvid /app
 
 COPY --from=python-builder --chown=samvid:samvid /app/.venv /app/.venv
-COPY --from=frontend-builder --chown=samvid:samvid /build/frontend/dist /app/frontend/dist
+COPY --from=frontend-builder --chown=samvid:samvid /build/frontend/.next /app/frontend/dist
 
 USER samvid
 EXPOSE 8000
