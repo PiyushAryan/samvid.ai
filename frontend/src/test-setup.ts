@@ -1,5 +1,12 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { afterEach, vi } from "vitest";
 
-afterEach(() => cleanup());
+vi.mock("next/navigation", async () => import("./test-navigation"));
+vi.mock("next/link", async () => import("./test-link"));
+
+afterEach(async () => {
+  cleanup();
+  const { setTestUrl } = await import("./test-navigation");
+  setTestUrl("/");
+});

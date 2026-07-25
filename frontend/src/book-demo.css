@@ -290,16 +290,6 @@
   opacity: 0.45;
 }
 
-.book-demo-cal-trigger {
-  position: fixed;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
 @media (max-width: 980px) {
   .book-demo-page {
     grid-template-columns: 1fr;

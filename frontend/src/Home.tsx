@@ -1,5 +1,8 @@
+"use client";
+
 import React, { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import Image from "next/image";
+import { Link } from "./next-router-compat";
 import { AnimatePresence, motion, useReducedMotion, useScroll, useSpring, useTransform } from "motion/react";
 import {
   FileText,
@@ -15,7 +18,6 @@ import {
   Search,
   X
 } from "lucide-react";
-import "./home.css";
 
 type PreviewStepId = "intake" | "review" | "track";
 const MotionLink = motion.create(Link);
@@ -149,6 +151,33 @@ export function LandingPage() {
     }
   };
 
+  const handlePreviewTabKeyDown = (
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    currentStepId: PreviewStepId
+  ) => {
+    const currentIndex = previewSteps.findIndex((step) => step.id === currentStepId);
+    let nextIndex: number | null = null;
+
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      nextIndex = (currentIndex + 1) % previewSteps.length;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      nextIndex = (currentIndex - 1 + previewSteps.length) % previewSteps.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = previewSteps.length - 1;
+    }
+
+    if (nextIndex === null) return;
+
+    event.preventDefault();
+    const nextStep = previewSteps[nextIndex];
+    handlePreviewStepSelect(nextStep.id);
+    window.requestAnimationFrame(() => {
+      document.getElementById(`preview-tab-${nextStep.id}`)?.focus();
+    });
+  };
+
   return (
     <div className="landing-body">
       <div className="landing-grid-bg"></div>
@@ -219,7 +248,7 @@ export function LandingPage() {
             </div>
           </div>
           <div className="hero-road" aria-hidden="true">
-            <img src="/road-tuktuk-bike.webp" alt="" />
+            <Image src="/road-tuktuk-bike.webp" alt="" fill sizes="100vw" />
           </div>
         </section>
 
@@ -297,8 +326,11 @@ export function LandingPage() {
                       role="tab"
                       aria-label={step.label}
                       aria-selected={activePreviewStep === step.id}
+                      aria-controls={`preview-panel-${step.id}`}
+                      tabIndex={activePreviewStep === step.id ? 0 : -1}
                       className={`demo-step-card ${activePreviewStep === step.id ? "active" : ""}`}
                       onClick={() => handlePreviewStepSelect(step.id)}
+                      onKeyDown={(event) => handlePreviewTabKeyDown(event, step.id)}
                     >
                       <span className="demo-step-meta"><span>{step.number}</span> {step.label}</span>
                       <strong>{step.title}</strong>
@@ -316,7 +348,9 @@ export function LandingPage() {
                   <div
                     className="simulator-body demo-panel-body"
                     role="tabpanel"
+                    id={`preview-panel-${activePreviewStep}`}
                     aria-labelledby={`preview-tab-${activePreviewStep}`}
+                    tabIndex={0}
                   >
                     <AnimatePresence mode="wait">
                       {activePreviewStep === "intake" && (
@@ -337,7 +371,7 @@ export function LandingPage() {
                               <span className="preview-avatar">PN</span>
                               <div>
                                 <strong>Priya Nair</strong>
-                                <span>to Alex, procurement@acme.com, samvid.ai</span>
+                                <span>to Alex, procurement@acme.com, contracts@samvid.online</span>
                               </div>
                               <time>09:41 AM</time>
                             </div>
@@ -658,7 +692,7 @@ export function LandingPage() {
         {/* Footer */}
         <footer className="landing-footer">
           <h2 className="footer-punchline">
-            <span className="footer-punchline-pixel">Workspace</span> to fix your chaos with <span className="footer-punchline-brand">samvid.ai</span>
+            <span className="footer-punchline-pixel">Workspace</span> to fix your chaos with <span className="footer-punchline-brand">samvid.online</span>
           </h2>
 
           <div className="footer-details">

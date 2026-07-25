@@ -1,6 +1,6 @@
 import { createAuthClient } from "@neondatabase/neon-js/auth";
 
-const neonAuthUrl = import.meta.env.VITE_NEON_AUTH_URL?.trim();
+const neonAuthUrl = process.env.NEXT_PUBLIC_NEON_AUTH_URL?.trim();
 
 export const PENDING_AUTH_EMAIL_KEY = "samvid-pending-auth-email";
 
@@ -64,6 +64,7 @@ export function safeInternalPath(value: string | null | undefined, fallback = "/
   if (!value) return fallback;
 
   try {
+    if (typeof window === "undefined") return value.startsWith("/") ? value : fallback;
     const origin = window.location.origin;
     const resolved = new URL(value, origin);
     if (resolved.origin !== origin || !resolved.pathname.startsWith("/")) return fallback;

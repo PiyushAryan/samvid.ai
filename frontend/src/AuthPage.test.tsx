@@ -1,9 +1,10 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, useLocation } from "react-router-dom";
+import { usePathname, useSearchParams } from "next/navigation";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { AuthPage } from "./AuthPage";
 import { safeInternalPath } from "./auth";
+import { setTestUrl } from "./test-navigation";
 
 const authClient = vi.hoisted(() => ({
   signUp: { email: vi.fn() },
@@ -28,8 +29,10 @@ vi.mock("./auth", async (importOriginal) => {
 });
 
 function LocationProbe() {
-  const location = useLocation();
-  return <output data-testid="location">{`${location.pathname}${location.search}`}</output>;
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const search = searchParams.toString();
+  return <output data-testid="location">{`${pathname}${search ? `?${search}` : ""}`}</output>;
 }
 
 function renderAuth(
@@ -37,12 +40,8 @@ function renderAuth(
   initialEntry = `/auth${initialView && initialView !== "sign-in" ? `?view=${initialView}` : ""}`,
   initialEmail = ""
 ) {
-  return render(
-    <MemoryRouter initialEntries={[initialEntry]}>
-      <AuthPage initialView={initialView} initialEmail={initialEmail} />
-      <LocationProbe />
-    </MemoryRouter>
-  );
+  setTestUrl(initialEntry);
+  return render(<><AuthPage initialView={initialView} initialEmail={initialEmail} /><LocationProbe /></>);
 }
 
 beforeEach(() => {

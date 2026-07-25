@@ -1,8 +1,9 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { usePathname, useSearchParams } from "next/navigation";
 import { beforeEach, expect, test, vi } from "vitest";
 
-import { AuthProvider, AuthRouteLoading, RequireAuth } from "./AuthProvider";
+import { AuthProvider, AuthRouteLoading, RequireAuth, useAuth } from "./AuthProvider";
+import { setTestUrl } from "./test-navigation";
 
 const authMocks = vi.hoisted(() => ({
   getAuthSession: vi.fn(),
@@ -22,19 +23,20 @@ vi.mock("./auth", async (importOriginal) => {
 });
 
 function renderProtectedRoute() {
+  setTestUrl("/contracts");
   return render(
-    <MemoryRouter initialEntries={["/contracts"]}>
-      <AuthProvider>
-        <Routes>
-          <Route path="/auth" element={<div>Authentication route</div>} />
-          <Route
-            path="/contracts"
-            element={<RequireAuth><div>Private workspace</div></RequireAuth>}
-          />
-        </Routes>
-      </AuthProvider>
-    </MemoryRouter>
+    <AuthProvider>
+      <RequireAuth><div>Private workspace</div></RequireAuth>
+      <LocationProbe />
+    </AuthProvider>
   );
+}
+
+function LocationProbe() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const search = searchParams.toString();
+  return <output data-testid="location">{`${pathname}${search ? `?${search}` : ""}`}</output>;
 }
 
 beforeEach(() => {
@@ -52,17 +54,22 @@ test("uses the saved theme favicon while authentication is loading", () => {
   expect(document.querySelector(".auth-route-loading-logo")).toHaveAttribute("src", "/favicon-dark.svg");
 });
 
-test("routes an unverified session back to email verification", async () => {
+test("marks an unverified session without checking workspace access", async () => {
   authMocks.getAuthSession.mockResolvedValue({
     user: { id: "u1", email: "asha@example.com", name: "Asha", emailVerified: false },
     session: { token: "token" }
   });
 
-  renderProtectedRoute();
+  render(<AuthProvider><AuthStateProbe /></AuthProvider>);
 
-  expect(await screen.findByText("Authentication route")).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByTestId("auth-state")).toHaveTextContent("unverified"));
   expect(authMocks.checkWorkspaceAccess).not.toHaveBeenCalled();
 });
+
+function AuthStateProbe() {
+  const { accessStatus } = useAuth();
+  return <output data-testid="auth-state">{accessStatus}</output>;
+}
 
 test("shows a dedicated state when account provisioning rejects access", async () => {
   authMocks.getAuthSession.mockResolvedValue({

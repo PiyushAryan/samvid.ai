@@ -1,3 +1,5 @@
+"use client";
+
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -28,7 +30,7 @@ import {
   Undo2
 } from "lucide-react";
 import { FormEvent, KeyboardEvent, ReactNode, useEffect, useRef, useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from "./next-router-compat";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "motion/react";
 import {
@@ -148,7 +150,7 @@ function SidebarChatHistory({
   );
 }
 
-export function AppShell() {
+export function AppShell({ children }: { children: ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarMenuOpen, setSidebarMenuOpen] = useState(false);
   const location = useLocation();
@@ -491,7 +493,7 @@ export function AppShell() {
         )}
       </aside>
       <main className="workspace-main">
-        <Outlet />
+        {children}
       </main>
     </motion.div>
   );

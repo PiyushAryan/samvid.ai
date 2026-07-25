@@ -2,11 +2,11 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactNode } from "react";
 import { beforeEach, expect, test, vi } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { AppShell, ChatsPage, ContractDetailPage, ContractsTableSkeleton, ContractTable, ReviewTab, Timeline } from "./App";
 import { LandingPage } from "./Home";
 import * as api from "./api";
 import { TooltipProvider } from "./components/ui/tooltip";
+import { setTestUrl } from "./test-navigation";
 import type { ChatSession, ChatSessionSummary, ContractDetail, ContractListItem, ContractReview, SigningRequest } from "./types";
 
 vi.mock("./api", async (importOriginal) => {
@@ -132,17 +132,21 @@ function QueryProvider({ children }: { children: ReactNode }) {
 test("landing simulator switches between customer workflow previews", async () => {
   vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
 
-  render(
-    <MemoryRouter>
-      <LandingPage />
-    </MemoryRouter>
-  );
+  render(<LandingPage />);
 
   expect(screen.getByRole("heading", { name: "Every contract your business touches." })).toBeInTheDocument();
   expect(screen.getByText("Re: Acme vendor agreement")).toBeInTheDocument();
 
-  fireEvent.click(screen.getByRole("tab", { name: "Review" }));
+  const inboxTab = screen.getByRole("tab", { name: "Inbox" });
+  const reviewTab = screen.getByRole("tab", { name: "Review" });
+  expect(inboxTab).toHaveAttribute("aria-controls", "preview-panel-intake");
+  expect(screen.getByRole("tabpanel")).toHaveAttribute("id", "preview-panel-intake");
+
+  inboxTab.focus();
+  fireEvent.keyDown(inboxTab, { key: "ArrowRight" });
   expect(await screen.findByText("Review complete")).toBeInTheDocument();
+  expect(reviewTab).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("tabpanel")).toHaveAttribute("id", "preview-panel-review");
 
   fireEvent.click(screen.getByRole("tab", { name: "Signature" }));
   expect(await screen.findByText("Follow-up scheduled")).toBeInTheDocument();
@@ -150,9 +154,8 @@ test("landing simulator switches between customer workflow previews", async () =
 
 test("contract listing renders signing counters and risk counts", () => {
   render(
-    <MemoryRouter>
-      <ContractTable
-        contracts={[
+    <ContractTable
+      contracts={[
           {
             id: "c1",
             title: "Vendor agreement",
@@ -172,9 +175,8 @@ test("contract listing renders signing counters and risk counts", () => {
               signer_total: 3
             }
           } satisfies ContractListItem
-        ]}
-      />
-    </MemoryRouter>
+      ]}
+    />
   );
 
   expect(screen.getByRole("link", { name: "Vendor agreement" })).toBeInTheDocument();
@@ -183,16 +185,8 @@ test("contract listing renders signing counters and risk counts", () => {
 });
 
 test("contract owner confirms permanent deletion and returns to the list", async () => {
-  render(
-    <QueryProvider>
-      <MemoryRouter initialEntries={["/contracts/contract-delete"]}>
-        <Routes>
-          <Route path="/contracts/:contractId" element={<ContractDetailPage />} />
-          <Route path="/contracts" element={<div>Contract list</div>} />
-        </Routes>
-      </MemoryRouter>
-    </QueryProvider>
-  );
+  setTestUrl("/contracts/contract-delete");
+  render(<QueryProvider><ContractDetailPage /></QueryProvider>);
 
   expect(await screen.findByRole("heading", { name: "Vendor agreement" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Delete" }));
@@ -202,21 +196,12 @@ test("contract owner confirms permanent deletion and returns to the list", async
   fireEvent.click(within(dialog).getByRole("button", { name: "Permanently delete" }));
 
   await waitFor(() => expect(api.deleteContract).toHaveBeenCalledWith("contract-delete"));
-  expect(await screen.findByText("Contract list")).toBeInTheDocument();
+  expect(window.location.pathname).toBe("/contracts");
 });
 
 test("sidebar control toggles its collapsed state", () => {
-  render(
-    <TooltipProvider>
-      <MemoryRouter initialEntries={["/contracts"]}>
-        <Routes>
-          <Route element={<AppShell />}>
-            <Route path="/contracts" element={<div>Contracts page</div>} />
-          </Route>
-        </Routes>
-      </MemoryRouter>
-    </TooltipProvider>
-  );
+  setTestUrl("/contracts");
+  render(<TooltipProvider><AppShell><div>Contracts page</div></AppShell></TooltipProvider>);
 
   const toggle = screen.getByRole("button", { name: "Collapse sidebar" });
   fireEvent.click(toggle);
@@ -225,18 +210,10 @@ test("sidebar control toggles its collapsed state", () => {
 });
 
 test("workspace view slider switches between console and loads chat history", async () => {
+  setTestUrl("/contracts");
   const { container } = render(
     <QueryProvider>
-      <TooltipProvider>
-        <MemoryRouter initialEntries={["/contracts"]}>
-          <Routes>
-            <Route element={<AppShell />}>
-              <Route path="/contracts" element={<div>Contracts page</div>} />
-              <Route path="/chats" element={<ChatsPage />} />
-            </Route>
-          </Routes>
-        </MemoryRouter>
-      </TooltipProvider>
+      <TooltipProvider><AppShell><ChatsPage /></AppShell></TooltipProvider>
     </QueryProvider>
   );
 
@@ -263,13 +240,8 @@ test("workspace view slider switches between console and loads chat history", as
 });
 
 test("chat session renders persisted history and contract sources", async () => {
-  const { container } = render(
-    <QueryProvider>
-      <MemoryRouter initialEntries={["/chats?chat=chat-1"]}>
-        <ChatsPage />
-      </MemoryRouter>
-    </QueryProvider>
-  );
+  setTestUrl("/chats?chat=chat-1");
+  const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
 
   expect(within(container).getByText("Loading conversation")).toBeInTheDocument();
   expect(await within(container).findByText("The agreement renews automatically for another 12 months.")).toBeInTheDocument();
@@ -281,13 +253,8 @@ test("chat session renders persisted history and contract sources", async () => 
 
 test("chat session exposes a recoverable history error", async () => {
   vi.mocked(api.getChatSession).mockRejectedValue(new Error("Knowledge index unavailable"));
-  const { container } = render(
-    <QueryProvider>
-      <MemoryRouter initialEntries={["/chats?chat=chat-missing"]}>
-        <ChatsPage />
-      </MemoryRouter>
-    </QueryProvider>
-  );
+  setTestUrl("/chats?chat=chat-missing");
+  const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
 
   const alert = await within(container).findByRole("alert");
   expect(alert).toHaveTextContent("Conversation unavailable");
@@ -309,13 +276,8 @@ test("new chat streams an answer and exposes its sources", async () => {
     ]);
   });
 
-  const { container } = render(
-    <QueryProvider>
-      <MemoryRouter initialEntries={["/chats"]}>
-        <ChatsPage />
-      </MemoryRouter>
-    </QueryProvider>
-  );
+  setTestUrl("/chats");
+  const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
 
   const textbox = within(container).getByRole("textbox");
   fireEvent.change(textbox, { target: { value: "What is the termination notice?" } });
@@ -338,16 +300,9 @@ test("new chat streams an answer and exposes its sources", async () => {
 test("sidebar actions menu opens and switches theme", () => {
   window.localStorage.setItem("samvid-theme", "light");
 
+  setTestUrl("/contracts");
   const { container } = render(
-    <TooltipProvider>
-      <MemoryRouter initialEntries={["/contracts"]}>
-        <Routes>
-          <Route element={<AppShell />}>
-            <Route path="/contracts" element={<div>Contracts page</div>} />
-          </Route>
-        </Routes>
-      </MemoryRouter>
-    </TooltipProvider>
+    <TooltipProvider><AppShell><div>Contracts page</div></AppShell></TooltipProvider>
   );
 
   const menuTrigger = within(container).getByRole("button", { name: /open (?:sidebar actions|account menu)/i });

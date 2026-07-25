@@ -1,3 +1,5 @@
+"use client";
+
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -17,7 +19,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "motion/react";
 import { ReactNode, useEffect, useMemo, useState } from "react";
-import { Link, NavLink, Outlet, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, NavLink, useNavigate, useParams, useSearchParams } from "./next-router-compat";
 
 import {
   getAdminContract,
@@ -56,7 +58,7 @@ function getInitialTheme(): "light" | "dark" {
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-export function AdminShell() {
+export function AdminShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(getInitialTheme);
   const { user, signOut } = useAuth();
@@ -157,7 +159,7 @@ export function AdminShell() {
         </div>
       </aside>
       <main className="workspace-main admin-main">
-        <Outlet />
+        {children}
       </main>
     </motion.div>
   );

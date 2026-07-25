@@ -1,41 +1,66 @@
+"use client";
+
 import { getCalApi } from "@calcom/embed-react";
 import React, { FormEvent, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-import { Link } from "react-router-dom";
-import "./book-demo.css";
+import { Link } from "./next-router-compat";
 
 type WorkflowStage = "Production" | "Pilot" | "Prototyping / Exploring";
+type CalendarStatus = "loading" | "ready" | "error";
 
 const workflowStages: WorkflowStage[] = ["Production", "Pilot", "Prototyping / Exploring"];
+const calLink = "piyush-aryan-hrnwlm/virtual-coffee";
+const calBookingUrl = `https://cal.com/${calLink}`;
 
 export function BookDemoPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [workflow, setWorkflow] = useState("");
   const [stage, setStage] = useState<WorkflowStage>("Prototyping / Exploring");
+  const [calendarStatus, setCalendarStatus] = useState<CalendarStatus>("loading");
   const prefersReducedMotion = useReducedMotion();
-  const calTriggerRef = useRef<HTMLButtonElement>(null);
+  const calApiRef = useRef<Awaited<ReturnType<typeof getCalApi>> | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     void (async () => {
-      const cal = await getCalApi({ namespace: "virtual-coffee" });
-      cal("ui", { hideEventTypeDetails: false, layout: "month_view" });
+      try {
+        const cal = await getCalApi({ namespace: "virtual-coffee" });
+        if (!isMounted) return;
+
+        cal("ui", { hideEventTypeDetails: false, layout: "month_view" });
+        cal("preload", { calLink, type: "modal" });
+        calApiRef.current = cal;
+        setCalendarStatus("ready");
+      } catch {
+        if (isMounted) setCalendarStatus("error");
+      }
     })();
+
+    return () => {
+      isMounted = false;
+      calApiRef.current = null;
+    };
   }, []);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    calTriggerRef.current?.click();
-  };
+    const cal = calApiRef.current;
+    if (!cal) return;
 
-  const calConfig = JSON.stringify({
-    layout: "month_view",
-    useSlotsViewOnSmallScreen: "true",
-    name,
-    email,
-    notes: `${stage} contract workflow: ${workflow}`
-  });
+    cal("modal", {
+      calLink,
+      config: {
+        layout: "month_view",
+        useSlotsViewOnSmallScreen: "true",
+        name,
+        email,
+        notes: `${stage} contract workflow: ${workflow}`
+      }
+    });
+  };
 
   return (
     <main className="book-demo-page">
@@ -132,24 +157,31 @@ export function BookDemoPage() {
                     </fieldset>
 
                 <div className="book-demo-form-actions">
-                  <button className="book-demo-submit" type="submit">
-                    Select date &amp; time <ArrowRight size={12} aria-hidden="true" />
-                  </button>
+                  {calendarStatus === "error" ? (
+                    <a
+                      className="book-demo-submit"
+                      href={calBookingUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open booking calendar <ArrowRight size={12} aria-hidden="true" />
+                    </a>
+                  ) : (
+                    <button
+                      className="book-demo-submit"
+                      type="submit"
+                      disabled={calendarStatus === "loading"}
+                    >
+                      {calendarStatus === "loading" ? "Preparing calendar…" : "Select date & time"}
+                      {calendarStatus === "ready" && <ArrowRight size={12} aria-hidden="true" />}
+                    </button>
+                  )}
+                  <span aria-live="polite">
+                    {calendarStatus === "loading" && "Loading secure scheduling"}
+                    {calendarStatus === "error" && "The embedded calendar could not load"}
+                  </span>
                 </div>
           </form>
-
-          <button
-            ref={calTriggerRef}
-            className="book-demo-cal-trigger"
-            type="button"
-            data-cal-namespace="virtual-coffee"
-            data-cal-link="piyush-aryan-hrnwlm/virtual-coffee"
-            data-cal-config={calConfig}
-            tabIndex={-1}
-            aria-hidden="true"
-          >
-            Open Cal.com scheduler
-          </button>
         </motion.div>
       </section>
     </main>

@@ -117,7 +117,7 @@ repeated failures.
 
 | Surface | Technology | Responsibility |
 | --- | --- | --- |
-| Web workspace | React, TypeScript, Vite | Contract, review, document, signing, and account experiences |
+| Web workspace | Next.js App Router, React, TypeScript | Server-rendered marketing pages and private contract, review, document, signing, and account experiences |
 | Authentication | Neon Auth, Better Auth, JWKS | Browser sessions, email verification, password recovery, JWT issuance |
 | API | FastAPI, Pydantic | Authorization, contract APIs, uploads, webhooks, signing activity |
 | Database | Neon PostgreSQL | Contracts, reviews, versions, signers, events, and webhook idempotency |
@@ -212,8 +212,9 @@ npm install
 npm run dev
 ```
 
-The local workspace runs at `http://localhost:5173` and proxies `/api` to the
-configured `API_ORIGIN`.
+The local workspace runs at `http://localhost:3000`. The Next.js Proxy rewrites
+`/api/*` to the configured `API_ORIGIN` while keeping `/api/blob-upload` in the
+frontend Route Handler.
 
 Run frontend verification with:
 
@@ -251,11 +252,13 @@ that define a production deployment.
 
 ```dotenv
 API_ORIGIN=https://api.samvid.online
-VITE_NEON_AUTH_URL=https://<neon-auth-host>/neondb/auth
+NEXT_PUBLIC_NEON_AUTH_URL=https://<neon-auth-host>/neondb/auth
+NEXT_PUBLIC_SITE_URL=https://samvid.online
 MAX_FILE_SIZE_MB=20
 ```
 
-`VITE_NEON_AUTH_URL` is a public service endpoint, not a secret.
+`NEXT_PUBLIC_NEON_AUTH_URL` and `NEXT_PUBLIC_SITE_URL` are public values, not
+secrets.
 
 ### API
 
@@ -395,7 +398,7 @@ Configure the production Neon branch with:
 - email/password sign-up and sign-in enabled
 - verification at sign-up enabled with the verification-code method
 - a custom SMTP provider for verification and password-recovery delivery
-- the same Auth URL in `VITE_NEON_AUTH_URL` and `NEON_AUTH_URL`
+- the same Auth URL in `NEXT_PUBLIC_NEON_AUTH_URL` and `NEON_AUTH_URL`
 
 Authentication emails are sent by Neon Auth's configured SMTP provider. They do
 not use Samvid's inbound Resend webhook, API email adapter, or EC2 worker.
@@ -427,9 +430,10 @@ own issuer and signing keys.
 
 ### Web and API on Vercel
 
-The frontend deployment uses `frontend/` as its root directory. Routing
-middleware keeps the React shell public for authentication screens and proxies
-`/api` to `API_ORIGIN`; FastAPI remains the data-security boundary.
+The frontend deployment uses `frontend/` as its root directory. Next.js renders
+the public marketing routes, emits canonical metadata for `samvid.online`, and
+uses its Proxy to redirect `samvid.ai` to the canonical host and rewrite
+`/api/*` to `API_ORIGIN`. FastAPI remains the data-security boundary.
 
 The backend deployment uses the repository root. `Dockerfile.vercel` packages
 FastAPI as an OCI function that listens on Vercel's `PORT`. Both deployments
