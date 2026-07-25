@@ -2305,6 +2305,40 @@ textarea.field-control {
   text-transform: uppercase;
 }
 
+.text-shimmer {
+  --text-shimmer-base: #7b8582;
+  --text-shimmer-highlight: #17201e;
+  --text-shimmer-gradient: linear-gradient(
+    90deg,
+    transparent calc(50% - var(--text-shimmer-spread)),
+    var(--text-shimmer-highlight),
+    transparent calc(50% + var(--text-shimmer-spread))
+  );
+  position: relative;
+  display: inline-block;
+  color: transparent;
+  background-image:
+    var(--text-shimmer-gradient),
+    linear-gradient(var(--text-shimmer-base), var(--text-shimmer-base));
+  background-position: 100% center;
+  background-repeat: no-repeat, padding-box;
+  background-size: 250% 100%, auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+.app-shell[data-theme="dark"] .text-shimmer {
+  --text-shimmer-base: #77817e;
+  --text-shimmer-highlight: #f3f7f5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .text-shimmer {
+    color: inherit;
+    background: none;
+  }
+}
+
 .ai-chat-sources {
   display: grid;
   gap: 7px;

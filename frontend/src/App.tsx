@@ -64,6 +64,7 @@ import type {
 } from "./types";
 import { Skeleton } from "./components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
+import { TextShimmer } from "./components/core/text-shimmer";
 
 const MotionPanelLeft = motion.create(PanelLeft);
 const MotionFileText = motion.create(FileText);
@@ -634,7 +635,13 @@ export function ChatsPage() {
                 <span className="ai-chat-message-role">
                   {message.role === "user" ? "You" : "Samvid"}
                 </span>
-                <p>{message.content || (isSending ? "Searching your contracts..." : "No response was returned.")}</p>
+                <p>
+                  {message.content || (
+                    isSending && message.id.startsWith("pending-assistant-")
+                      ? <TextShimmer duration={1}>Searching your contracts...</TextShimmer>
+                      : "No response was returned."
+                  )}
+                </p>
                 {message.sources.length > 0 && (
                   <ul className="ai-chat-sources" aria-label="Sources">
                     {message.sources.map((source, index) => (
