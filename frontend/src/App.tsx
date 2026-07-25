@@ -1,3 +1,5 @@
+"use client";
+
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -28,7 +30,7 @@ import {
   Undo2
 } from "lucide-react";
 import { FormEvent, KeyboardEvent, ReactNode, useEffect, useRef, useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from "./next-router-compat";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "motion/react";
 import {
@@ -64,6 +66,7 @@ import type {
 } from "./types";
 import { Skeleton } from "./components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
+import { TextShimmer } from "./components/core/text-shimmer";
 
 const MotionPanelLeft = motion.create(PanelLeft);
 const MotionFileText = motion.create(FileText);
@@ -147,7 +150,7 @@ function SidebarChatHistory({
   );
 }
 
-export function AppShell() {
+export function AppShell({ children }: { children: ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarMenuOpen, setSidebarMenuOpen] = useState(false);
   const location = useLocation();
@@ -490,7 +493,7 @@ export function AppShell() {
         )}
       </aside>
       <main className="workspace-main">
-        <Outlet />
+        {children}
       </main>
     </motion.div>
   );
@@ -634,7 +637,13 @@ export function ChatsPage() {
                 <span className="ai-chat-message-role">
                   {message.role === "user" ? "You" : "Samvid"}
                 </span>
-                <p>{message.content || (isSending ? "Searching your contracts..." : "No response was returned.")}</p>
+                <p>
+                  {message.content || (
+                    isSending && message.id.startsWith("pending-assistant-")
+                      ? <TextShimmer duration={1}>Searching your contracts...</TextShimmer>
+                      : "No response was returned."
+                  )}
+                </p>
                 {message.sources.length > 0 && (
                   <ul className="ai-chat-sources" aria-label="Sources">
                     {message.sources.map((source, index) => (

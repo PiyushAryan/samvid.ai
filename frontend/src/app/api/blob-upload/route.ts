@@ -58,6 +58,9 @@ async function authorizeContractUpload(request: Request, pathname: string): Prom
   );
 }
 
+export const maxDuration = 10;
+export const preferredRegion = "sin1";
+
 export async function POST(request: Request): Promise<Response> {
   try {
     const body = (await request.json()) as HandleUploadBody;
@@ -90,12 +93,6 @@ export async function POST(request: Request): Promise<Response> {
     if (error instanceof UploadAdmissionError && error.retryAfter) {
       headers.set("Retry-After", error.retryAfter);
     }
-    return Response.json(
-      { error: message },
-      {
-        status,
-        headers
-      }
-    );
+    return Response.json({ error: message }, { status, headers });
   }
 }

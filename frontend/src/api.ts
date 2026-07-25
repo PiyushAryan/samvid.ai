@@ -249,7 +249,7 @@ export function appendSignerEvent(signerId: string, status: SignerStatus, note: 
 }
 
 export async function uploadContract(file: File, onProgress: (percent: number) => void): Promise<unknown> {
-  if (import.meta.env.PROD) {
+  if (process.env.NODE_ENV === "production") {
     return uploadContractThroughBlob(file, onProgress);
   }
 

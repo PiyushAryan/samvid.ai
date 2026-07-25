@@ -1,3 +1,5 @@
+"use client";
+
 import {
   ArrowLeft,
   ArrowRight,
@@ -11,7 +13,7 @@ import {
   Sun
 } from "lucide-react";
 import { FormEvent, useEffect, useId, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "./next-router-compat";
 import {
   getAuthClient,
   getAuthErrorMessage,
@@ -20,7 +22,6 @@ import {
   safeInternalPath
 } from "./auth";
 import { setFaviconTheme } from "./favicon";
-import "./auth.css";
 
 export type AuthView = "sign-in" | "sign-up" | "forgot-password" | "reset-password" | "verify-email";
 type AuthTheme = "light" | "dark";

@@ -1,11 +1,10 @@
 import { ArrowLeft, ArrowRight, Check, Mail, ShieldCheck, Sparkles } from "lucide-react";
-import { Link } from "react-router-dom";
-import "./home.css";
-import "./changelog.css";
+import Link from "next/link";
 
 const releases = [
   {
     date: "July 16, 2026",
+    dateTime: "2026-07-16",
     version: "v0.3.0",
     title: "The Samvid workspace is live",
     summary: "The first complete contract intelligence workspace brings review, evidence, versions, and signer tracking into one focused operating surface.",
@@ -19,6 +18,7 @@ const releases = [
   },
   {
     date: "July 10, 2026",
+    dateTime: "2026-07-10",
     version: "v0.2.0",
     title: "Email ingestion and document history",
     summary: "Contracts can now enter the review pipeline from email while every uploaded revision remains attributable and accessible.",
@@ -32,6 +32,7 @@ const releases = [
   },
   {
     date: "July 1, 2026",
+    dateTime: "2026-07-01",
     version: "v0.1.0",
     title: "Signer status tracking and audit history",
     summary: "Teams can coordinate signing progress without losing the operational history behind each manual status change.",
@@ -50,27 +51,27 @@ export function ChangelogPage() {
     <div className="changelog-page">
       <header className="changelog-navbar">
         <div className="changelog-navbar-inner">
-          <Link to="/" className="changelog-brand" aria-label="Samvid home">
+          <Link href="/" className="changelog-brand" aria-label="Samvid home">
             <span className="changelog-brand-name">Samvid</span>
             <span className="changelog-brand-tag">Intelligence</span>
           </Link>
 
           <nav className="changelog-navbar-links" aria-label="Primary navigation">
-            <Link to="/" className="changelog-navbar-link">Home</Link>
-            <Link to="/#features" className="changelog-navbar-link">Features</Link>
+            <Link href="/" className="changelog-navbar-link">Home</Link>
+            <Link href="/#features" className="changelog-navbar-link">Features</Link>
             <span className="changelog-navbar-link active" aria-current="page">Changelog</span>
           </nav>
 
           <div className="changelog-navbar-actions">
-            <Link to="/chats" className="btn-lp-secondary">Sign up</Link>
-            <Link to="/book-demo" className="btn-lp-primary">Book a Demo</Link>
+            <Link href="/chats" className="btn-lp-secondary">Sign up</Link>
+            <Link href="/book-demo" className="btn-lp-primary">Book a Demo</Link>
           </div>
         </div>
       </header>
 
       <main className="changelog-main">
         <section className="changelog-intro">
-          <Link to="/" className="changelog-back-link">
+          <Link href="/" className="changelog-back-link">
             <ArrowLeft size={14} /> Back to Samvid
           </Link>
           <div className="changelog-intro-grid">
@@ -85,10 +86,10 @@ export function ChangelogPage() {
         </section>
 
         <section className="release-list" aria-label="Product releases">
-          {releases.map(({ date, version, title, summary, icon: Icon, tags, changes }, index) => (
+          {releases.map(({ date, dateTime, version, title, summary, icon: Icon, tags, changes }, index) => (
             <article className="release-entry" key={version}>
               <div className="release-meta">
-                <time dateTime={date}>{date}</time>
+                <time dateTime={dateTime}>{date}</time>
                 <span>{version}</span>
               </div>
 
@@ -123,7 +124,7 @@ export function ChangelogPage() {
             <h2>Put the latest release to work.</h2>
             <p>Review contracts, inspect evidence, and coordinate signer status from the Samvid workspace.</p>
           </div>
-          <Link to="/chats" className="btn-lp-primary">
+          <Link href="/chats" className="btn-lp-primary">
             Open workspace <ArrowRight size={15} />
           </Link>
         </section>

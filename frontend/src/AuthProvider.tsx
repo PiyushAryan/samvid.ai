@@ -1,5 +1,7 @@
+"use client";
+
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate, useLocation } from "./next-router-compat";
 
 import {
   checkWorkspaceAccess,
@@ -27,6 +29,7 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function getLoadingTheme(): "light" | "dark" {
+  if (typeof window === "undefined") return "light";
   const savedTheme = window.localStorage.getItem("samvid-theme");
   if (savedTheme === "light" || savedTheme === "dark") return savedTheme;
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
