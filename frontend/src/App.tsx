@@ -508,6 +508,7 @@ export function ChatsPage() {
   const accountName = user?.name?.trim().split(/\s+/)[0] || "there";
   const [draft, setDraft] = useState("");
   const [liveConversation, setLiveConversation] = useState<{ sessionId: string; messages: ChatMessage[] } | null>(null);
+  const [pendingMessages, setPendingMessages] = useState<ChatMessage[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [streamError, setStreamError] = useState("");
   const [announcement, setAnnouncement] = useState("");
@@ -517,15 +518,19 @@ export function ChatsPage() {
     queryFn: () => getChatSession(activeChatId!),
     enabled: Boolean(activeChatId)
   });
-  const messages = liveConversation?.sessionId === activeChatId
-    ? liveConversation.messages
-    : sessionQuery.data?.messages || [];
+  const messages = pendingMessages.length > 0
+    ? pendingMessages
+    : liveConversation?.sessionId === activeChatId
+      ? liveConversation.messages
+      : sessionQuery.data?.messages || [];
+  const isConversationView = Boolean(activeChatId || liveConversation || pendingMessages.length || isSending);
 
   useEffect(() => {
     if (activeChatId && liveConversation?.sessionId === activeChatId) return;
     streamControllerRef.current?.abort();
     streamControllerRef.current = null;
     setLiveConversation((current) => current?.sessionId === activeChatId ? current : null);
+    setPendingMessages([]);
     setStreamError("");
     setAnnouncement("");
     setIsSending(false);
@@ -542,6 +547,26 @@ export function ChatsPage() {
     setAnnouncement("Searching your contracts");
     setDraft("");
     let sessionId = activeChatId;
+    const now = new Date().toISOString();
+    const userMessage: ChatMessage = {
+      id: `pending-user-${crypto.randomUUID()}`,
+      role: "user",
+      content,
+      sources: [],
+      created_at: now
+    };
+    const assistantId = `pending-assistant-${crypto.randomUUID()}`;
+    const assistantMessage: ChatMessage = {
+      id: assistantId,
+      role: "assistant",
+      content: "",
+      sources: [],
+      created_at: now
+    };
+    const baseMessages = sessionId === activeChatId ? messages : [];
+    const nextMessages = [...baseMessages, userMessage, assistantMessage];
+    if (!sessionId) setPendingMessages(nextMessages);
+
     try {
       if (!sessionId) {
         const session = await createChatSession(chatTitle(content));
@@ -551,24 +576,8 @@ export function ChatsPage() {
         navigate(`/chats?chat=${encodeURIComponent(session.id)}`, { replace: true });
       }
 
-      const now = new Date().toISOString();
-      const userMessage: ChatMessage = {
-        id: `pending-user-${crypto.randomUUID()}`,
-        role: "user",
-        content,
-        sources: [],
-        created_at: now
-      };
-      const assistantId = `pending-assistant-${crypto.randomUUID()}`;
-      const assistantMessage: ChatMessage = {
-        id: assistantId,
-        role: "assistant",
-        content: "",
-        sources: [],
-        created_at: now
-      };
-      const baseMessages = sessionId === activeChatId ? messages : [];
-      setLiveConversation({ sessionId, messages: [...baseMessages, userMessage, assistantMessage] });
+      setLiveConversation({ sessionId, messages: nextMessages });
+      setPendingMessages([]);
 
       const controller = new AbortController();
       streamControllerRef.current = controller;
@@ -592,6 +601,7 @@ export function ChatsPage() {
       if (error instanceof DOMException && error.name === "AbortError") return;
       setStreamError(chatErrorMessage(error));
       setDraft(content);
+      setPendingMessages([]);
       setLiveConversation((current) => current?.sessionId === sessionId
         ? { ...current, messages: current.messages.filter((message) => !message.id.startsWith("pending-assistant-")) }
         : current);
@@ -608,12 +618,14 @@ export function ChatsPage() {
   };
 
   return (
-    <section className="ai-chat-page" aria-labelledby="ai-chat-title">
+    <section className="ai-chat-page" aria-label="Contract chat" data-conversation={isConversationView}>
       <div className="ai-chat-content">
-        <header className="ai-chat-header">
-          <h1 id="ai-chat-title">Hello, {accountName}</h1>
-          <p>{activeChatId && sessionQuery.data ? sessionQuery.data.title : "find anything about your contracts"}</p>
-        </header>
+        {!isConversationView && (
+          <header className="ai-chat-header">
+            <h1>Hello, {accountName}</h1>
+            <p>find anything about your contracts</p>
+          </header>
+        )}
 
         {activeChatId && sessionQuery.isPending && !liveConversation ? (
           <div className="ai-chat-conversation-state" role="status">
@@ -703,7 +715,7 @@ export function ChatsPage() {
           {streamError && <p className="ai-chat-stream-error" role="alert">{streamError}</p>}
         </form>
 
-        {!activeChatId && messages.length === 0 && (
+        {!isConversationView && (
           <div className="ai-chat-suggestions" aria-label="Suggested questions">
             <p>Try asking</p>
             <div>
@@ -739,7 +751,7 @@ function updateChatMessage(
 
 function chatTitle(content: string): string {
   const normalized = content.replace(/\s+/g, " ").trim();
-  return normalized.length > 72 ? `${normalized.slice(0, 69)}...` : normalized;
+  return normalized.length > 180 ? `${normalized.slice(0, 177)}...` : normalized;
 }
 
 function chatErrorMessage(error: unknown): string {
