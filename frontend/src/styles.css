@@ -1888,6 +1888,26 @@ textarea.field-control {
   content: "";
 }
 
+.ai-chat-page[data-conversation="true"] {
+  --surface: #fff;
+  --surface-muted: #f0f2ef;
+  --surface-subtle: #f5f6f3;
+  --border: #dfe3df;
+  --border-strong: #cfd6d3;
+  --text: #171b1a;
+  --text-secondary: #3f4846;
+  --text-muted: #737d7a;
+  --accent: #08776d;
+  --accent-dark: #055e57;
+  --accent-soft: #e7f3f1;
+  --focus-border: #8dbdb7;
+  background: #fff;
+}
+
+.ai-chat-page[data-conversation="true"]::before {
+  display: none;
+}
+
 .ai-chat-main {
   display: flex;
   width: min(640px, 100%);
@@ -2435,12 +2455,21 @@ textarea.field-control {
   background: transparent;
 }
 
+.app-shell[data-theme="dark"] .ai-chat-page[data-conversation="true"] {
+  background: #fff;
+}
+
 .app-shell[data-theme="dark"] .ai-chat-page::before {
   background-image: linear-gradient(var(--workspace-wash), var(--workspace-wash)), url("/blr-dark.webp");
 }
 
 .app-shell[data-theme="dark"] .ai-chat-composer {
   box-shadow: 0 20px 56px rgba(0, 0, 0, 0.34), 0 2px 8px rgba(0, 0, 0, 0.24);
+}
+
+.ai-chat-page[data-conversation="true"] .ai-chat-composer,
+.app-shell[data-theme="dark"] .ai-chat-page[data-conversation="true"] .ai-chat-composer {
+  box-shadow: 0 18px 48px rgba(23, 27, 26, 0.09), 0 2px 8px rgba(23, 27, 26, 0.05);
 }
 
 .spin {

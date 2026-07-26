@@ -283,6 +283,8 @@ test("new chat streams an answer and exposes its sources", async () => {
   fireEvent.change(textbox, { target: { value: "What is the termination notice?" } });
   fireEvent.click(within(container).getByRole("button", { name: "Send message" }));
 
+  expect(within(container).queryByRole("heading", { name: "Hello, Piyush" })).not.toBeInTheDocument();
+  expect(container.querySelector(".ai-chat-page")).toHaveAttribute("data-conversation", "true");
   await waitFor(() => expect(api.createChatSession).toHaveBeenCalledWith("What is the termination notice?"));
   expect(api.streamChatMessage).toHaveBeenCalledWith(
     "chat-new",
@@ -295,6 +297,69 @@ test("new chat streams an answer and exposes its sources", async () => {
     "href",
     "/contracts/contract-2"
   );
+});
+
+test("new chats show the first message in the sidebar while the response is streaming", async () => {
+  const prompt = "What is the termination notice?";
+  vi.mocked(api.createChatSession).mockResolvedValueOnce({
+    id: "chat-new",
+    title: prompt,
+    message_count: 0,
+    created_at: "2026-07-20T10:00:00Z",
+    updated_at: "2026-07-20T10:00:00Z",
+    messages: []
+  });
+  vi.mocked(api.streamChatMessage).mockImplementationOnce(() => new Promise(() => undefined));
+
+  setTestUrl("/chats");
+  const { container } = render(
+    <QueryProvider>
+      <TooltipProvider><AppShell><ChatsPage /></AppShell></TooltipProvider>
+    </QueryProvider>
+  );
+  await within(container).findByRole("button", { name: "Vendor renewal terms" });
+
+  fireEvent.change(within(container).getByRole("textbox"), { target: { value: prompt } });
+  fireEvent.click(within(container).getByRole("button", { name: "Send message" }));
+
+  expect(await within(container).findByRole("button", { name: prompt })).toBeInTheDocument();
+  expect(api.streamChatMessage).toHaveBeenCalledWith(
+    "chat-new",
+    prompt,
+    expect.any(Object),
+    expect.any(AbortSignal)
+  );
+  expect(within(container).queryByRole("heading", { name: "Hello, Piyush" })).not.toBeInTheDocument();
+  expect(within(container).getByText("Searching your contracts...")).toBeInTheDocument();
+  expect(container.querySelector(".ai-chat-page")).toHaveAttribute("data-conversation", "true");
+});
+
+test("new chat titles preserve normalized input up to the backend limit", async () => {
+  const prompt = `  ${"a".repeat(181)}  `;
+  const expectedTitle = `${"a".repeat(177)}...`;
+
+  setTestUrl("/chats");
+  const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
+  fireEvent.change(within(container).getByRole("textbox"), { target: { value: prompt } });
+  fireEvent.click(within(container).getByRole("button", { name: "Send message" }));
+
+  await waitFor(() => expect(api.createChatSession).toHaveBeenCalledWith(expectedTitle));
+});
+
+test("a failed new chat returns to the welcome state and restores the draft", async () => {
+  vi.mocked(api.createChatSession).mockRejectedValueOnce(new Error("Chat service unavailable"));
+
+  setTestUrl("/chats");
+  const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
+  const textbox = within(container).getByRole("textbox");
+  fireEvent.change(textbox, { target: { value: "Find my renewal date" } });
+  fireEvent.click(within(container).getByRole("button", { name: "Send message" }));
+
+  expect(within(container).queryByRole("heading", { name: "Hello, Piyush" })).not.toBeInTheDocument();
+  expect(await within(container).findByRole("alert")).toHaveTextContent("Chat service unavailable");
+  expect(within(container).getByRole("heading", { name: "Hello, Piyush" })).toBeInTheDocument();
+  expect(textbox).toHaveValue("Find my renewal date");
+  expect(container.querySelector(".ai-chat-page")).toHaveAttribute("data-conversation", "false");
 });
 
 test("sidebar actions menu opens and switches theme", () => {
