@@ -20,7 +20,7 @@ export default function OpenGraphImage() {
       }}>
         <div style={{ color: "#0c9488", display: "flex", fontSize: 34, fontWeight: 700, letterSpacing: "-1px" }}>samvid</div>
         <div style={{ display: "flex", fontSize: 72, fontWeight: 700, letterSpacing: "-3px", lineHeight: 1.06, marginTop: 28, maxWidth: 900 }}>
-          Contract intelligence from inbox to signature.
+          Samvid - Contract intelligence for your team
         </div>
         <div style={{ color: "#48615c", display: "flex", fontSize: 30, marginTop: 34 }}>
           Review contracts, explain risk, and keep every handoff moving.
