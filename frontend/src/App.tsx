@@ -810,8 +810,15 @@ export function ContractsPage() {
             ))}
           </select>
         </label>
-        <button className={iconButton} onClick={() => contractsQuery.refetch()} aria-label="Refresh contracts">
-          <RefreshCw size={16} />
+        <button
+          className={iconButton}
+          type="button"
+          onClick={() => void contractsQuery.refetch()}
+          aria-label="Refresh contracts"
+          aria-busy={contractsQuery.isFetching}
+          disabled={contractsQuery.isFetching}
+        >
+          <RefreshCw className={contractsQuery.isFetching ? "spin" : undefined} size={16} aria-hidden="true" />
         </button>
       </div>
       <QueryState query={contractsQuery} loadingFallback={<ContractsTableSkeleton />}>

@@ -2021,6 +2021,15 @@ textarea.field-control {
   outline-offset: 4px;
 }
 
+.app-shell[data-theme="dark"] .ai-chat-suggestions,
+.app-shell[data-theme="dark"] .ai-chat-suggestions button {
+  color: #f3f0e8;
+}
+
+.app-shell[data-theme="dark"] .ai-chat-suggestions button:hover {
+  color: #fffdf7;
+}
+
 .ai-chat-conversation-state {
   display: grid;
   min-height: 180px;

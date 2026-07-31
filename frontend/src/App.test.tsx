@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactNode } from "react";
 import { beforeEach, expect, test, vi } from "vitest";
-import { AppShell, ChatsPage, ContractDetailPage, ContractsTableSkeleton, ContractTable, ReviewTab, Timeline } from "./App";
+import { AppShell, ChatsPage, ContractDetailPage, ContractsPage, ContractsTableSkeleton, ContractTable, ReviewTab, Timeline } from "./App";
 import { LandingPage } from "./Home";
 import * as api from "./api";
 import { TooltipProvider } from "./components/ui/tooltip";
@@ -16,6 +16,7 @@ vi.mock("./api", async (importOriginal) => {
     listChatSessions: vi.fn(),
     createChatSession: vi.fn(),
     getChatSession: vi.fn(),
+    listContracts: vi.fn(),
     getContract: vi.fn(),
     getContractDocument: vi.fn(),
     deleteContract: vi.fn(),
@@ -116,6 +117,7 @@ beforeEach(() => {
     updated_at: "2026-07-20T10:00:00Z",
     messages: []
   });
+  vi.mocked(api.listContracts).mockResolvedValue([]);
   vi.mocked(api.getContract).mockResolvedValue(contractDetail);
   vi.mocked(api.getContractDocument).mockResolvedValue(new Blob());
   vi.mocked(api.deleteContract).mockResolvedValue(undefined);
@@ -150,6 +152,55 @@ test("landing simulator switches between customer workflow previews", async () =
 
   fireEvent.click(screen.getByRole("tab", { name: "Signature" }));
   expect(await screen.findByText("Follow-up scheduled")).toBeInTheDocument();
+});
+
+test("contract refresh rotates until updated API data arrives", async () => {
+  setTestUrl("/contracts");
+  render(<QueryProvider><ContractsPage /></QueryProvider>);
+
+  const refreshButton = screen.getByRole("button", { name: "Refresh contracts" });
+  await waitFor(() => expect(refreshButton).not.toBeDisabled());
+
+  let resolveRefresh!: (contracts: ContractListItem[]) => void;
+  vi.mocked(api.listContracts).mockReturnValueOnce(new Promise((resolve) => {
+    resolveRefresh = resolve;
+  }));
+
+  fireEvent.click(refreshButton);
+
+  await waitFor(() => {
+    expect(api.listContracts).toHaveBeenLastCalledWith({ search: "", reviewStatus: "", signingStatus: "" });
+    expect(refreshButton).toBeDisabled();
+    expect(refreshButton).toHaveAttribute("aria-busy", "true");
+    expect(refreshButton.firstElementChild).toHaveClass("spin");
+  });
+
+  resolveRefresh([
+    {
+      id: "c-refreshed",
+      title: "Refreshed services agreement",
+      review_status: "review_ready",
+      created_by: "legal@example.com",
+      created_at: "2026-07-31T00:00:00Z",
+      updated_at: "2026-07-31T00:05:00Z",
+      current_version_id: "v-refreshed",
+      original_filename: "services-agreement.pdf",
+      mime_type: "application/pdf",
+      risk_counts: { critical: 0, high: 0, medium: 1, low: 0 },
+      signing_summary: {
+        active_request_id: null,
+        status: "not_started",
+        required_signed: 0,
+        required_total: 0,
+        signer_total: 0
+      }
+    }
+  ]);
+
+  expect(await screen.findByRole("link", { name: "Refreshed services agreement" })).toBeInTheDocument();
+  expect(refreshButton).not.toBeDisabled();
+  expect(refreshButton).toHaveAttribute("aria-busy", "false");
+  expect(refreshButton.firstElementChild).not.toHaveClass("spin");
 });
 
 test("contract listing renders signing counters and risk counts", () => {
