@@ -209,6 +209,7 @@ class ContractProcessingService:
             contract_version_id=contract_version_id,
         )
         if existing_review is not None:
+            self.repository.update_contract_status(contract_id, WorkflowState.REVIEW_READY)
             self._metric_worker_started(processing_run_id)
             self._metric_completed(processing_run_id, outcome=WorkflowState.REVIEW_READY.value)
             return ContractProcessingResult(

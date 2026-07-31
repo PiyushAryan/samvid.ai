@@ -146,6 +146,53 @@ def test_queued_contract_is_reviewed_from_durable_storage(monkeypatch, tmp_path:
     assert result.review.risks[0].title == "Unlimited liability"
 
 
+def test_existing_review_restores_contract_to_review_ready(monkeypatch, tmp_path: Path) -> None:
+    contract = tmp_path / "existing-review.txt"
+    contract.write_text(
+        "This Vendor Agreement is made between Acme Ltd and Example Technologies. "
+        "The Supplier's liability under this Agreement shall be unlimited.",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(AgnoContractReviewAgent, "create_contract_review", _fake_contract_review)
+    settings = Settings(
+        database_url=f"sqlite:///{tmp_path / 'contractmate.db'}",
+        local_storage_dir=tmp_path / "files",
+        model_provider="openai",
+        model_api_key="test-key",
+    )
+
+    producer = ContractProcessingService.local(settings)
+    try:
+        reviewed = producer.review_local_file(
+            file_path=contract,
+            workspace_id="T1",
+            email_thread_id="email-thread-existing-review",
+            requested_by="reviewer@example.com",
+        )
+        producer.repository.update_contract_status(reviewed.contract_id, WorkflowState.QUEUED)
+    finally:
+        producer.close()
+
+    consumer = ContractProcessingService.local(settings)
+    try:
+        result = consumer.review_stored_contract(
+            contract_id=reviewed.contract_id,
+            contract_version_id=reviewed.contract_version_id,
+            workspace_id="T1",
+        )
+        persisted = consumer.repository.connection.execute(
+            "SELECT status FROM contracts WHERE id = ?",
+            (reviewed.contract_id,),
+        ).fetchone()
+    finally:
+        consumer.close()
+
+    assert result.status is WorkflowState.REVIEW_READY
+    assert result.review is not None
+    assert persisted is not None
+    assert persisted["status"] == WorkflowState.REVIEW_READY.value
+
+
 def test_enqueue_failure_marks_processing_run_failed(tmp_path: Path) -> None:
     contract = tmp_path / "queue-failure.txt"
     contract.write_text("A valid contract document.", encoding="utf-8")
