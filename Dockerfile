@@ -1,12 +1,5 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:22.21.1-bookworm-slim AS frontend-builder
-WORKDIR /build/frontend
-COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
-RUN npm ci
-COPY frontend/ ./
-RUN npm run build
-
 FROM python:3.12.10-slim-bookworm AS python-builder
 RUN python -m pip install --no-cache-dir uv==0.11.17
 ENV UV_COMPILE_BYTECODE=1 \
@@ -33,7 +26,6 @@ RUN groupadd --system --gid 10001 samvid \
     && chown -R samvid:samvid /app
 
 COPY --from=python-builder --chown=samvid:samvid /app/.venv /app/.venv
-COPY --from=frontend-builder --chown=samvid:samvid /build/frontend/.next /app/frontend/dist
 
 USER samvid
 EXPOSE 8000

@@ -76,7 +76,7 @@ export function safeInternalPath(value: string | null | undefined, fallback = "/
 
 export function getAuthClient() {
   if (!authClient) {
-    throw new Error("Neon Auth is not configured. Add VITE_NEON_AUTH_URL to the frontend environment.");
+    throw new Error("Neon Auth is not configured. Add NEXT_PUBLIC_NEON_AUTH_URL to the frontend environment.");
   }
 
   return authClient;

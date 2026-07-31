@@ -50,7 +50,7 @@ jobs:
         working-directory: frontend
 
       - name: Build API production image
-        run: docker build --tag samvid:ci .
+        run: docker build --file Dockerfile.vercel --tag samvid-api:ci .
 
       - name: Build worker production image
         run: docker build --file Dockerfile.worker --tag samvid-worker:ci .

@@ -80,18 +80,13 @@ def test_verifier_requires_bearer_scheme() -> None:
         verifier.verify_authorization_header("Basic abc123")
 
 
-def test_neon_mode_keeps_spa_public_and_protects_api(monkeypatch, tmp_path) -> None:
+def test_neon_mode_leaves_non_api_routes_public_and_protects_api(monkeypatch, tmp_path) -> None:
     pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient
 
     from contractmate.app import create_app
     from contractmate.security.neon_auth import NeonAuthPrincipal
     from contractmate.settings import Settings
-
-    frontend_dist = tmp_path / "frontend" / "dist"
-    frontend_dist.mkdir(parents=True)
-    (frontend_dist / "index.html").write_text("<main>Samvid</main>", encoding="utf-8")
-    monkeypatch.chdir(tmp_path)
 
     principal = NeonAuthPrincipal(
         subject="user_123",
@@ -123,7 +118,7 @@ def test_neon_mode_keeps_spa_public_and_protects_api(monkeypatch, tmp_path) -> N
     )
     client = TestClient(create_app(settings))
 
-    assert client.get("/").status_code == 200
+    assert client.get("/").status_code == 404
     assert client.get("/api/auth/me").status_code == 401
     response = client.get("/api/auth/me", headers={"Authorization": "Bearer valid-token"})
 
