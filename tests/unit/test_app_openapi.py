@@ -14,17 +14,12 @@ def test_app_generates_openapi_schema() -> None:
     assert "/email/inbound" in schema["paths"]
 
 
-def test_production_app_requires_basic_auth_and_sets_security_headers(monkeypatch, tmp_path) -> None:
+def test_production_api_requires_basic_auth_and_sets_security_headers(tmp_path) -> None:
     pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient
 
     from contractmate.app import create_app
     from contractmate.settings import Settings
-
-    frontend_dist = tmp_path / "frontend" / "dist"
-    frontend_dist.mkdir(parents=True)
-    (frontend_dist / "index.html").write_text("<main>Samvid</main>", encoding="utf-8")
-    monkeypatch.chdir(tmp_path)
 
     settings = Settings(
         app_env="production",
@@ -34,9 +29,9 @@ def test_production_app_requires_basic_auth_and_sets_security_headers(monkeypatc
         database_url="postgresql://user:pass@database/samvid",
         local_storage_dir=tmp_path / "contracts",
         inbound_attachment_dir=tmp_path / "inbound",
-            model_api_key="model-key",
-            fireworks_api_key="fireworks-key",
-            auto_send_review_email=False,
+        model_api_key="model-key",
+        fireworks_api_key="fireworks-key",
+        auto_send_review_email=False,
     )
     client = TestClient(create_app(settings))
 
@@ -46,7 +41,7 @@ def test_production_app_requires_basic_auth_and_sets_security_headers(monkeypatc
 
     assert unauthenticated.status_code == 401
     assert unauthenticated.headers["www-authenticate"].startswith("Basic")
-    assert authenticated.status_code == 200
+    assert authenticated.status_code == 404
     assert authenticated.headers["x-content-type-options"] == "nosniff"
     assert "max-age=31536000" in authenticated.headers["strict-transport-security"]
 

@@ -3,7 +3,6 @@ import binascii
 import hmac
 import logging
 from contextlib import asynccontextmanager
-from pathlib import Path
 from tempfile import NamedTemporaryFile
 from urllib.parse import urlsplit
 
@@ -32,8 +31,7 @@ def create_app(settings: Settings | None = None):
         from fastapi import FastAPI, Header, HTTPException, Request
         from fastapi.middleware.cors import CORSMiddleware
         from fastapi.middleware.trustedhost import TrustedHostMiddleware
-        from fastapi.responses import FileResponse, JSONResponse
-        from fastapi.staticfiles import StaticFiles
+        from fastapi.responses import JSONResponse
         from starlette.concurrency import run_in_threadpool
     except ModuleNotFoundError as exc:
         raise RuntimeError("Install the 'api' extra to run the HTTP app: uv sync --extra api") from exc
@@ -92,10 +90,10 @@ def create_app(settings: Settings | None = None):
                     content={"detail": str(exc)},
                     headers={"WWW-Authenticate": "Bearer"},
                 )
-                return _with_security_headers(response, settings=settings, request_path=request.url.path)
+                return _with_security_headers(response, settings=settings)
             except NeonAuthorizationError as exc:
                 response = JSONResponse(status_code=403, content={"detail": str(exc)})
-                return _with_security_headers(response, settings=settings, request_path=request.url.path)
+                return _with_security_headers(response, settings=settings)
         elif settings.is_production and settings.auth_mode == "basic" and request.url.path not in public_paths:
             if not _basic_auth_is_valid(request.headers.get("authorization"), settings):
                 response = JSONResponse(
@@ -103,7 +101,7 @@ def create_app(settings: Settings | None = None):
                     content={"detail": "Authentication required"},
                     headers={"WWW-Authenticate": 'Basic realm="Samvid", charset="UTF-8"'},
                 )
-                return _with_security_headers(response, settings=settings, request_path=request.url.path)
+                return _with_security_headers(response, settings=settings)
 
         if (neon_verifier is not None and is_api_request) or (
             settings.is_production and settings.auth_mode == "basic" and request.url.path not in public_paths
@@ -112,10 +110,10 @@ def create_app(settings: Settings | None = None):
                 fetch_site = request.headers.get("sec-fetch-site")
                 if fetch_site and fetch_site not in {"same-origin", "none"}:
                     response = JSONResponse(status_code=403, content={"detail": "Cross-site request rejected"})
-                    return _with_security_headers(response, settings=settings, request_path=request.url.path)
+                    return _with_security_headers(response, settings=settings)
 
         response = await call_next(request)
-        return _with_security_headers(response, settings=settings, request_path=request.url.path)
+        return _with_security_headers(response, settings=settings)
 
     app.include_router(create_api_router(settings))
 
@@ -220,20 +218,6 @@ def create_app(settings: Settings | None = None):
     def unknown_api_route(full_path: str):
         raise HTTPException(status_code=404, detail="API route not found")
 
-    frontend_dist = Path("frontend/dist")
-    if frontend_dist.exists():
-        assets_dir = frontend_dist / "assets"
-        if assets_dir.exists():
-            app.mount("/assets", StaticFiles(directory=assets_dir), name="frontend-assets")
-
-        @app.get("/{full_path:path}", include_in_schema=False)
-        def frontend(full_path: str):
-            requested = (frontend_dist / full_path).resolve()
-            root = frontend_dist.resolve()
-            if requested.exists() and requested.is_file() and (root in requested.parents or requested == root):
-                return FileResponse(requested)
-            return FileResponse(frontend_dist / "index.html")
-
     return app
 
 
@@ -254,7 +238,7 @@ def _basic_auth_is_valid(authorization_header: str | None, settings: Settings) -
     )
 
 
-def _with_security_headers(response, *, settings: Settings, request_path: str):
+def _with_security_headers(response, *, settings: Settings):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
@@ -270,8 +254,6 @@ def _with_security_headers(response, *, settings: Settings, request_path: str):
     )
     if settings.is_production:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    if request_path.startswith("/assets/"):
-        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return response
 
 
