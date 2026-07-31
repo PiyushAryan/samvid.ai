@@ -702,7 +702,6 @@ export function ChatsPage() {
           />
 
           <div className="ai-chat-composer-actions">
-            <span className="ai-chat-context-note">Answers use your indexed contracts</span>
             <button
               className="ai-chat-send-button"
               type="submit"
