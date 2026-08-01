@@ -15,7 +15,8 @@ import type {
   SignerDraft,
   SignerStatus,
   SigningRequest,
-  SigningRequestStatus
+  SigningRequestStatus,
+  SlackIntegrationStatus
 } from "./types";
 
 export type CollectionResponse<T> = T[] | AdminCollection<T>;
@@ -378,4 +379,16 @@ export function listAdminAccessEvents(filters: { search?: string; eventType?: st
       page: filters.page
     })}`
   );
+}
+
+export function getSlackIntegration() {
+  return request<SlackIntegrationStatus>("/api/integrations/slack");
+}
+
+export function beginSlackInstallation() {
+  return request<{ authorize_url: string }>("/api/integrations/slack/install", { method: "POST" });
+}
+
+export function disconnectSlackInstallation(installationId: string) {
+  return request<void>(`/api/integrations/slack/${encodeURIComponent(installationId)}`, { method: "DELETE" });
 }

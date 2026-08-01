@@ -11,6 +11,10 @@
   },
   "dependencies": {
     "@calcom/embed-react": "^1.5.3",
+    "@fontsource/cabin-sketch": "^5.3.0",
+    "@fontsource/caveat": "^5.3.0",
+    "@hugeicons/core-free-icons": "^4.2.3",
+    "@hugeicons/react": "^1.1.9",
     "@neondatabase/neon-js": "0.6.2-beta",
     "@tanstack/react-query": "^5.59.16",
     "@vercel/blob": "^2.6.1",

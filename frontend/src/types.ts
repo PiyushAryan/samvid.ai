@@ -146,7 +146,20 @@ export type ChatStreamEvent =
   | { type: "error"; code?: string; message: string };
 
 export type AdminAccountState = "unclaimed" | "active";
-export type AdminAccountSource = "signup" | "inbound_email";
+export type AdminAccountSource = "signup" | "inbound_email" | "inbound_slack";
+
+export interface SlackInstallation {
+  id: string;
+  team_id: string;
+  team_name: string | null;
+  status: "active" | "revoked" | "disconnected" | string;
+  created_at?: string | null;
+}
+
+export interface SlackIntegrationStatus {
+  enabled: boolean;
+  installations: SlackInstallation[];
+}
 
 export interface AdminUserSummary {
   id: string;

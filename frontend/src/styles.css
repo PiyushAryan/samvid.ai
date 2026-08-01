@@ -6,6 +6,14 @@
   font-weight: 100 900;
 }
 
+@font-face {
+  font-family: "GeistPixelSans";
+  src: url("../node_modules/geist/dist/fonts/geist-pixel/GeistPixel-Square.woff2") format("woff2");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 100 900;
+}
+
 :root {
   --app-bg: #f6f7f4;
   --surface: #fbfcf9;
@@ -1405,6 +1413,344 @@ p {
   box-shadow: var(--workspace-surface-shadow);
 }
 
+.integrations-page {
+  max-width: 920px;
+}
+
+.settings-page {
+  min-height: calc(100vh - 18px);
+  background: #fff;
+}
+
+.app-shell[data-theme="dark"] .settings-page {
+  background: var(--app-bg);
+}
+
+.settings-page-content {
+  display: grid;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  grid-template-columns: 140px minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+  padding-top: 40px;
+  font-family: "Instrument Sans", "Geist Sans", system-ui, sans-serif;
+  font-size: 13px;
+}
+
+.settings-nav {
+  position: sticky;
+  top: 40px;
+  width: 140px;
+}
+
+.settings-nav h1,
+.settings-content-header h1 {
+  font-family: "GeistPixelSans", "Geist Pixel Square", ui-monospace, monospace;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+.settings-nav h1 {
+  margin: 0 0 14px 20px;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.settings-nav nav {
+  display: grid;
+  gap: 6px;
+}
+
+.settings-nav-item {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: "Instrument Sans", "Geist Sans", system-ui, sans-serif;
+  font-size: 13px;
+  text-align: left;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.settings-nav-item:hover {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.settings-nav-item[data-active="true"] {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+
+.settings-content-panel {
+  min-width: 0;
+  max-width: 560px;
+  padding-top: 2px;
+}
+
+.settings-content-header {
+  margin-bottom: 28px;
+}
+
+.settings-content-header h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.settings-content-header p {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.settings-profile-card,
+.settings-account-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.settings-profile-card {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+
+.settings-profile-card strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-profile-card .secondary {
+  min-height: 30px;
+  margin-left: auto;
+  padding-inline: 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-avatar {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  place-items: center;
+  border: 4px solid var(--surface);
+  border-radius: 50%;
+  outline: 1px solid var(--border);
+  background: var(--accent);
+  color: #fff;
+  font-size: 15px;
+}
+
+.settings-account-card {
+  margin-top: 12px;
+  overflow: hidden;
+}
+
+.settings-account-card h2 {
+  padding: 14px 16px 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-account-row {
+  display: flex;
+  min-height: 60px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-account-row span:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-account-row small {
+  color: var(--text-secondary);
+  font-family: "GeistPixelSans", "Geist Pixel Square", ui-monospace, monospace;
+  font-size: 13px;
+}
+
+.settings-account-row strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.settings-verified {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--success-bg);
+  color: var(--success);
+  font-size: 13px;
+}
+
+.settings-account-row .secondary {
+  min-height: 30px;
+  padding-inline: 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-empty-card {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.integration-card {
+  display: grid;
+  gap: 20px;
+}
+
+.settings-content-panel .integration-card {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.integration-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.integration-heading h2,
+.integration-heading p,
+.integration-state,
+.integration-error,
+.integration-privacy {
+  margin: 0;
+}
+
+.integration-heading h2 {
+  font-size: 13px;
+}
+
+.integration-heading p,
+.integration-state,
+.integration-privacy {
+  color: var(--text-muted);
+}
+
+.integration-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border: 0.5px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-muted);
+}
+
+.integration-icon img {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.integration-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.integration-status {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--neutral-bg);
+  color: var(--neutral);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.integration-status.is-connected {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.integration-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.integration-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  border: 0.5px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.integration-list li > span {
+  display: grid;
+  gap: 3px;
+}
+
+.integration-list small {
+  color: var(--text-muted);
+}
+
+.integration-connect {
+  width: fit-content;
+}
+
+.integration-state,
+.integration-error,
+.integration-connect,
+.integration-list button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.integration-error {
+  color: var(--danger);
+}
+
+.integration-privacy {
+  padding-top: 14px;
+  border-top: 0.5px solid var(--border);
+  font-size: 11px;
+}
+
 .panel h2,
 .dialog h2 {
   margin: 0 0 14px;
@@ -2502,6 +2848,33 @@ textarea.field-control {
 }
 
 @media (max-width: 960px) {
+  .settings-page-content {
+    grid-template-columns: 140px minmax(0, 1fr);
+    gap: 20px;
+  }
+
+  .settings-nav-item {
+    min-height: 36px;
+    font-size: 13px;
+  }
+
+  .settings-profile-card {
+    gap: 12px;
+    padding-inline: 12px;
+  }
+
+  .settings-avatar {
+    width: 48px;
+    height: 48px;
+    flex-basis: 48px;
+    border-width: 4px;
+    font-size: 18px;
+  }
+
+  .settings-profile-card strong {
+    font-size: 13px;
+  }
+
   .app-shell {
     width: calc(100% - 16px);
     min-height: calc(100vh - 16px);
@@ -2609,6 +2982,75 @@ textarea.field-control {
 }
 
 @media (max-width: 720px) {
+  .settings-page-content {
+    display: block;
+    padding-top: 24px;
+  }
+
+  .settings-nav {
+    position: static;
+    width: 100%;
+    margin-bottom: 36px;
+  }
+
+  .settings-nav h1 {
+    margin-left: 0;
+    font-size: 16px;
+  }
+
+  .settings-nav nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-nav-item {
+    min-height: 36px;
+    justify-content: center;
+    gap: 8px;
+    padding-inline: 8px;
+    font-size: 13px;
+  }
+
+  .settings-content-header {
+    margin-bottom: 24px;
+  }
+
+  .settings-content-header h1 {
+    font-size: 16px;
+  }
+
+  .settings-content-header p {
+    font-size: 13px;
+  }
+
+  .settings-profile-card {
+    min-height: 92px;
+    padding: 14px;
+  }
+
+  .settings-profile-card strong {
+    font-size: 13px;
+  }
+
+  .settings-profile-card .secondary {
+    min-height: 30px;
+    font-size: 13px;
+  }
+
+  .settings-account-card h2,
+  .settings-account-row {
+    padding-inline: 20px;
+  }
+
+  .settings-account-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .settings-verified,
+  .settings-account-row .secondary {
+    font-size: 13px;
+  }
+
   .page {
     padding: 32px 16px;
   }

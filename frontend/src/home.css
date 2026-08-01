@@ -1,4 +1,6 @@
-/* Samvid Landing Page Custom CSS - Light Theme */
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+/* Samvid Landing Page Custom CSS - Warm Parchment & Emerald Theme */
 
 @font-face {
   font-family: "Geist Pixel Circle";
@@ -9,26 +11,31 @@
 }
 
 :root {
-  --lp-bg: #f6f7f4;
-  --lp-bg-card: #fbfcf9;
-  --lp-bg-card-hover: #f0f2ef;
-  --lp-border: rgba(15, 23, 42, 0.08);
-  --lp-border-hover: rgba(13, 148, 136, 0.35);
-  --lp-teal: #0d9488;
-  --lp-teal-glow: rgba(13, 148, 136, 0.12);
-  --lp-cyan: #0891b2;
-  --lp-text-primary: #0f172a;
-  --lp-text-secondary: #334155;
-  --lp-text-muted: #64748b;
+  --lp-bg: #faf9f9;
+  --lp-bg-card: #fcf9f2;
+  --lp-bg-card-hover: #f7f2e7;
+  --lp-border: rgba(90, 75, 55, 0.14);
+  --lp-border-hover: rgba(15, 76, 58, 0.3);
+  --lp-emerald: #0f4c3a;
+  --lp-emerald-hover: #0b3b2d;
+  --lp-emerald-glow: rgba(15, 76, 58, 0.15);
+  --lp-kraft: #e8decb;
+  --lp-kraft-text: #594d3c;
+  --lp-text-primary: #1c2421;
+  --lp-text-secondary: #4a5550;
+  --lp-text-muted: #78857e;
   
-  --lp-red: #e11d48;
-  --lp-red-bg: rgba(225, 29, 72, 0.05);
+  --lp-red: #b91c1c;
+  --lp-red-bg: rgba(185, 28, 28, 0.06);
   --lp-amber: #d97706;
-  --lp-amber-bg: rgba(217, 119, 6, 0.05);
-  --lp-green: #059669;
-  --lp-green-bg: rgba(5, 150, 105, 0.05);
+  --lp-amber-bg: rgba(217, 119, 6, 0.08);
+  --lp-green: #0f4c3a;
+  --lp-green-bg: rgba(15, 76, 58, 0.08);
   
-  --lp-font-sans: "Geist Sans", system-ui, -apple-system, sans-serif;
+  --lp-font-serif: "Cormorant Garamond", Georgia, serif;
+  --lp-font-handwriting: "Caveat", cursive;
+  --lp-font-sketch: "Cabin Sketch", cursive;
+  --lp-font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
   --lp-font-mono: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
 }
 
@@ -89,7 +96,7 @@
 
 .landing-header.is-scrolled::before {
   border-bottom-color: var(--lp-border);
-  background: rgba(251, 252, 249, 0.92);
+  background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -123,20 +130,22 @@
 }
 
 .landing-brand-name {
-  font-family: "Geist Pixel Circle", var(--lp-font-mono);
-  font-weight: 900;
-  font-size: 32px;
-  letter-spacing: 0;
-  line-height: 1.1;
-  color: var(--lp-text-primary);
+  font-family: var(--lp-font-serif);
+  font-weight: 700;
+  font-size: 30px;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--lp-emerald);
 }
 
 .landing-brand-tag {
-  font-family: var(--lp-font-mono);
-  font-size: 8px;
-  color: var(--lp-teal);
-  letter-spacing: 0.05em;
-  margin-top: 1px;
+  font-family: var(--lp-font-sans);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--lp-text-secondary);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-top: 2px;
 }
 
 .landing-nav-links {
@@ -149,61 +158,63 @@
 .landing-nav-link {
   color: var(--lp-text-secondary);
   text-decoration: none;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 500;
   transition: color 0.2s ease;
 }
 
 .landing-nav-link:hover {
-  color: var(--lp-text-primary);
+  color: var(--lp-emerald);
 }
 
 .landing-nav-cta {
   display: flex;
   justify-self: end;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   will-change: transform;
 }
 
 .landing-nav-cta .btn-lp-primary,
 .landing-nav-cta .btn-lp-secondary {
-  min-height: 36px;
-  padding: 8px 14px;
+  min-height: 38px;
+  padding: 8px 18px;
+  border-radius: 24px;
 }
 
 /* Premium Buttons */
 .btn-lp-primary {
-  background: var(--lp-teal);
+  background: var(--lp-emerald);
   color: #ffffff;
   font-weight: 600;
-  padding: 10px 18px;
-  border-radius: 8px;
-  border: 1px solid var(--lp-teal);
-  font-size: 16px;
+  padding: 10px 20px;
+  border-radius: 24px;
+  border: 1px solid var(--lp-emerald);
+  font-size: 15px;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.15);
+  box-shadow: 0 4px 12px rgba(15, 76, 58, 0.18);
 }
 
 .btn-lp-primary:hover {
-  background: transparent;
-  color: var(--lp-teal);
-  box-shadow: 0 0 10px var(--lp-teal-glow);
+  background: var(--lp-emerald-hover);
+  border-color: var(--lp-emerald-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15, 76, 58, 0.25);
 }
 
 .btn-lp-secondary {
   background: var(--lp-bg-card);
   color: var(--lp-text-primary);
   font-weight: 500;
-  padding: 10px 18px;
-  border-radius: 8px;
+  padding: 10px 20px;
+  border-radius: 24px;
   border: 1px solid var(--lp-border);
-  font-size: 16px;
+  font-size: 15px;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
@@ -214,188 +225,794 @@
 
 .btn-lp-secondary:hover {
   background: var(--lp-bg-card-hover);
+  border-color: rgba(90, 75, 55, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-lp-secondary:hover {
+  background: var(--lp-bg-card-hover);
   border-color: var(--lp-text-secondary);
 }
 
-/* Hero Section */
-.landing-body h1,
-.landing-body h2,
-.landing-body h3,
-.landing-body h4,
-.landing-body h5,
-.landing-body h6 {
-  color: var(--lp-text-primary);
-}
+/* ==========================================================================
+   Hero Section Styling - Parchment Aesthetic & Visual Stage
+   ========================================================================== */
 
 .hero-section {
   position: relative;
-  isolation: isolate;
-  width: 100vw;
-  min-height: calc(100svh - 74px);
-  margin-left: calc(50% - 50vw);
-  padding: 92px 24px 60px;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.hero-section::before,
-.hero-section::after {
-  content: "";
-  position: absolute;
-  inset: -74px 0 0;
-  pointer-events: none;
-}
-
-.hero-section::before {
-  z-index: -2;
-  background-image: url('/blr-hero.webp');
-  background-repeat: no-repeat;
-  background-position: center 50%;
-  background-size: cover;
-}
-
-.hero-section::after {
-  z-index: -1;
-  background: linear-gradient(
-    180deg,
-    rgba(248, 250, 250, 0.1) 0%,
-    rgba(248, 250, 250, 0.16) 58%,
-    rgba(246, 247, 244, 0.32) 76%,
-    rgba(246, 247, 244, 0.72) 92%,
-    var(--lp-bg) 100%
-  );
-}
-
-.hero-content-wrapper {
-  width: min(900px, 100%);
-  min-height: 380px;
+  width: 100%;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 18px 24px 0;
-  transform: translateY(-90px);
+  padding: 40px 0 0;
+}
+
+.hero-container {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 40px;
+  align-items: center;
+  position: relative;
+  z-index: 2;
+}
+
+@media (max-width: 960px) {
+  .hero-container {
+    grid-template-columns: 1fr;
+    gap: 48px;
+  }
+}
+
+/* Left Content */
+.hero-left-content {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+}
+
+.hero-badge-tape {
+  display: inline-flex;
   align-items: center;
-  text-align: center;
+  padding: 6px 14px;
+  background: #e8decb;
+  border: 1px dashed rgba(120, 100, 70, 0.35);
+  border-radius: 6px;
+  font-family: var(--lp-font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #594d3c;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+  transform: rotate(-0.8deg);
+}
+
+.hero-main-title {
+  font-family: var(--lp-font-sketch);
+  font-size: clamp(44px, 4.4vw, 66px);
+  font-weight: 700;
+  line-height: 1.05;
+  color: #1c2421;
+  margin-bottom: 20px;
+  letter-spacing: 0.01em;
+  text-wrap: balance;
+}
+
+.hero-title-italic-emerald {
+  font-family: var(--lp-font-serif);
+  font-style: italic;
+  font-weight: 600;
+  color: var(--lp-emerald);
   position: relative;
-  z-index: 1;
+  display: inline-block;
 }
 
-.hero-road {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  height: 100%;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.hero-road::after {
+.hero-title-italic-emerald::after {
   content: "";
   position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    to bottom,
-    transparent 10%,
-    rgba(246, 247, 244, 0.38) 85%,
-    var(--lp-bg) 100%
-  );
+  bottom: 2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: currentColor;
+  opacity: 0.4;
 }
 
-.hero-road img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center bottom;
-  transform: translateY(clamp(8px, 1vw, 14px));
+.hero-description {
+  font-family: var(--lp-font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  color: #4a5550;
+  max-width: 480px;
+  margin-bottom: 28px;
 }
 
-.demo-section {
-  width: 100%;
+.hero-action-buttons {
   display: flex;
-  justify-content: center;
-  padding-top: 72px;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 28px;
 }
 
-.hero-badge {
-  font-family: var(--lp-font-mono);
-  font-size: 10px;
-  color: #285a55;
-  padding: 0;
-  margin-bottom: 16px;
-  letter-spacing: 0.05em;
+.btn-hero-cta {
+  padding: 12px 22px !important;
+  font-size: 15px !important;
+}
+
+.hero-handwritten-note {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--lp-font-handwriting) !important;
+  font-size: 26px !important;
+  font-weight: 600 !important;
+  color: #3c3022;
+  line-height: 1.25;
+}
+
+.note-envelope-arrow {
   display: flex;
   align-items: center;
   gap: 6px;
+  color: #5c4d3b;
 }
 
-.hero-badge-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: var(--lp-teal);
+.note-mail-icon {
+  color: #5c4d3b;
 }
 
-.hero-heading {
-  max-width: 860px;
-  margin: 0 auto 22px;
-  color: #101817;
-  font-size: clamp(40px, 6vw, 68px);
-  font-weight: 600;
-  line-height: 1.04;
-  letter-spacing: 0;
+.note-arrow {
+  font-family: var(--lp-font-handwriting) !important;
+  font-size: 24px !important;
+  font-weight: 700 !important;
+  letter-spacing: -1px;
 }
 
-.hero-heading-lead {
-  color: #285a55;
-  font-family: var(--lp-font-mono);
-  font-size: 0.42em;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.hero-heading-dial {
-  display: block;
-  height: 1.14em;
-  overflow: hidden;
-  perspective: 700px;
-}
-
-.hero-dial-track {
+.note-text {
   display: flex;
-  height: 2.28em;
   flex-direction: column;
-  animation: hero-dial-scroll 7s cubic-bezier(0.65, 0, 0.35, 1) infinite;
-  will-change: transform;
+  font-family: var(--lp-font-handwriting) !important;
+  font-size: 26px !important;
+  font-weight: 600 !important;
+  color: #3c3022;
 }
 
-.hero-dial-phase {
-  flex: 0 0 1.14em;
+.note-text span {
+  font-family: var(--lp-font-handwriting) !important;
+  font-size: 26px !important;
+  font-weight: 600 !important;
+  line-height: 1.2;
+}
+
+/* Right Visual Stage */
+.hero-visual-stage {
+  position: relative;
+  min-height: 460px;
+  width: 100%;
+}
+
+.hero-paperwork {
+  position: absolute;
+  z-index: 2;
+  inset: 12px 0 auto;
+  height: 330px;
+  pointer-events: none;
+}
+
+.hero-paper {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 14px;
+  color: #2f3935;
+  font-family: var(--lp-font-sans);
+}
+
+.hero-paper-eyebrow {
+  color: #6b6256;
+  font-family: var(--lp-font-mono);
+  font-size: 7px;
+  letter-spacing: 0.08em;
+}
+
+.hero-paper strong {
+  font-family: var(--lp-font-serif);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.hero-paper > span:not(.hero-paper-eyebrow) {
+  color: #645b4e;
+  font-size: 9px;
+}
+
+.hero-paper i {
+  display: block;
+  width: 100%;
+  height: 1px;
+  background: rgba(63, 56, 47, 0.26);
+}
+
+.hero-paper i:nth-last-child(2) {
+  width: 76%;
+}
+
+.hero-paper i:last-child {
+  width: 60%;
+}
+
+.hero-stamp-paper {
+  top: 18px;
+  left: 52px;
+  width: 304px;
+  height: auto;
+  aspect-ratio: 1491 / 1055;
+  padding: 0;
+  border: 0;
+  background: url("/stamp-paper.png") center / contain no-repeat;
+  box-shadow: none;
+  transform: rotate(-7deg);
+}
+
+.hero-pink-file {
+  top: 220px;
+  left: 350px;
+  width: 174px;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 558 / 447;
+  padding: 0;
+  border: 0;
+  background: url("/pink-file.png") center / contain no-repeat;
+  box-shadow: none;
+  transform: rotate(9deg);
+}
+
+.hero-policy-paper {
+  top: 48px;
+  left: 220px;
+  width: 207px;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 1024 / 1536;
+  padding: 0;
+  border: 0;
+  background: url("/emp-bond.png") center / contain no-repeat;
+  box-shadow: none;
+  transform: rotate(2deg);
+}
+
+.hero-contract-paper {
+  top: 176px;
+  left: 96px;
+  width: 205px;
+  min-height: 118px;
+  border: 1px solid #cfc4b2;
+  background: #faf7ef;
+  box-shadow: 3px 4px 0 rgba(89, 77, 60, 0.08);
+  transform: rotate(-2deg);
+}
+
+.hero-nda-paper {
+  top: 158px;
+  left: 315px;
+  width: 163px;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 1055 / 1491;
+  padding: 0;
+  border: 0;
+  background: url("/NDA.png") center / contain no-repeat;
+  box-shadow: none;
+  transform: rotate(6deg);
+}
+
+.hero-rubber-stamp {
+  position: absolute;
+  top: 0;
+  left: 298px;
+  display: grid;
+  width: 90px;
+  height: 90px;
+  place-items: center;
+  border: 2px double rgba(159, 52, 45, 0.72);
+  border-radius: 50%;
+  color: rgba(159, 52, 45, 0.78);
+  font-family: var(--lp-font-sketch);
+  font-size: 14px;
+  line-height: 0.9;
+  text-align: center;
+  text-transform: uppercase;
+  transform: rotate(14deg);
+}
+
+.hero-bengaluru-artwork {
+  position: absolute;
+  right: -160px;
+  bottom: -110px;
+  width: min(720px, 58vw);
+  height: 500px;
+  background: url("/blr-s124.png") right bottom / contain no-repeat;
+  filter: saturate(0.92) contrast(0.98);
+  -webkit-mask-image: radial-gradient(ellipse 76% 68% at 70% 60%, #000 16%, rgba(0, 0, 0, 0.8) 44%, transparent 100%);
+  mask-image: radial-gradient(ellipse 76% 68% at 70% 60%, #000 16%, rgba(0, 0, 0, 0.8) 44%, transparent 100%);
+}
+
+.hero-bengaluru-artwork::after {
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  background:
+    linear-gradient(to right, var(--lp-bg) 0%, transparent 30%, transparent 76%, var(--lp-bg) 100%),
+    linear-gradient(to bottom, var(--lp-bg) 0%, transparent 24%, transparent 78%, var(--lp-bg) 100%);
+  content: "";
+}
+
+@media (max-width: 960px) {
+  .hero-visual-stage {
+    min-height: 320px;
+  }
+
+  .hero-bengaluru-artwork {
+    right: -36px;
+    bottom: -42px;
+    width: min(620px, 104vw);
+    height: 360px;
+  }
+
+  .hero-paperwork {
+    transform: scale(0.82);
+    transform-origin: top left;
+  }
+}
+
+@media (max-width: 640px) {
+  .hero-paperwork {
+    display: none;
+  }
+}
+
+/* Base Document Card */
+.doc-preview-card {
+  position: absolute;
+  top: 10px;
+  right: 40px;
+  width: min(420px, 85%);
+  background: #fbf8f3;
+  border: 1px solid #d9cebd;
+  border-radius: 4px 6px 3px 5px;
+  padding: 24px;
+  box-shadow: 5px 6px 0 rgba(89, 77, 60, 0.07);
+  z-index: 1;
+}
+
+.doc-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #efe8da;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  position: relative;
+}
+
+.doc-preview-title {
+  font-family: var(--lp-font-serif);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: #2c3531;
+}
+
+.doc-preview-page {
+  font-family: var(--lp-font-sans);
+  font-size: 11px;
+  color: #8c7e6c;
+  background: #f3ede2;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.doc-stamp-mark {
+  position: absolute;
+  top: -8px;
+  right: 90px;
+  width: 44px;
+  height: 44px;
+  border: 1.5px dashed rgba(185, 28, 28, 0.35);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  transform: rotate(-12deg);
+}
+
+.stamp-circle-text {
+  font-size: 6px;
+  font-weight: 700;
+  color: rgba(185, 28, 28, 0.5);
+  letter-spacing: 0.05em;
+  text-align: center;
+}
+
+.doc-preview-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.doc-skeleton-line {
+  height: 6px;
+  background: #eae2d3;
+  border-radius: 3px;
+}
+
+.doc-line-w80 { width: 80%; }
+.doc-line-w90 { width: 90%; }
+.doc-line-w100 { width: 100%; }
+.doc-line-w70 { width: 70%; }
+.doc-line-w85 { width: 85%; }
+
+.doc-highlight-box {
+  background: #fef08a;
+  border-left: 3px solid #d97706;
+  padding: 8px 12px;
+  border-radius: 0 6px 6px 0;
+  margin: 4px 0;
+}
+
+.doc-highlight-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #78350f;
+  display: block;
+}
+
+.doc-highlight-text {
+  font-size: 11px;
+  color: #92400e;
+  margin: 0;
+}
+
+/* Floating Card 1: Risk Summary (Top Left) */
+.card-risk-summary {
+  position: absolute;
+  top: -10px;
+  left: 0;
+  width: 250px;
+  background: #ffffff;
+  border: 1px solid #eae3d5;
+  border-radius: 4px 6px 5px 3px;
+  padding: 16px;
+  box-shadow: 4px 5px 0 rgba(89, 77, 60, 0.07);
+  z-index: 4;
+}
+
+.card-risk-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.card-risk-header strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1c2421;
+}
+
+.pill-risk-high {
+  background: #fef3c7;
+  color: #b45309;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.card-risk-text {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #4b5563;
+  margin-bottom: 8px;
+}
+
+.card-risk-link {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0d9488;
+  text-decoration: underline;
+}
+
+/* Floating Card 2: Auto extracted Sticky Note (Top Right) */
+.card-sticky-note {
+  position: absolute;
+  top: 30px;
+  right: -15px;
+  width: 165px;
+  background: #fef9c3;
+  border: 1px solid #fef08a;
+  border-radius: 4px;
+  padding: 14px 14px 16px;
+  box-shadow: 4px 10px 24px rgba(0, 0, 0, 0.12);
+  z-index: 5;
+  transform: rotate(3deg);
+}
+
+.sticky-paperclip-graphic {
+  position: absolute;
+  top: -10px;
+  right: 18px;
+  width: 12px;
+  height: 22px;
+  border: 2px solid #a8a29e;
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+  background: transparent;
+}
+
+.sticky-note-title {
+  font-family: var(--lp-font-sans);
+  font-size: 12px;
+  font-weight: 700;
+  color: #713f12;
+  margin-bottom: 8px;
+}
+
+.sticky-checklist {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: #854d0e;
+}
+
+.sticky-checklist li {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.2em;
+  gap: 5px;
 }
 
-.hero-subheading {
-  max-width: 650px;
-  margin: 0 auto 32px;
-  color: #263b38;
-  font-size: clamp(15px, 2vw, 18px);
-  font-weight: 400;
-  line-height: 1.6;
-  font-family: var(--lp-font-mono);
+.check-icon {
+  color: #15803d;
+  flex-shrink: 0;
 }
 
-.hero-channel-flip {
-  display: inline-block;
-  width: 92px;
-  height: 1.55em;
-  perspective: 240px;
-  vertical-align: -0.4em;
+.sticky-more {
+  font-family: var(--lp-font-handwriting);
+  font-size: 14px;
+  color: #a16207;
+  margin-top: 2px;
+}
+
+/* Floating Card 3: Key Details Extracted (Middle Left) */
+.card-key-details {
+  position: absolute;
+  top: 145px;
+  left: 20px;
+  width: 245px;
+  background: #ffffff;
+  border: 1px solid #eae3d5;
+  border-radius: 5px 3px 6px 4px;
+  padding: 14px 16px;
+  box-shadow: 4px 5px 0 rgba(89, 77, 60, 0.06);
+  z-index: 4;
+}
+
+.card-details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1c2421;
+  margin-bottom: 10px;
+}
+
+.icon-chevron {
+  color: #9ca3af;
+}
+
+.card-detail-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.detail-icon {
+  color: #6b7280;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.detail-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+}
+
+.detail-val {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.card-detail-more {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 4px;
+  padding-left: 25px;
+}
+
+/* Floating Card 4: Samvid Status (Bottom Right) */
+.card-samvid-status {
+  position: absolute;
+  bottom: 80px;
+  right: 15px;
+  width: 235px;
+  background: #ffffff;
+  border: 1px solid #e5dfd3;
+  border-radius: 3px 5px 4px 6px;
+  padding: 12px 16px;
+  box-shadow: 4px 5px 0 rgba(89, 77, 60, 0.07);
+  z-index: 5;
+}
+
+.samvid-status-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.status-pin-badge {
+  width: 20px;
+  height: 20px;
+  background: #ccfbf1;
+  color: #0f4c3a;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+
+.status-brand-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1c2421;
+}
+
+.status-arrow {
+  margin-left: auto;
+  color: #9ca3af;
+}
+
+.samvid-status-copy {
+  font-size: 11px;
+  color: #4b5563;
+  line-height: 1.4;
+}
+
+.status-risk-alert {
+  color: #1f2937;
+}
+
+.risk-highlight {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+/* Approved Cursive Stamp */
+.approved-handwritten-stamp {
+  position: absolute;
+  top: 130px;
+  right: 120px;
+  font-family: var(--lp-font-handwriting);
+  font-size: 34px;
+  color: rgba(185, 28, 28, 0.65);
+  transform: rotate(-10deg);
+  z-index: 6;
+  pointer-events: none;
+}
+
+/* Full-width Vidhana Soudha Watercolor Artwork Stage (blr-s12.png) */
+.blr-fullwidth-stage {
+  position: relative;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-top: -60px;
+  z-index: 1;
+}
+
+@media (max-width: 960px) {
+  .blr-fullwidth-stage {
+    margin-top: 20px;
+  }
+}
+
+.blr-fullwidth-inner {
+  position: relative;
+  width: 100%;
+}
+
+/* Smooth top and bottom background gradient blend */
+.blr-fullwidth-inner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    var(--lp-bg) 0%,
+    rgba(244, 239, 230, 0.75) 14%,
+    rgba(244, 239, 230, 0) 32%,
+    rgba(244, 239, 230, 0) 68%,
+    rgba(244, 239, 230, 0.75) 86%,
+    var(--lp-bg) 100%
+  );
+}
+
+.blr-fullwidth-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: contain;
+  filter: saturate(0.92) contrast(0.98);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 1) 16%,
+    rgba(0, 0, 0, 1) 82%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 1) 16%,
+    rgba(0, 0, 0, 1) 82%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
+/* Bengaluru Postal Stamp Badge */
+.bengaluru-postal-stamp {
+  position: absolute;
+  bottom: 24px;
+  left: max(24px, calc(50vw - 580px));
+  background: rgba(253, 251, 247, 0.92);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(140, 120, 95, 0.25);
+  border-radius: 8px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  z-index: 5;
+}
+
+.stamp-pin {
+  color: #0f4c3a;
+}
+
+.stamp-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.stamp-city {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1c2421;
+}
+
+.stamp-motto {
+  font-size: 10px;
+  color: #6b7280;
 }
 
 .hero-channel-flip-track {

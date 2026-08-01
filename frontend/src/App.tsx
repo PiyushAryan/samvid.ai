@@ -327,9 +327,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                       className="sidebar-menu-item sidebar-menu-action"
                       type="button"
                       role="menuitem"
-                      aria-label="Settings"
-                      aria-disabled="true"
-                      title="Settings are not available yet"
+                    aria-label="Settings"
+                    title="Integrations and settings"
+                    onClick={() => {
+                      setSidebarMenuOpen(false);
+                      navigate("/settings");
+                    }}
                     >
                       <Settings size={19} aria-hidden="true" />
                     </button>

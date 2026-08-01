@@ -4,6 +4,7 @@ import { ReactNode } from "react";
 import { beforeEach, expect, test, vi } from "vitest";
 import { AppShell, ChatsPage, ContractDetailPage, ContractsPage, ContractsTableSkeleton, ContractTable, ReviewTab, Timeline } from "./App";
 import { LandingPage } from "./Home";
+import { IntegrationsPage } from "./Integrations";
 import * as api from "./api";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { setTestUrl } from "./test-navigation";
@@ -20,6 +21,9 @@ vi.mock("./api", async (importOriginal) => {
     getContract: vi.fn(),
     getContractDocument: vi.fn(),
     deleteContract: vi.fn(),
+    getSlackIntegration: vi.fn(),
+    beginSlackInstallation: vi.fn(),
+    disconnectSlackInstallation: vi.fn(),
     streamChatMessage: vi.fn()
   };
 });
@@ -428,7 +432,7 @@ test("sidebar actions menu opens and switches theme", () => {
   const menu = within(container).getByRole("menu", { name: /sidebar actions|account/i });
   expect(within(menu).getByRole("menuitem", { name: "Account: Piyush Aryan" })).toBeInTheDocument();
   expect(within(menu).getByText("piyusharyan81@gmail.com")).toBeInTheDocument();
-  expect(within(menu).getByRole("menuitem", { name: "Settings" })).toHaveAttribute("aria-disabled", "true");
+  expect(within(menu).getByRole("menuitem", { name: "Settings" })).toBeEnabled();
   expect(within(menu).getByRole("menuitem", { name: /log ?out/i })).toBeEnabled();
 
   fireEvent.click(within(menu).getByRole("menuitemcheckbox", { name: /dark mode/i }));
@@ -436,6 +440,21 @@ test("sidebar actions menu opens and switches theme", () => {
   expect(container.querySelector(".app-shell")).toHaveAttribute("data-theme", "dark");
   expect(window.localStorage.getItem("samvid-theme")).toBe("dark");
   expect(within(container).queryByRole("menu", { name: /sidebar actions|account/i })).not.toBeInTheDocument();
+});
+
+test("integrations page lists and disconnects a Slack workspace", async () => {
+  vi.mocked(api.getSlackIntegration).mockResolvedValue({
+    enabled: true,
+    installations: [{ id: "install-1", team_id: "T123", team_name: "Legal Ops", status: "active" }]
+  });
+  vi.mocked(api.disconnectSlackInstallation).mockResolvedValue(undefined);
+
+  render(<QueryProvider><IntegrationsPage /></QueryProvider>);
+
+  expect(await screen.findByText("Legal Ops")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /disconnect/i }));
+  await waitFor(() => expect(api.disconnectSlackInstallation).toHaveBeenCalled());
+  expect(vi.mocked(api.disconnectSlackInstallation).mock.calls[0][0]).toBe("install-1");
 });
 
 test("contract loading state exposes one accessible status and hides its placeholders", () => {

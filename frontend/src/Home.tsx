@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import { Link } from "./next-router-compat";
 import { AnimatePresence, motion, useReducedMotion, useScroll, useSpring, useTransform } from "motion/react";
 import {
@@ -192,7 +191,7 @@ export function LandingPage() {
             style={{ x: prefersReducedMotion ? 0 : smoothBrandX }}
           >
             <div className="landing-brand-text">
-              <span className="landing-brand-name">samvid</span>
+              <span className="landing-brand-name">Samvid</span>
               <span className="landing-brand-tag">Intelligence</span>
             </div>
           </MotionLink>
@@ -203,14 +202,17 @@ export function LandingPage() {
           >
             <a href="#workflow" className="landing-nav-link">How it works</a>
             <Link to="/changelog" className="landing-nav-link">Changelog</Link>
+            <a href="#pricing" className="landing-nav-link">Pricing</a>
+            <a href="#blog" className="landing-nav-link">Blog</a>
+            <a href="#docs" className="landing-nav-link">Docs</a>
           </motion.nav>
           <motion.div
             ref={navCtaRef}
             className="landing-nav-cta"
             style={{ x: prefersReducedMotion ? 0 : smoothCtaX }}
           >
-            <Link to="/chats" className="btn-lp-secondary">
-              Sign up
+            <Link to="/chats" className="btn-lp-secondary btn-header-signin">
+              Sign in
             </Link>
             <Link to="/book-demo" className="btn-lp-primary">Book a Demo</Link>
           </motion.div>
@@ -218,38 +220,71 @@ export function LandingPage() {
 
         {/* Hero Section */}
         <section ref={heroRef} className="hero-section">
-          <div className="hero-content-wrapper">
-            <div className="hero-badge">
-              BUILT FOR LEGAL & PROCUREMENT TEAMS
+          <div className="hero-container">
+            {/* Left Column: Headline & Action Copy */}
+            <div className="hero-left-content">
+              <div className="hero-badge-tape">
+                BUILT FOR LEGAL &amp; PROCUREMENT TEAMS
+              </div>
+
+              <h1 className="hero-main-title">
+               review. track. remember.
+              </h1>
+
+              <p className="hero-description">
+                Samvid reads every page, explains the risk, keeps every version organized, and records each signing handoff.
+              </p>
+
+              <div className="hero-action-buttons">
+                <Link to="/chats" className="btn-lp-primary btn-hero-cta">
+                  Open Workspace <ArrowRight size={16} />
+                </Link>
+                <a
+                  href="mailto:contracts@samvid.online?subject=please%20review%20this&body=Hi%20Samvid%0Aplease%20review%20it."
+                  className="btn-lp-secondary btn-hero-cta"
+                  aria-label="Email a contract to Samvid"
+                >
+                  Mail it. Chill.
+                </a>
+              </div>
+
+              <div className="hero-handwritten-note">
+                <div className="note-envelope-arrow">
+                  <Mail size={25} className="note-mail-icon" />
+                  <span className="note-arrow">→</span>
+                </div>
+                <div className="note-text">
+                  <span>Forward a contract or upload it.</span>
+                  <span>Samvid takes care of the rest.</span>
+                </div>
+              </div>
             </div>
-            <h1 className="hero-heading">
-              <span className="hero-heading-lead">One teammate to keep every contract</span>
-              <span className="hero-heading-dial">
-                <span className="hero-dial-word">review. </span>
-                <span className="hero-dial-word">track. </span>
-                <span className="hero-dial-word hero-heading-highlight">remember. </span>
-              </span>
-            </h1>
-            <p className="hero-subheading">
-              Forward a contract or upload it. Samvid reads every page, explains the risk, keeps every version organized, and records each signing handoff.
-            </p>
-            <div className="hero-actions">
-              <a
-                href="mailto:contracts@samvid.online?subject=please%20review%20this&body=Hi%20Samvid%0Aplease%20review%20it."
-                className="btn-lp-secondary"
-                aria-label="Email a contract to Samvid"
-              >
-                Mail it. Chill.
-              </a>
-              <Link to="/chats" className="btn-lp-primary">
-                Open Workspace <ArrowRight size={15} />
-              </Link>
-              
+
+            {/* Right Column: Bengaluru artwork */}
+            <div className="hero-visual-stage">
+              <div className="hero-paperwork" aria-hidden="true">
+                <div className="hero-paper hero-pink-file" />
+                <div className="hero-paper hero-stamp-paper" />
+                <div className="hero-paper hero-policy-paper" />
+                <div className="hero-paper hero-contract-paper">
+                  <span className="hero-paper-eyebrow">CONTRACT</span>
+                  <strong>Terms reviewed</strong>
+                  <i />
+                  <i />
+                </div>
+                <div className="hero-paper hero-nda-paper" />
+                <span className="hero-rubber-stamp">Reviewed<br />Legal</span>
+              </div>
+              <motion.div
+                className="hero-bengaluru-artwork"
+                aria-hidden="true"
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 0.58, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.1 }}
+              />
             </div>
           </div>
-          <div className="hero-road" aria-hidden="true">
-            <Image src="/road-tuktuk-bike.webp" alt="" fill sizes="100vw" />
-          </div>
+
         </section>
 
         <section className="problem-section" aria-labelledby="problem-title">
@@ -681,13 +716,6 @@ export function LandingPage() {
           </div>
         </section>
 
-        {/* Disclaimer Banner */}
-        <section id="disclaimer" className="disclaimer-banner">
-          <AlertTriangle className="disclaimer-icon" size={20} />
-          <div className="disclaimer-text">
-            <strong>Signing status tracking only:</strong> Samvid coordinates and records the signing workflow. It does not place signature fields, verify legal identity, issue digital certificates, or execute legally binding electronic signatures.
-          </div>
-        </section>
 
         {/* Footer */}
         <footer className="landing-footer">
