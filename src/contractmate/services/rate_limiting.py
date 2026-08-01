@@ -379,10 +379,13 @@ class UpstashRateLimiter:
         identifier: str,
         pathname: str,
         ttl_seconds: int = 1_800,
+        units: int = 1,
     ) -> RateLimitDecision:
         """Atomically reserve a pathname and consume quota once when it is new."""
         if not pathname:
             raise ValueError("pathname is required")
+        if units < 1:
+            raise ValueError("units must be at least 1")
         if not self._configured:
             return RateLimitDecision(
                 allowed=True,
@@ -404,7 +407,7 @@ class UpstashRateLimiter:
             policy.minute_limit or 0,
             policy.hourly_limit or 0,
             policy.daily_limit or 0,
-            1,
+            units,
             max(1, ttl_seconds),
             1 if self._mode == "observe" else 0,
         ]

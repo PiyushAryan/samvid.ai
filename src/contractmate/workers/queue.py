@@ -5,7 +5,7 @@ import logging
 import time
 from collections import deque
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 from uuid import uuid4
 
@@ -33,6 +33,13 @@ class ContractReviewJob:
     workspace_id: str
     email_thread_id: str
     requested_by: str
+    version: int = 2
+    source_channel: str = "email"
+    source_thread_key: str | None = None
+    slack_installation_id: str | None = None
+    slack_channel_id: str | None = None
+    slack_thread_ts: str | None = None
+    source_submission_key: str | None = None
     recipient_name: str | None = None
     response_address: str | None = None
     original_subject: str | None = None
@@ -50,6 +57,8 @@ class ContractReviewJob:
             "workspace_id": self.workspace_id,
             "email_thread_id": self.email_thread_id,
             "requested_by": self.requested_by,
+            "version": self.version,
+            "source_channel": self.source_channel,
             "send_review_email": self.send_review_email,
             "attempt": self.attempt,
         }
@@ -63,6 +72,11 @@ class ContractReviewJob:
                     "in_reply_to": self.in_reply_to,
                     "references": self.references,
                     "processing_run_id": self.processing_run_id,
+                    "source_thread_key": self.source_thread_key,
+                    "slack_installation_id": self.slack_installation_id,
+                    "slack_channel_id": self.slack_channel_id,
+                    "slack_thread_ts": self.slack_thread_ts,
+                    "source_submission_key": self.source_submission_key,
                 }.items()
                 if value is not None
             }
@@ -78,6 +92,13 @@ class ContractReviewJob:
             workspace_id=str(message["workspace_id"]),
             email_thread_id=str(message["email_thread_id"]),
             requested_by=str(message["requested_by"]),
+            version=int(message.get("version", 1)),
+            source_channel=str(message.get("source_channel", "email")),
+            source_thread_key=str(message["source_thread_key"]) if message.get("source_thread_key") else None,
+            slack_installation_id=str(message["slack_installation_id"]) if message.get("slack_installation_id") else None,
+            slack_channel_id=str(message["slack_channel_id"]) if message.get("slack_channel_id") else None,
+            slack_thread_ts=str(message["slack_thread_ts"]) if message.get("slack_thread_ts") else None,
+            source_submission_key=str(message["source_submission_key"]) if message.get("source_submission_key") else None,
             recipient_name=str(message["recipient_name"]) if message.get("recipient_name") else None,
             response_address=str(message["response_address"]) if message.get("response_address") else None,
             original_subject=str(message["original_subject"]) if message.get("original_subject") else None,
@@ -167,11 +188,18 @@ class ContractQueue(Protocol):
     def enqueue(
         self,
         *,
+        job_id: str | None = None,
         contract_id: str,
         contract_version_id: str,
         workspace_id: str,
         email_thread_id: str,
         requested_by: str,
+        source_channel: str = "email",
+        source_thread_key: str | None = None,
+        slack_installation_id: str | None = None,
+        slack_channel_id: str | None = None,
+        slack_thread_ts: str | None = None,
+        source_submission_key: str | None = None,
         recipient_name: str | None = None,
         response_address: str | None = None,
         original_subject: str | None = None,
@@ -190,11 +218,18 @@ class InMemoryContractQueue:
     def enqueue(
         self,
         *,
+        job_id: str | None = None,
         contract_id: str,
         contract_version_id: str,
         workspace_id: str,
         email_thread_id: str,
         requested_by: str,
+        source_channel: str = "email",
+        source_thread_key: str | None = None,
+        slack_installation_id: str | None = None,
+        slack_channel_id: str | None = None,
+        slack_thread_ts: str | None = None,
+        source_submission_key: str | None = None,
         recipient_name: str | None = None,
         response_address: str | None = None,
         original_subject: str | None = None,
@@ -204,12 +239,18 @@ class InMemoryContractQueue:
         processing_run_id: str | None = None,
     ) -> ContractReviewJob:
         job = ContractReviewJob(
-            job_id=str(uuid4()),
+            job_id=job_id or str(uuid4()),
             contract_id=contract_id,
             contract_version_id=contract_version_id,
             workspace_id=workspace_id,
             email_thread_id=email_thread_id,
             requested_by=requested_by,
+            source_channel=source_channel,
+            source_thread_key=source_thread_key,
+            slack_installation_id=slack_installation_id,
+            slack_channel_id=slack_channel_id,
+            slack_thread_ts=slack_thread_ts,
+            source_submission_key=source_submission_key,
             recipient_name=recipient_name,
             response_address=response_address,
             original_subject=original_subject,
@@ -266,11 +307,18 @@ class RabbitMQContractQueue:
     def enqueue(
         self,
         *,
+        job_id: str | None = None,
         contract_id: str,
         contract_version_id: str,
         workspace_id: str,
         email_thread_id: str,
         requested_by: str,
+        source_channel: str = "email",
+        source_thread_key: str | None = None,
+        slack_installation_id: str | None = None,
+        slack_channel_id: str | None = None,
+        slack_thread_ts: str | None = None,
+        source_submission_key: str | None = None,
         recipient_name: str | None = None,
         response_address: str | None = None,
         original_subject: str | None = None,
@@ -280,12 +328,18 @@ class RabbitMQContractQueue:
         processing_run_id: str | None = None,
     ) -> ContractReviewJob:
         job = ContractReviewJob(
-            job_id=str(uuid4()),
+            job_id=job_id or str(uuid4()),
             contract_id=contract_id,
             contract_version_id=contract_version_id,
             workspace_id=workspace_id,
             email_thread_id=email_thread_id,
             requested_by=requested_by,
+            source_channel=source_channel,
+            source_thread_key=source_thread_key,
+            slack_installation_id=slack_installation_id,
+            slack_channel_id=slack_channel_id,
+            slack_thread_ts=slack_thread_ts,
+            source_submission_key=source_submission_key,
             recipient_name=recipient_name,
             response_address=response_address,
             original_subject=original_subject,
@@ -510,26 +564,23 @@ class RabbitMQDelivery:
         if self.job.attempt >= self.queue.topology.max_attempts:
             self.dead_letter()
             return
-        retry_job = ContractReviewJob(
-            job_id=self.job.job_id,
-            contract_id=self.job.contract_id,
-            contract_version_id=self.job.contract_version_id,
-            workspace_id=self.job.workspace_id,
-            email_thread_id=self.job.email_thread_id,
-            requested_by=self.job.requested_by,
-            recipient_name=self.job.recipient_name,
-            response_address=self.job.response_address,
-            original_subject=self.job.original_subject,
-            in_reply_to=self.job.in_reply_to,
-            references=self.job.references,
-            send_review_email=self.job.send_review_email,
-            processing_run_id=self.job.processing_run_id,
-            attempt=self.job.attempt + 1,
-        )
+        retry_job = replace(self.job, attempt=self.job.attempt + 1)
         try:
             self.queue._publish_confirmed_on_channel(
                 self.channel,
                 retry_job,
+                routing_key=self.queue.topology.retry_routing_key,
+            )
+            self.channel.basic_ack(delivery_tag=self.delivery_tag)
+        finally:
+            self._close_connection_if_needed()
+
+    def retry_contention(self) -> None:
+        """Delay a busy duplicate without consuming its processing-attempt budget."""
+        try:
+            self.queue._publish_confirmed_on_channel(
+                self.channel,
+                self.job,
                 routing_key=self.queue.topology.retry_routing_key,
             )
             self.channel.basic_ack(delivery_tag=self.delivery_tag)
@@ -782,13 +833,7 @@ class RabbitMQKnowledgeDelivery:
         if self.job.attempt >= self.queue.topology.max_attempts:
             self.dead_letter()
             return
-        retry_job = KnowledgeIndexJob(
-            job_id=self.job.job_id,
-            contract_id=self.job.contract_id,
-            contract_version_id=self.job.contract_version_id,
-            workspace_id=self.job.workspace_id,
-            attempt=self.job.attempt + 1,
-        )
+        retry_job = replace(self.job, attempt=self.job.attempt + 1)
         try:
             self.queue._publish_confirmed_on_channel(
                 self.channel,

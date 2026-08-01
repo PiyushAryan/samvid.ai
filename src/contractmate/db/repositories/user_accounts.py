@@ -118,7 +118,15 @@ class UserAccountRepository:
                 raise UserAccountConflictError("Account was concurrently bound to another identity")
             return account
 
-    def provision_inbound_user(self, *, email: str, display_name: str | None = None) -> UserAccount:
+    def provision_inbound_user(
+        self,
+        *,
+        email: str,
+        display_name: str | None = None,
+        source: str = "inbound_email",
+    ) -> UserAccount:
+        if source not in {"inbound_email", "inbound_slack"}:
+            raise ValueError("Inbound account source must be email or Slack")
         normalized_email = normalize_email(email)
         with self._transaction(immediate=not self.is_postgres):
             existing = self._get_in_transaction("email = ?", (normalized_email,))
@@ -135,7 +143,7 @@ class UserAccountRepository:
                 role="user",
                 state="unclaimed",
                 workspace_id=self._new_workspace_id(),
-                source="inbound_email",
+                source=source,
                 claimed=False,
             )
             account = self._get_in_transaction("email = ?", (normalized_email,))

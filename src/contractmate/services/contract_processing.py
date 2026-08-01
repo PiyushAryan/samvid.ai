@@ -8,6 +8,8 @@ from tempfile import NamedTemporaryFile
 from pydantic import BaseModel
 
 from contractmate.db.repositories.contracts import ContractRepository
+from contractmate.db.repositories.contract_sources import ContractSourceRepository
+from contractmate.db.repositories.slack import SlackRepository
 from contractmate.db.session import connect, initialize_database
 from contractmate.ocr.base import OCRBackend, OCRProcessingError
 from contractmate.ocr.sarvam_vision import SarvamVisionOCR
@@ -21,6 +23,7 @@ from contractmate.services.review_service import ReviewService
 from contractmate.settings import Settings
 from contractmate.tools.document_storage import DocumentStorage, StoredDocument, document_storage_from_settings
 from contractmate.workers.queue import ContractQueue
+from contractmate.workers.review_publish_outbox import SlackReviewPublishDispatcher
 from contractmate.workflows.states import WorkflowState
 
 
@@ -42,6 +45,7 @@ class IngestedContract:
     contract_version_id: str
     workspace_id: str
     email_thread_id: str
+    source_channel: str
     requested_by: str
     original_filename: str
     mime_type: str
@@ -97,6 +101,7 @@ class ContractProcessingService:
         declared_mime_type: str | None = None,
         original_filename: str | None = None,
         stored_object_key: str | None = None,
+        source_channel: str = "browser",
     ) -> ContractProcessingResult:
         ingested = self._ingest_local_file(
             file_path=file_path,
@@ -106,6 +111,7 @@ class ContractProcessingService:
             declared_mime_type=declared_mime_type,
             original_filename=original_filename,
             stored_object_key=stored_object_key,
+            source_channel=source_channel,
         )
         if isinstance(ingested, ContractProcessingResult):
             return ingested
@@ -128,6 +134,12 @@ class ContractProcessingService:
         original_subject: str | None = None,
         in_reply_to: str | None = None,
         references: str | None = None,
+        source_channel: str = "browser",
+        slack_installation_id: str | None = None,
+        slack_channel_id: str | None = None,
+        slack_thread_ts: str | None = None,
+        source_submission_key: str | None = None,
+        review_job_id: str | None = None,
     ) -> ContractProcessingResult:
         ingested = self._ingest_local_file(
             file_path=file_path,
@@ -137,27 +149,103 @@ class ContractProcessingService:
             declared_mime_type=declared_mime_type,
             original_filename=original_filename,
             stored_object_key=stored_object_key,
+            source_channel=source_channel,
         )
         if isinstance(ingested, ContractProcessingResult):
             return ingested
 
-        self.repository.update_contract_status(ingested.contract_id, WorkflowState.QUEUED)
-        processing_run_id = self._queue_processing_run(ingested)
-        try:
-            job = queue.enqueue(
+        execution_status = None
+        existing_run = None
+        if source_submission_key:
+            execution_status = SlackRepository(
+                self.repository.connection
+            ).get_review_execution_status(submission_key=source_submission_key)
+        if review_job_id:
+            existing_run = ProcessingRunRepository(
+                self.repository.connection
+            ).get_by_job_id(job_id=review_job_id)
+
+        # A Slack publish can reach RabbitMQ even when publisher confirmation is
+        # lost. A retry must retain the original job/run envelope. In particular,
+        # never reset an actively processed contract to QUEUED or create an
+        # orphan metrics run while the first consumer owns the submission.
+        if execution_status == "completed":
+            existing_review = self.repository.get_contract_review(
+                ingested.contract_id,
+                contract_version_id=ingested.contract_version_id,
+            )
+            terminal_status = self.repository.get_contract_status(ingested.contract_id)
+            return ContractProcessingResult(
                 contract_id=ingested.contract_id,
                 contract_version_id=ingested.contract_version_id,
-                workspace_id=ingested.workspace_id,
-                email_thread_id=ingested.email_thread_id,
-                requested_by=ingested.requested_by,
-                recipient_name=recipient_name,
-                response_address=response_address,
-                original_subject=original_subject,
-                in_reply_to=in_reply_to,
-                references=references,
-                send_review_email=send_review_email,
-                processing_run_id=processing_run_id,
+                status=terminal_status or (
+                    WorkflowState.REVIEW_READY if existing_review is not None
+                    else WorkflowState.ANALYSIS_FAILED
+                ),
+                review=existing_review,
+                message=(
+                    "Contract review is already ready."
+                    if existing_review is not None
+                    else "Contract processing has already completed."
+                ),
+                processing_run_id=existing_run.id if existing_run else None,
             )
+
+        if existing_run is not None:
+            if (
+                existing_run.workspace_id != ingested.workspace_id
+                or existing_run.contract_id != ingested.contract_id
+                or existing_run.contract_version_id != ingested.contract_version_id
+            ):
+                raise ValueError("Stable review job identifier belongs to a different contract submission.")
+            if execution_status == "processing":
+                return ContractProcessingResult(
+                    contract_id=ingested.contract_id,
+                    contract_version_id=ingested.contract_version_id,
+                    status=WorkflowState.QUEUED,
+                    review=None,
+                    message="Contract review is already being processed.",
+                    processing_run_id=existing_run.id,
+                )
+
+        self.repository.update_contract_status(ingested.contract_id, WorkflowState.QUEUED)
+        processing_run_id = existing_run.id if existing_run else self._queue_processing_run(
+            ingested, job_id=review_job_id,
+        )
+        job_payload = {
+            "job_id": review_job_id,
+            "contract_id": ingested.contract_id,
+            "contract_version_id": ingested.contract_version_id,
+            "workspace_id": ingested.workspace_id,
+            "email_thread_id": ingested.email_thread_id,
+            "requested_by": ingested.requested_by,
+            "recipient_name": recipient_name,
+            "response_address": response_address,
+            "original_subject": original_subject,
+            "in_reply_to": in_reply_to,
+            "references": references,
+            "send_review_email": send_review_email,
+            "processing_run_id": processing_run_id,
+            "source_channel": source_channel,
+            "source_thread_key": ingested.email_thread_id,
+            "slack_installation_id": slack_installation_id,
+            "slack_channel_id": slack_channel_id,
+            "slack_thread_ts": slack_thread_ts,
+            "source_submission_key": source_submission_key,
+        }
+        try:
+            if source_channel == "slack" and source_submission_key and review_job_id:
+                slack_repository = SlackRepository(self.repository.connection)
+                slack_repository.persist_review_job(
+                    submission_key=source_submission_key,
+                    job_id=review_job_id,
+                    payload=job_payload,
+                )
+                SlackReviewPublishDispatcher(repository=slack_repository, queue=queue).drain_once()
+                published_job_id = review_job_id
+            else:
+                job = queue.enqueue(**job_payload)
+                published_job_id = job.job_id
         except Exception as exc:
             self._metric_failed(processing_run_id, stage="queue", error=str(exc))
             self.repository.update_contract_status(ingested.contract_id, WorkflowState.ANALYSIS_FAILED)
@@ -173,10 +261,10 @@ class ContractProcessingService:
             workspace_id=ingested.workspace_id,
             contract_id=ingested.contract_id,
             event_type="contract.queued",
-            metadata={"job_id": job.job_id},
+            metadata={"job_id": published_job_id},
         )
         if processing_run_id:
-            self._metric_call("job_enqueued", run_id=processing_run_id, job_id=job.job_id)
+            self._metric_call("job_enqueued", run_id=processing_run_id, job_id=published_job_id)
         return ContractProcessingResult(
             contract_id=ingested.contract_id,
             contract_version_id=ingested.contract_version_id,
@@ -241,6 +329,7 @@ class ContractProcessingService:
                 contract_version_id=contract_version_id,
                 workspace_id=workspace_id,
                 email_thread_id=str(row["email_thread_id"]),
+                source_channel="browser",
                 requested_by=str(row["created_by"]),
                 original_filename=str(row["original_filename"]),
                 mime_type=str(row["mime_type"]),
@@ -299,6 +388,7 @@ class ContractProcessingService:
         declared_mime_type: str | None,
         original_filename: str | None,
         stored_object_key: str | None,
+        source_channel: str,
     ) -> IngestedContract | ContractProcessingResult:
         validation = validate_uploaded_file(
             file_path,
@@ -336,6 +426,15 @@ class ContractProcessingService:
             object_key=stored.object_key,
             uploaded_by=requested_by,
         )
+        source_repository = ContractSourceRepository(self.repository.connection)
+        # create_contract_with_version is idempotent by workspace + SHA. Preserve
+        # the original provenance when another channel submits the same bytes.
+        if source_repository.get(contract_id=contract_id) is None:
+            source_repository.upsert(
+                contract_id=contract_id,
+                source_channel=source_channel,  # type: ignore[arg-type]
+                source_thread_key=email_thread_id,
+            )
         self.audit.record(
             workspace_id=workspace_id,
             contract_id=contract_id,
@@ -350,6 +449,7 @@ class ContractProcessingService:
             contract_version_id=version_id,
             workspace_id=workspace_id,
             email_thread_id=email_thread_id,
+            source_channel=source_channel,
             requested_by=requested_by,
             original_filename=display_filename,
             mime_type=validation.mime_type,
@@ -447,13 +547,21 @@ class ContractProcessingService:
             processing_run_id=processing_run_id,
         )
 
-    def _queue_processing_run(self, ingested: IngestedContract) -> str | None:
+    def _queue_processing_run(
+        self, ingested: IngestedContract, *, job_id: str | None = None,
+    ) -> str | None:
         try:
+            metrics_source = {
+                "slack": "slack",
+                "email": "inbound_email",
+                "browser": "browser_upload",
+            }.get(ingested.source_channel, "browser_upload")
             return self.metrics.queue_run(
                 workspace_id=ingested.workspace_id,
                 contract_id=ingested.contract_id,
                 contract_version_id=ingested.contract_version_id,
-                source="inbound_email" if not ingested.email_thread_id.startswith("samvid-upload-") else "browser_upload",
+                source=metrics_source,
+                job_id=job_id,
             ).id
         except Exception:
             logger.exception("Could not create processing metrics for contract %s", ingested.contract_id)

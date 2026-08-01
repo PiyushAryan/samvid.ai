@@ -19,6 +19,7 @@ from contractmate.settings import Settings
 from contractmate.workers.contract_worker import ContractWorker
 from contractmate.workers.delivery_worker import DeliveryWorker
 from contractmate.workers.knowledge_worker import KnowledgeIndexWorker
+from contractmate.workers.slack_worker import SlackIntakeWorker
 
 
 def main() -> None:
@@ -42,6 +43,9 @@ def main() -> None:
 
     delivery_worker = subcommands.add_parser("delivery-worker", help="Deliver queued review emails and knowledge jobs")
     delivery_worker.add_argument("--poll-interval", type=float, default=1.0, help="Seconds to wait when all outboxes are empty")
+
+    slack_worker = subcommands.add_parser("slack-worker", help="Process queued Slack contract intake events")
+    slack_worker.add_argument("--poll-interval", type=float, default=1.0, help="Seconds to wait when Slack intake is empty")
 
     subcommands.add_parser(
         "knowledge-backfill",
@@ -144,6 +148,27 @@ def main() -> None:
         signal.signal(signal.SIGINT, request_delivery_stop)
         signal.signal(signal.SIGTERM, request_delivery_stop)
         DeliveryWorker.from_settings(settings).run_forever(
+            poll_interval_seconds=max(args.poll_interval, 0.1),
+            stop_requested=stop_event.is_set,
+        )
+        return
+
+    if args.command == "slack-worker":
+        logging.basicConfig(
+            level=os.getenv("LOG_LEVEL", "INFO").upper(),
+            format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        )
+        settings = Settings.from_env()
+        settings.validate_runtime()
+        stop_event = Event()
+
+        def request_slack_stop(signum: int, _frame: object) -> None:
+            logging.getLogger(__name__).info("Received signal %s; stopping Slack intake worker", signum)
+            stop_event.set()
+
+        signal.signal(signal.SIGINT, request_slack_stop)
+        signal.signal(signal.SIGTERM, request_slack_stop)
+        SlackIntakeWorker.from_settings(settings).run_forever(
             poll_interval_seconds=max(args.poll_interval, 0.1),
             stop_requested=stop_event.is_set,
         )

@@ -88,6 +88,25 @@ def test_contract_deletion_removes_content_and_preserves_tombstone_audit() -> No
         (contract_id, version_id),
     )
     connection.execute(
+        "INSERT INTO contract_sources(contract_id, source_channel, source_thread_key) VALUES (?, 'slack', 'thread-key')",
+        (contract_id,),
+    )
+    connection.execute(
+        """
+        INSERT INTO outbound_slack_outbox(
+            id, workspace_id, installation_id, contract_id, contract_version_id,
+            channel_id, thread_ts, thread_position, message_type, text_body, idempotency_key
+        ) VALUES ('slack-1', 'workspace-1', 'install-1', ?, ?, 'channel-1', '123.4', 1, 'review', 'secret summary', 'review:slack')
+        """,
+        (contract_id, version_id),
+    )
+    connection.execute(
+        """INSERT INTO slack_review_job_outbox(
+            submission_key, job_id, contract_id, contract_version_id, payload_json, status
+        ) VALUES ('event:file', 'review-job-1', ?, ?, '{}', 'published')""",
+        (contract_id, version_id),
+    )
+    connection.execute(
         """
         INSERT INTO signing_requests(id, workspace_id, contract_id, contract_version_id, created_by)
         VALUES ('request-1', 'workspace-1', ?, ?, 'user@example.com')
@@ -156,6 +175,9 @@ def test_contract_deletion_removes_content_and_preserves_tombstone_audit() -> No
         "contract_processing_runs",
         "contract_processing_stages",
         "outbound_email_outbox",
+        "outbound_slack_outbox",
+        "slack_review_job_outbox",
+        "contract_sources",
         "signing_requests",
         "signers",
         "signer_status_events",

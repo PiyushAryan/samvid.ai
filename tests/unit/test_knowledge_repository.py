@@ -43,9 +43,14 @@ def test_postgres_schema_enables_pgvector_hybrid_indexes() -> None:
 def test_postgres_initialization_installs_vector_before_schema(monkeypatch: pytest.MonkeyPatch) -> None:
     executed: list[str] = []
 
+    class FakeResult:
+        def fetchone(self):
+            return None
+
     class FakeConnection:
-        def execute(self, statement: str) -> None:
+        def execute(self, statement: str, *_params):
             executed.append(statement)
+            return FakeResult()
 
         def commit(self) -> None:
             executed.append("COMMIT")

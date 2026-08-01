@@ -202,9 +202,6 @@ export function LandingPage() {
           >
             <a href="#workflow" className="landing-nav-link">How it works</a>
             <Link to="/changelog" className="landing-nav-link">Changelog</Link>
-            <a href="#pricing" className="landing-nav-link">Pricing</a>
-            <a href="#blog" className="landing-nav-link">Blog</a>
-            <a href="#docs" className="landing-nav-link">Docs</a>
           </motion.nav>
           <motion.div
             ref={navCtaRef}

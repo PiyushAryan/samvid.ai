@@ -76,6 +76,7 @@ class EmailIngestionService:
                     "requested_by": str(message.from_address),
                     "declared_mime_type": attachment.mime_type,
                     "original_filename": attachment.filename,
+                    "source_channel": "email",
                 }
                 result = (
                     self.processing_service.enqueue_local_file(

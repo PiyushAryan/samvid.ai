@@ -54,3 +54,22 @@ services:
       options:
         max-size: 10m
         max-file: "3"
+
+  slack-worker:
+    image: ${WORKER_IMAGE:-ghcr.io/piyusharyan/samvid-contract-worker:latest}
+    pull_policy: always
+    restart: unless-stopped
+    init: true
+    command: ["contractmate", "slack-worker", "--poll-interval", "1"]
+    env_file:
+      - ${WORKER_ENV_FILE:-.env.worker}
+    mem_limit: 512m
+    cpus: 0.5
+    stop_grace_period: 2m
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

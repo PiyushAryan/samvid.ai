@@ -5,10 +5,13 @@ import time
 from collections.abc import Callable
 
 from contractmate.db.repositories.outbound_email_outbox import OutboundEmailOutboxRepository
+from contractmate.db.repositories.slack import SlackRepository
 from contractmate.db.session import connect, initialize_database
 from contractmate.email.interface import EmailSender
 from contractmate.services.knowledge_outbox import KnowledgeOutboxDispatcher
 from contractmate.services.outbound_email_delivery import OutboundEmailDeliveryService
+from contractmate.services.outbound_slack_delivery import OutboundSlackDeliveryService
+from contractmate.security.slack import SlackTokenCipher
 from contractmate.settings import Settings
 from contractmate.workers.queue import RabbitMQKnowledgeQueue
 
@@ -29,9 +32,11 @@ class DeliveryWorker:
         *,
         email_delivery: OutboundEmailDeliveryService,
         knowledge_dispatcher: KnowledgeOutboxDispatcher,
+        slack_delivery: OutboundSlackDeliveryService | None = None,
     ) -> None:
         self.email_delivery = email_delivery
         self.knowledge_dispatcher = knowledge_dispatcher
+        self.slack_delivery = slack_delivery
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "DeliveryWorker":
@@ -42,6 +47,14 @@ class DeliveryWorker:
 
         connection = connect(settings.database_url)
         knowledge_queue = RabbitMQKnowledgeQueue.from_settings(settings)
+        slack_delivery = (
+            OutboundSlackDeliveryService(
+                repository=SlackRepository(connection),
+                token_cipher=SlackTokenCipher(settings.slack_token_encryption_key or ""),
+                max_attempts=max(settings.rabbitmq_max_attempts, 3),
+            )
+            if settings.slack_enabled else None
+        )
         return cls(
             email_delivery=OutboundEmailDeliveryService(
                 repository=OutboundEmailOutboxRepository(connection),
@@ -53,6 +66,7 @@ class DeliveryWorker:
                 settings=settings,
                 publisher=knowledge_queue,
             ),
+            slack_delivery=slack_delivery,
         )
 
     def run_forever(
@@ -80,7 +94,8 @@ class DeliveryWorker:
     def run_once(self) -> int:
         published = self.knowledge_dispatcher.drain_once()
         sent = self.email_delivery.drain_once()
-        return published + sent
+        slack_sent = self.slack_delivery.drain_once() if self.slack_delivery is not None else 0
+        return published + sent + slack_sent
 
     def close(self) -> None:
         self.knowledge_dispatcher.close()

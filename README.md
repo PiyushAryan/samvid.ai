@@ -538,3 +538,6 @@ validation as a deployment guard, not an error to bypass.
 Samvid turns contracts into structured, traceable work. It helps teams review,
 coordinate, and follow through; final legal judgment, negotiation authority, and
 contract execution remain with the people responsible for the agreement.
+## Slack sandbox API smoke test
+
+The live Slack API smoke test is opt-in and never runs in normal CI. Use a dedicated sandbox workspace and set `RUN_SLACK_SANDBOX_SMOKE=1`, `SLACK_SANDBOX_BOT_TOKEN`, `SLACK_SANDBOX_TEAM_ID`, `SLACK_SANDBOX_CHANNEL_ID`, `SLACK_SANDBOX_USER_ID`, `SLACK_SANDBOX_FILE_ID`, and `SLACK_TOKEN_ENCRYPTION_KEY`. `SLACK_SANDBOX_THREAD_TS` is optional. It checks token identity, file access, posting/deleting a message, and local installation storage/disconnect. It is not the full OAuth → event → RabbitMQ → review → threaded reply → revoke end-to-end test, which remains sandbox-infrastructure gated.

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field
 
@@ -30,6 +31,23 @@ class Settings(BaseModel):
     email_workspace_id: str = "email-workspace"
     email_from_address: str = "contractmate@example.com"
     resend_api_key: str | None = None
+    slack_enabled: bool = False
+    slack_client_id: str | None = None
+    slack_client_secret: str | None = None
+    slack_signing_secret: str | None = None
+    slack_token_encryption_key: str | None = None
+    slack_redirect_uri: str | None = None
+    slack_install_scopes: tuple[str, ...] = (
+        "app_mentions:read",
+        "im:history",
+        "files:read",
+        "chat:write",
+        "users:read",
+        "users:read.email",
+    )
+    # Empty pilot allowlists mean unrestricted rollout.
+    slack_pilot_account_ids: tuple[str, ...] = ()
+    slack_pilot_team_ids: tuple[str, ...] = ()
     smtp_host: str | None = None
     smtp_port: int = Field(default=587, ge=1)
     smtp_username: str | None = None
@@ -100,8 +118,39 @@ class Settings(BaseModel):
                 inbound_errors.append("RESEND_INBOUND_RECIPIENTS is required when Resend inbound receiving is enabled")
             if not self.samvid_super_admin_email:
                 inbound_errors.append("SAMVID_SUPER_ADMIN_EMAIL is required when Resend inbound receiving is enabled")
+        if self.slack_enabled:
+            if not self.slack_client_id:
+                inbound_errors.append("SLACK_CLIENT_ID is required when Slack is enabled")
+            if not self.slack_client_secret:
+                inbound_errors.append("SLACK_CLIENT_SECRET is required when Slack is enabled")
+            if not self.slack_signing_secret:
+                inbound_errors.append("SLACK_SIGNING_SECRET is required when Slack is enabled")
+            if not self.slack_token_encryption_key:
+                inbound_errors.append("SLACK_TOKEN_ENCRYPTION_KEY is required when Slack is enabled")
+            else:
+                try:
+                    from contractmate.security.slack import SlackTokenCipher
+
+                    SlackTokenCipher(self.slack_token_encryption_key)
+                except ValueError as exc:
+                    inbound_errors.append(str(exc))
+            required_scopes = {
+                "app_mentions:read", "im:history", "files:read", "chat:write", "users:read", "users:read.email"
+            }
+            missing_scopes = sorted(required_scopes.difference(self.slack_install_scopes))
+            if missing_scopes:
+                inbound_errors.append("SLACK_INSTALL_SCOPES is missing: " + ", ".join(missing_scopes))
+            redirect_uri = self.slack_redirect_uri or (
+                f"{self.app_base_url.rstrip('/')}/slack/oauth/callback" if self.app_base_url else None
+            )
+            if not redirect_uri:
+                inbound_errors.append("SLACK_REDIRECT_URI or APP_BASE_URL is required when Slack is enabled")
+            else:
+                parsed_redirect = urlsplit(redirect_uri)
+                if not parsed_redirect.netloc or parsed_redirect.scheme not in ({"https"} if self.is_production else {"http", "https"}):
+                    inbound_errors.append("Slack OAuth redirect URI must be an absolute HTTPS URL in production")
         if inbound_errors:
-            raise ValueError("Invalid inbound email configuration: " + "; ".join(inbound_errors))
+            raise ValueError("Invalid inbound integration configuration: " + "; ".join(inbound_errors))
 
         if not self.is_production:
             return
@@ -192,6 +241,18 @@ class Settings(BaseModel):
             email_workspace_id=os.getenv("EMAIL_WORKSPACE_ID", "email-workspace"),
             email_from_address=os.getenv("EMAIL_FROM_ADDRESS", "contractmate@example.com"),
             resend_api_key=os.getenv("RESEND_API_KEY") or None,
+            slack_enabled=bool_env("SLACK_ENABLED", False),
+            slack_client_id=os.getenv("SLACK_CLIENT_ID") or None,
+            slack_client_secret=os.getenv("SLACK_CLIENT_SECRET") or None,
+            slack_signing_secret=os.getenv("SLACK_SIGNING_SECRET") or None,
+            slack_token_encryption_key=os.getenv("SLACK_TOKEN_ENCRYPTION_KEY") or None,
+            slack_redirect_uri=os.getenv("SLACK_REDIRECT_URI") or None,
+            slack_install_scopes=csv_env(
+                "SLACK_INSTALL_SCOPES",
+                "app_mentions:read,im:history,files:read,chat:write,users:read,users:read.email",
+            ),
+            slack_pilot_account_ids=csv_env("SLACK_PILOT_ACCOUNT_IDS", ""),
+            slack_pilot_team_ids=csv_env("SLACK_PILOT_TEAM_IDS", ""),
             smtp_host=os.getenv("SMTP_HOST") or None,
             smtp_port=int(os.getenv("SMTP_PORT", "587")),
             smtp_username=os.getenv("SMTP_USERNAME") or None,

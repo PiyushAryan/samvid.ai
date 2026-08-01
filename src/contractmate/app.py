@@ -33,6 +33,7 @@ def create_app(settings: Settings | None = None):
         from fastapi.middleware.trustedhost import TrustedHostMiddleware
         from fastapi.responses import JSONResponse
         from starlette.concurrency import run_in_threadpool
+        from contractmate.api.slack_routes import create_slack_router
     except ModuleNotFoundError as exc:
         raise RuntimeError("Install the 'api' extra to run the HTTP app: uv sync --extra api") from exc
 
@@ -77,7 +78,14 @@ def create_app(settings: Settings | None = None):
 
     @app.middleware("http")
     async def production_boundary(request: Request, call_next):
-        public_paths = {"/health", "/ready", "/email/inbound", "/agentos/control-plane/status"}
+        public_paths = {
+            "/health",
+            "/ready",
+            "/email/inbound",
+            "/slack/events",
+            "/slack/oauth/callback",
+            "/agentos/control-plane/status",
+        }
         is_api_request = request.url.path == "/api" or request.url.path.startswith("/api/")
         if neon_verifier is not None and is_api_request:
             try:
@@ -116,6 +124,7 @@ def create_app(settings: Settings | None = None):
         return _with_security_headers(response, settings=settings)
 
     app.include_router(create_api_router(settings))
+    app.include_router(create_slack_router(settings))
 
     @app.get("/health")
     def health() -> dict:

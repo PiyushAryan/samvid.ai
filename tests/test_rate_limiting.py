@@ -147,14 +147,15 @@ def test_upload_reservation_is_one_atomic_eval_and_duplicate_does_not_readmit() 
 
     limiter = UpstashRateLimiter(_settings(), client=_client(handler))
     policy = default_rate_limit_policy("review")
-    first = limiter.reserve_upload(policy=policy, identifier="account-id", pathname="contracts/ws/file.pdf")
-    duplicate = limiter.reserve_upload(policy=policy, identifier="account-id", pathname="contracts/ws/file.pdf")
+    first = limiter.reserve_upload(policy=policy, identifier="account-id", pathname="contracts/ws/file.pdf", units=2)
+    duplicate = limiter.reserve_upload(policy=policy, identifier="account-id", pathname="contracts/ws/file.pdf", units=2)
 
     assert first.allowed is True
     assert duplicate.allowed is True
     command = commands[0]
     assert command[0] == "EVAL"
     assert command[2] == 4
+    assert command[10] == 2
     assert "contracts/ws/file.pdf" not in str(command)
     assert "account-id" not in str(command)
     assert "redis.call('GET', KEYS[1])" in command[1]

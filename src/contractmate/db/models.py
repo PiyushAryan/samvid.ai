@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS user_accounts (
     role TEXT NOT NULL CHECK (role IN ('user', 'super_admin')),
     state TEXT NOT NULL CHECK (state IN ('unclaimed', 'active')),
     personal_workspace_id TEXT UNIQUE,
-    source TEXT NOT NULL CHECK (source IN ('signup', 'inbound_email')),
+    source TEXT NOT NULL CHECK (source IN ('signup', 'inbound_email', 'inbound_slack')),
     claimed_at TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS inbound_email_events (
 CREATE TABLE IF NOT EXISTS contracts (
     id TEXT PRIMARY KEY,
     workspace_id TEXT NOT NULL,
-    email_thread_id TEXT NOT NULL,
+    email_thread_id TEXT,
     title TEXT,
     status TEXT NOT NULL,
     current_version_id TEXT,
@@ -383,6 +383,158 @@ ON signers(signing_request_id, display_order);
 
 CREATE INDEX IF NOT EXISTS ix_signer_status_events_signer_created
 ON signer_status_events(signer_id, created_at);
+
+CREATE TABLE IF NOT EXISTS contract_sources (
+    contract_id TEXT PRIMARY KEY,
+    source_channel TEXT NOT NULL CHECK (source_channel IN ('browser', 'email', 'slack')),
+    source_thread_key TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS ix_contract_sources_channel_thread
+ON contract_sources(source_channel, source_thread_key);
+
+CREATE TABLE IF NOT EXISTS slack_installations (
+    id TEXT PRIMARY KEY,
+    team_id TEXT NOT NULL UNIQUE,
+    team_name TEXT,
+    bot_user_id TEXT,
+    encrypted_bot_token TEXT NOT NULL,
+    installed_by_account_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked', 'disconnected')),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS slack_oauth_states (
+    state_hash TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    consumed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS slack_user_links (
+    id TEXT PRIMARY KEY,
+    team_id TEXT NOT NULL,
+    slack_user_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    email TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(team_id, slack_user_id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_slack_user_links_account
+ON slack_user_links(account_id);
+
+CREATE TABLE IF NOT EXISTS inbound_slack_events (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL UNIQUE,
+    team_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    payload_hash TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'processed', 'ignored', 'failed')),
+    attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+    next_attempt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    lease_token TEXT,
+    lease_expires_at TEXT,
+    last_error TEXT,
+    received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    processed_at TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS ix_inbound_slack_events_delivery
+ON inbound_slack_events(status, next_attempt_at, lease_expires_at);
+
+CREATE TABLE IF NOT EXISTS inbound_slack_file_submissions (
+    event_id TEXT NOT NULL,
+    file_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'processing' CHECK (status IN ('pending', 'processing', 'completed')),
+    lease_token TEXT,
+    review_job_id TEXT NOT NULL,
+    lease_expires_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(event_id, file_id)
+);
+
+CREATE TABLE IF NOT EXISTS slack_review_executions (
+    submission_key TEXT PRIMARY KEY,
+    status TEXT NOT NULL DEFAULT 'processing' CHECK (status IN ('pending', 'processing', 'completed')),
+    lease_token TEXT,
+    lease_expires_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS slack_review_job_outbox (
+    submission_key TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL UNIQUE,
+    contract_id TEXT NOT NULL,
+    contract_version_id TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'publishing', 'published')),
+    attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+    next_attempt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    lease_token TEXT,
+    lease_expires_at TEXT,
+    last_error TEXT,
+    published_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS ix_slack_review_job_outbox_delivery
+ON slack_review_job_outbox(status, next_attempt_at, lease_expires_at);
+
+CREATE TABLE IF NOT EXISTS slack_unknown_sender_admissions (
+    event_id TEXT PRIMARY KEY,
+    team_id TEXT NOT NULL,
+    slack_user_id TEXT NOT NULL,
+    attachment_count INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS outbound_slack_outbox (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    installation_id TEXT NOT NULL,
+    contract_id TEXT,
+    contract_version_id TEXT,
+    channel_id TEXT NOT NULL,
+    thread_ts TEXT NOT NULL,
+    thread_position INTEGER NOT NULL CHECK (thread_position >= 1),
+    message_type TEXT NOT NULL CHECK (message_type IN ('receipt', 'review', 'failure')),
+    text_body TEXT NOT NULL,
+    blocks_json TEXT,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sending', 'sent', 'failed')),
+    attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+    next_attempt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    lease_token TEXT,
+    lease_expires_at TEXT,
+    last_error TEXT,
+    provider_message_ts TEXT,
+    sent_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(installation_id, channel_id, thread_ts, thread_position)
+);
+
+CREATE INDEX IF NOT EXISTS ix_outbound_slack_outbox_delivery
+ON outbound_slack_outbox(status, next_attempt_at, lease_expires_at);
+
+CREATE TABLE IF NOT EXISTS slack_inbound_rate_limits (
+    team_id TEXT NOT NULL,
+    slack_user_id TEXT NOT NULL,
+    window_kind TEXT NOT NULL CHECK (window_kind IN ('hour', 'day')),
+    window_start TEXT NOT NULL,
+    attachment_count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY(team_id, slack_user_id, window_kind, window_start)
+);
 """
 
 
@@ -403,7 +555,7 @@ CREATE TABLE IF NOT EXISTS user_accounts (
     role TEXT NOT NULL CHECK (role IN ('user', 'super_admin')),
     state TEXT NOT NULL CHECK (state IN ('unclaimed', 'active')),
     personal_workspace_id TEXT UNIQUE,
-    source TEXT NOT NULL CHECK (source IN ('signup', 'inbound_email')),
+    source TEXT NOT NULL CHECK (source IN ('signup', 'inbound_email', 'inbound_slack')),
     claimed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -461,7 +613,7 @@ CREATE TABLE IF NOT EXISTS inbound_email_events (
 CREATE TABLE IF NOT EXISTS contracts (
     id TEXT PRIMARY KEY,
     workspace_id TEXT NOT NULL,
-    email_thread_id TEXT NOT NULL,
+    email_thread_id TEXT,
     title TEXT,
     status TEXT NOT NULL,
     current_version_id TEXT,
@@ -777,4 +929,156 @@ ON signers(signing_request_id, display_order);
 
 CREATE INDEX IF NOT EXISTS ix_signer_status_events_signer_created
 ON signer_status_events(signer_id, created_at);
+
+CREATE TABLE IF NOT EXISTS contract_sources (
+    contract_id TEXT PRIMARY KEY,
+    source_channel TEXT NOT NULL CHECK (source_channel IN ('browser', 'email', 'slack')),
+    source_thread_key TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS ix_contract_sources_channel_thread
+ON contract_sources(source_channel, source_thread_key);
+
+CREATE TABLE IF NOT EXISTS slack_installations (
+    id TEXT PRIMARY KEY,
+    team_id TEXT NOT NULL UNIQUE,
+    team_name TEXT,
+    bot_user_id TEXT,
+    encrypted_bot_token TEXT NOT NULL,
+    installed_by_account_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked', 'disconnected')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS slack_oauth_states (
+    state_hash TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS slack_user_links (
+    id TEXT PRIMARY KEY,
+    team_id TEXT NOT NULL,
+    slack_user_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    email TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(team_id, slack_user_id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_slack_user_links_account
+ON slack_user_links(account_id);
+
+CREATE TABLE IF NOT EXISTS inbound_slack_events (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL UNIQUE,
+    team_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    payload_json JSONB NOT NULL,
+    payload_hash TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'processed', 'ignored', 'failed')),
+    attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+    next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    lease_token TEXT,
+    lease_expires_at TIMESTAMPTZ,
+    last_error TEXT,
+    received_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    processed_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS ix_inbound_slack_events_delivery
+ON inbound_slack_events(status, next_attempt_at, lease_expires_at);
+
+CREATE TABLE IF NOT EXISTS inbound_slack_file_submissions (
+    event_id TEXT NOT NULL,
+    file_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'processing' CHECK (status IN ('pending', 'processing', 'completed')),
+    lease_token TEXT,
+    review_job_id TEXT NOT NULL,
+    lease_expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(event_id, file_id)
+);
+
+CREATE TABLE IF NOT EXISTS slack_review_executions (
+    submission_key TEXT PRIMARY KEY,
+    status TEXT NOT NULL DEFAULT 'processing' CHECK (status IN ('pending', 'processing', 'completed')),
+    lease_token TEXT,
+    lease_expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS slack_review_job_outbox (
+    submission_key TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL UNIQUE,
+    contract_id TEXT NOT NULL,
+    contract_version_id TEXT NOT NULL,
+    payload_json JSONB NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'publishing', 'published')),
+    attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+    next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    lease_token TEXT,
+    lease_expires_at TIMESTAMPTZ,
+    last_error TEXT,
+    published_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS ix_slack_review_job_outbox_delivery
+ON slack_review_job_outbox(status, next_attempt_at, lease_expires_at);
+
+CREATE TABLE IF NOT EXISTS slack_unknown_sender_admissions (
+    event_id TEXT PRIMARY KEY,
+    team_id TEXT NOT NULL,
+    slack_user_id TEXT NOT NULL,
+    attachment_count INTEGER NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS outbound_slack_outbox (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    installation_id TEXT NOT NULL,
+    contract_id TEXT,
+    contract_version_id TEXT,
+    channel_id TEXT NOT NULL,
+    thread_ts TEXT NOT NULL,
+    thread_position INTEGER NOT NULL CHECK (thread_position >= 1),
+    message_type TEXT NOT NULL CHECK (message_type IN ('receipt', 'review', 'failure')),
+    text_body TEXT NOT NULL,
+    blocks_json JSONB,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sending', 'sent', 'failed')),
+    attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+    next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    lease_token TEXT,
+    lease_expires_at TIMESTAMPTZ,
+    last_error TEXT,
+    provider_message_ts TEXT,
+    sent_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(installation_id, channel_id, thread_ts, thread_position)
+);
+
+CREATE INDEX IF NOT EXISTS ix_outbound_slack_outbox_delivery
+ON outbound_slack_outbox(status, next_attempt_at, lease_expires_at);
+
+CREATE TABLE IF NOT EXISTS slack_inbound_rate_limits (
+    team_id TEXT NOT NULL,
+    slack_user_id TEXT NOT NULL,
+    window_kind TEXT NOT NULL CHECK (window_kind IN ('hour', 'day')),
+    window_start TIMESTAMPTZ NOT NULL,
+    attachment_count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY(team_id, slack_user_id, window_kind, window_start)
+);
 """

@@ -340,6 +340,17 @@ class ProcessingRunRepository:
         ).fetchone()
         return self._run_from_row(row) if row is not None else None
 
+    def get_by_job_id(self, *, job_id: str) -> ProcessingRun | None:
+        """Return the durable producer run for a stable broker job identifier."""
+        row = self.connection.execute(
+            self._sql(
+                """SELECT * FROM contract_processing_runs
+                WHERE job_id = ? ORDER BY queued_at DESC, id DESC LIMIT 1"""
+            ),
+            (job_id,),
+        ).fetchone()
+        return self._run_from_row(row) if row is not None else None
+
     def list_recent(self, *, limit: int = 500) -> list[ProcessingRun]:
         """Return recent runs for operational latency reporting, newest first."""
         rows = self.connection.execute(

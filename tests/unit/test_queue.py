@@ -1,4 +1,5 @@
 import pytest
+from dataclasses import replace
 
 from contractmate.settings import Settings
 import json
@@ -38,6 +39,8 @@ def test_contract_review_job_round_trips_without_contract_text() -> None:
         "workspace_id",
         "email_thread_id",
         "requested_by",
+        "version",
+        "source_channel",
         "send_review_email",
         "attempt",
     }
@@ -109,6 +112,46 @@ def test_delivery_retry_increments_attempt_and_acks() -> None:
     assert queue.published[0][1] == "contract.review.retry"
     assert channel.acked == [10]
     assert connection.closed
+
+
+def test_slack_delivery_retry_serialization_preserves_complete_envelope() -> None:
+    original = ContractReviewJob(
+        job_id="stable-job", contract_id="contract-1", contract_version_id="version-1",
+        workspace_id="workspace-1", email_thread_id="slack:T1:C1:1.0", requested_by="user@example.com",
+        version=2, source_channel="slack", source_thread_key="slack:T1:C1:1.0",
+        slack_installation_id="install-1", slack_channel_id="C1", slack_thread_ts="1.0",
+        source_submission_key="Ev1:F1", recipient_name="Human", response_address="human@example.com",
+        original_subject="Review", in_reply_to="1.0", references="0.9", send_review_email=False,
+        processing_run_id="run-1", attempt=1,
+    )
+    queue = _FakeQueue(QueueTopology(max_attempts=3))
+    delivery = RabbitMQDelivery(
+        queue=queue, connection=_FakeConnection(), channel=_FakeChannel(), delivery_tag=1, job=original,
+    )
+
+    delivery.retry()
+
+    retried = queue.published[0][0]
+    wire_body = json.dumps(retried.to_message()).encode("utf-8")
+    restored = ContractReviewJob.from_message(json.loads(wire_body.decode("utf-8")))
+    assert restored == replace(original, attempt=2)
+    assert queue.published[0][1] == "contract.review.retry"
+
+
+def test_contention_retry_never_consumes_attempt_budget() -> None:
+    job = ContractReviewJob(
+        job_id="stable-job", contract_id="contract-1", contract_version_id="version-1",
+        workspace_id="workspace-1", email_thread_id="slack:T:C:1", requested_by="user@example.com",
+        source_channel="slack", source_submission_key="Ev1:F1", attempt=3,
+    )
+    for _ in range(5):
+        queue = _FakeQueue(QueueTopology(max_attempts=3))
+        delivery = RabbitMQDelivery(
+            queue=queue, connection=_FakeConnection(), channel=_FakeChannel(), delivery_tag=1, job=job,
+        )
+        delivery.retry_contention()
+        assert queue.published[0][0] == job
+        assert queue.published[0][1] == "contract.review.retry"
 
 
 def test_delivery_retry_routes_to_dlq_after_max_attempts() -> None:

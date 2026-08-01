@@ -99,6 +99,13 @@ class ContractRepository:
                 (status.value, contract_id),
             )
 
+    def get_contract_status(self, contract_id: str) -> WorkflowState | None:
+        row = self.connection.execute(
+            self._sql("SELECT status FROM contracts WHERE id = ?"),
+            (contract_id,),
+        ).fetchone()
+        return WorkflowState(str(row["status"])) if row is not None else None
+
     def get_contract_version(self, *, contract_id: str, contract_version_id: str) -> Any | None:
         return self.connection.execute(
             self._sql(
@@ -210,6 +217,18 @@ class ContractRepository:
             self.connection.execute(
                 self._sql("DELETE FROM outbound_email_outbox WHERE workspace_id = ? AND contract_id = ?"),
                 (workspace_id, contract_id),
+            )
+            self.connection.execute(
+                self._sql("DELETE FROM outbound_slack_outbox WHERE workspace_id = ? AND contract_id = ?"),
+                (workspace_id, contract_id),
+            )
+            self.connection.execute(
+                self._sql("DELETE FROM slack_review_job_outbox WHERE contract_id = ?"),
+                (contract_id,),
+            )
+            self.connection.execute(
+                self._sql("DELETE FROM contract_sources WHERE contract_id = ?"),
+                (contract_id,),
             )
             self._delete_by_ids("parsed_documents", "contract_version_id", version_ids)
             self._delete_by_ids("contract_reviews", "contract_version_id", version_ids)
