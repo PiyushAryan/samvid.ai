@@ -237,7 +237,7 @@ export function LandingPage() {
 
               <div className="hero-action-buttons">
                 <Link to="/chats" className="btn-lp-primary btn-hero-cta">
-                  Open Workspace <ArrowRight size={16} />
+                  Open Workspace <ArrowRight size={14} />
                 </Link>
                 <a
                   href="mailto:contracts@samvid.online?subject=please%20review%20this&body=Hi%20Samvid%0Aplease%20review%20it."
