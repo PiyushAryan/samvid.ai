@@ -17,6 +17,7 @@ import {
   Search,
   X
 } from "lucide-react";
+import { SubFooter } from "./components/sub-footer";
 
 type PreviewStepId = "intake" | "review" | "track";
 const MotionLink = motion.create(Link);
@@ -50,6 +51,12 @@ const previewDotTopByStep: Record<PreviewStepId, string> = {
   track: "94%"
 };
 
+const previewDotLeftByStep: Record<PreviewStepId, string> = {
+  intake: "50%",
+  review: "50%",
+  track: "50%"
+};
+
 export function LandingPage() {
   const [activePreviewStep, setActivePreviewStep] = useState<PreviewStepId>("intake");
   const [isSignupNudgeOpen, setIsSignupNudgeOpen] = useState(false);
@@ -71,7 +78,16 @@ export function LandingPage() {
   const brandX = useTransform(scrollY, [0, 320], [0, -edgeShift]);
   const ctaX = useTransform(scrollY, [0, 320], [0, edgeShift]);
   const smoothDemoProgress = useSpring(demoScrollProgress, { stiffness: 170, damping: 30, mass: 0.32 });
-  const demoRailDotTop = useTransform(smoothDemoProgress, [0, 1], ["7%", "94%"]);
+  const demoRailDotTop = useTransform(
+    smoothDemoProgress,
+    [0, 0.296, 0.321, 0.434, 0.458, 0.642, 0.667, 0.779, 0.804, 1],
+    ["1.4%", "30.4%", "32.9%", "43.9%", "46.4%", "64.2%", "66.7%", "77.9%", "80.4%", "98.6%"]
+  );
+  const demoRailDotLeft = useTransform(
+    smoothDemoProgress,
+    [0, 0.296, 0.321, 0.434, 0.458, 0.642, 0.667, 0.779, 0.804, 1],
+    ["50%", "50%", "85.7%", "85.7%", "50%", "50%", "85.7%", "85.7%", "50%", "50%"]
+  );
   const smoothNavX = useSpring(navX, { stiffness: 180, damping: 28, mass: 0.35 });
   const smoothBrandX = useSpring(brandX, { stiffness: 180, damping: 28, mass: 0.35 });
   const smoothCtaX = useSpring(ctaX, { stiffness: 180, damping: 28, mass: 0.35 });
@@ -347,7 +363,10 @@ export function LandingPage() {
                     </svg>
                     <motion.span
                       className="demo-stage-rail-dot"
-                      style={{ top: prefersReducedMotion ? previewDotTopByStep[activePreviewStep] : demoRailDotTop }}
+                      style={{
+                        top: prefersReducedMotion ? previewDotTopByStep[activePreviewStep] : demoRailDotTop,
+                        left: prefersReducedMotion ? previewDotLeftByStep[activePreviewStep] : demoRailDotLeft
+                      }}
                     />
                   </div>
                   {previewSteps.map((step) => (
@@ -575,15 +594,19 @@ export function LandingPage() {
               <div className="feature-icon-wrapper">
                 <Sparkles size={18} />
               </div>
-              <h3 className="feature-title">Every risk, tied to evidence</h3>
-              <p className="feature-desc">See liability, indemnity, renewal, governing-law, and scope concerns in plain language with the exact supporting text and page.</p>
-              <div className="feature-signal">Page-linked findings</div>
+              <div className="feature-card-content">
+                <span className="feature-card-label">01 / Clause review</span>
+                <h3 className="feature-title">Every risk, tied to evidence</h3>
+                <p className="feature-desc">See liability, indemnity, renewal, governing-law, and scope concerns in plain language with the exact supporting text and page.</p>
+                <div className="feature-signal">Page-linked findings</div>
+              </div>
             </div>
 
             <div className="feature-card feature-card-support">
               <div className="feature-icon-wrapper">
                 <Cpu size={18} />
               </div>
+              <span className="feature-card-label">02 / Paper to text</span>
               <h3 className="feature-title">Scans become review-ready</h3>
               <p className="feature-desc">Image-based and scanned contracts are converted into readable text before analysis, so older documents are not left out of the workflow.</p>
               <div className="feature-signal">Scanned documents supported</div>
@@ -593,6 +616,7 @@ export function LandingPage() {
               <div className="feature-icon-wrapper">
                 <Mail size={18} />
               </div>
+              <span className="feature-card-label">03 / Mailroom</span>
               <h3 className="feature-title">Forward it from your inbox</h3>
               <p className="feature-desc">Send an attachment to your workspace address. Samvid validates, files, parses, and queues the contract without another upload ritual.</p>
               <div className="feature-signal">Forward and review</div>
@@ -602,6 +626,7 @@ export function LandingPage() {
               <div className="feature-icon-wrapper">
                 <History size={18} />
               </div>
+              <span className="feature-card-label">04 / Record</span>
               <h3 className="feature-title">A timeline nobody can rewrite</h3>
               <p className="feature-desc">Signer status changes, actors, notes, timestamps, and IP context remain in an append-only history for clear operational accountability.</p>
               <div className="feature-signal">Complete activity history</div>
@@ -611,6 +636,7 @@ export function LandingPage() {
               <div className="feature-icon-wrapper">
                 <Layers size={18} />
               </div>
+              <span className="feature-card-label">05 / Revisions</span>
               <h3 className="feature-title">Know which version moved forward</h3>
               <p className="feature-desc">Keep every revision together and pin each signing request to the document snapshot the team actually approved.</p>
               <div className="feature-signal">Approved version linked</div>
@@ -620,6 +646,7 @@ export function LandingPage() {
               <div className="feature-icon-wrapper">
                 <Clock size={18} />
               </div>
+              <span className="feature-card-label">06 / Next action</span>
               <h3 className="feature-title">Never lose the next step</h3>
               <p className="feature-desc">Keep renewal dates, notice windows, approval states, and signer follow-ups visible so important contract work does not quietly stall.</p>
               <div className="feature-signal">Deadlines and next actions</div>
@@ -645,7 +672,7 @@ export function LandingPage() {
         <section id="workflow" className="workflow-section">
           <div className="section-header">
             <div className="section-kicker">How it works</div>
-            <h2 className="section-title">One contract in. A decision-ready record out.</h2>
+            <h2 className="section-title workflow-section-title">One contract in. A decision-ready record out.</h2>
             <p className="section-desc">Samvid keeps the document, the reasoning, and the next action connected through every stage.</p>
           </div>
 
@@ -701,28 +728,17 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section className="closing-cta">
-          <div>
-            <div className="section-kicker">Start with the next contract</div>
-            <h2>Give every handoff a record.</h2>
-            <p>Bring review, evidence, versions, and signer status into one workspace your team can trust.</p>
-          </div>
-          <div className="closing-cta-actions">
-            <a href="#workflow" className="btn-lp-secondary">See the workflow</a>
-            <Link to="/chats" className="btn-lp-primary">Open workspace <ArrowRight size={15} /></Link>
-          </div>
-        </section>
-
+        <SubFooter />
 
         {/* Footer */}
         <footer className="landing-footer">
           <h2 className="footer-punchline">
-            <span className="footer-punchline-pixel">Workspace</span> to fix your chaos with <span className="footer-punchline-brand">samvid.online</span>
+            <span className="footer-punchline-pixel">Workspace</span> to fix your chaos.
           </h2>
 
           <div className="footer-details">
             <div className="footer-logo-row">
-              <div className="landing-logo" style={{ width: "28px", height: "28px", fontSize: "13px" }}>S</div>
+              <img src="/favicon-dark.svg" alt="" width={28} height={28} />
               <span style={{ fontWeight: 700, fontSize: "15px", letterSpacing: 0 }}>Samvid</span>
             </div>
             <div className="footer-copy">
