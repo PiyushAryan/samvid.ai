@@ -1188,25 +1188,8 @@ export function ReviewTab({ review }: { review: ContractReview | null }) {
 export function RisksTab({ review }: { review: ContractReview | null }) {
   if (!review) return <EmptyState title="Risks will appear when the review is ready." />;
 
-  const counts = review.risks.reduce<Record<RiskSeverity, number>>(
-    (total, risk) => ({ ...total, [risk.severity]: total[risk.severity] + 1 }),
-    { critical: 0, high: 0, medium: 0, low: 0 }
-  );
-
   return (
     <div className="risks-tab">
-      <section className={cx(panelCardClass, "risks-overview")}>
-        <div>
-          <PanelTitle>Risk register</PanelTitle>
-          <p>Each finding includes its exact source text and page so you can review the clause in context.</p>
-        </div>
-        <div className="risks-overview-counts" aria-label={`${review.risks.length} risks found`}>
-          <strong>{review.risks.length}</strong>
-          <span>evidence-linked finding{review.risks.length === 1 ? "" : "s"}</span>
-          <RiskCounts counts={counts} />
-        </div>
-      </section>
-
       {review.risks.length ? (
         <div className="risk-list risk-list-register">
           {review.risks.map((risk) => (

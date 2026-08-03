@@ -488,7 +488,7 @@ test("risks tab renders evidence-grounded risks", () => {
 
   render(<RisksTab review={review} />);
 
-  expect(screen.getByText("Risk register")).toBeInTheDocument();
+  expect(screen.queryByText("Risk register")).not.toBeInTheDocument();
   expect(screen.getByText("Unlimited liability")).toBeInTheDocument();
   expect(screen.getByText("Page 2")).toBeInTheDocument();
   expect(screen.getByText("liability shall be unlimited")).toBeInTheDocument();
