@@ -371,9 +371,9 @@ export function AdminContractDetailPage() {
             {tab === "risks" && <RisksTab review={contractQuery.data.review} />}
             {tab === "document" && (
               <AdminQueryState query={documentQuery} loading={<AdminDocumentSkeleton />}>
-                {documentUrl ? (
+                {documentUrl && documentQuery.data ? (
                   contractQuery.data.current_version?.mime_type === "application/pdf"
-                    ? <PdfDocumentView title={contractQuery.data.title} url={documentUrl} />
+                    ? <PdfDocumentView title={contractQuery.data.title} document={documentQuery.data} />
                     : <div className="document-panel admin-document-panel"><div className="admin-document-fallback"><FileText size={28} /><p>Browser preview is not available for this file type.</p><a className="secondary" href={documentUrl} target="_blank" rel="noreferrer">Open original</a></div></div>
                 ) : <AdminEmpty title="No original document is available." />}
               </AdminQueryState>

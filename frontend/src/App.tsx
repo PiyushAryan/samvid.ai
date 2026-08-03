@@ -905,6 +905,7 @@ export function ContractDetailPage() {
             {tab === "document" && (
               <DocumentTab
                 contract={contractQuery.data}
+                document={documentQuery.data}
                 url={documentUrl}
                 isLoading={documentQuery.isLoading}
                 error={documentQuery.error instanceof Error ? documentQuery.error.message : null}
@@ -1219,11 +1220,13 @@ export function RisksTab({ review }: { review: ContractReview | null }) {
 
 function DocumentTab({
   contract,
+  document,
   url,
   isLoading,
   error
 }: {
   contract: ContractDetail;
+  document: Blob | undefined;
   url: string | null;
   isLoading: boolean;
   error: string | null;
@@ -1231,7 +1234,7 @@ function DocumentTab({
   if (error) {
     return <section className="panel error">Unable to load this document. {error}</section>;
   }
-  if (isLoading || !url) {
+  if (isLoading || !url || !document) {
     return (
       <section className="document-panel document-panel-loading" aria-label="Loading document" aria-busy="true">
         <Loader2 className="spin" size={24} aria-hidden="true" />
@@ -1239,7 +1242,7 @@ function DocumentTab({
     );
   }
   if (contract.mime_type === "application/pdf") {
-    return <PdfDocumentView title={contract.title} url={url} />;
+    return <PdfDocumentView title={contract.title} document={document} />;
   }
   return (
     <section className="panel document-download">
@@ -1252,7 +1255,7 @@ function DocumentTab({
   );
 }
 
-export function PdfDocumentView({ title, url }: { title: string; url: string }) {
+export function PdfDocumentView({ title, document: pdfBlob }: { title: string; document: Blob }) {
   const pagesRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -1269,7 +1272,9 @@ export function PdfDocumentView({ title, url }: { title: string; url: string }) 
         setIsLoading(true);
         const pdfjs = await import("pdfjs-dist");
         pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
-        const task = pdfjs.getDocument(url);
+        const documentData = new Uint8Array(await pdfBlob.arrayBuffer());
+        if (cancelled) return;
+        const task = pdfjs.getDocument({ data: documentData });
         loadingTask = task;
         const pdf = await task.promise;
         pdfDocument = pdf;
@@ -1313,7 +1318,7 @@ export function PdfDocumentView({ title, url }: { title: string; url: string }) 
       void loadingTask?.destroy();
       void pdfDocument?.destroy();
     };
-  }, [title, url]);
+  }, [title, pdfBlob]);
 
   return (
     <section className="document-panel document-viewer" aria-label={`${title} document`} aria-busy={isLoading}>
