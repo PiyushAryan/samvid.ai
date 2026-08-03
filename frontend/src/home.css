@@ -3448,6 +3448,25 @@
   position: relative;
 }
 
+.workflow-col-recall::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  right: -16px;
+  bottom: -18px;
+  width: 154px;
+  height: 154px;
+  background: url("/stamp-rubber.png") center / contain no-repeat;
+  opacity: 0.18;
+  pointer-events: none;
+  transform: rotate(-12deg);
+}
+
+.workflow-col-recall > * {
+  position: relative;
+  z-index: 1;
+}
+
 .workflow-col:not(:last-child)::after {
   content: "";
   position: absolute;

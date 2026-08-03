@@ -698,7 +698,7 @@ export function LandingPage() {
                 Coordinate review and manually track signer progress while every status update becomes part of the audit history.
               </p>
             </div>
-            <div className="workflow-col">
+            <div className="workflow-col workflow-col-recall">
               <div className="workflow-num">04 / RECALL</div>
               <h3 className="workflow-title">Return to the answer</h3>
               <p className="workflow-desc">

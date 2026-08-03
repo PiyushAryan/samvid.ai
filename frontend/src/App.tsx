@@ -887,8 +887,8 @@ export function ContractDetailPage() {
                 </div>
               }
             />
-            <div className="tabs" role="tablist">
-              {["review", "document", "signing"].map((value) => (
+            <div className="tabs" role="tablist" aria-label="Contract sections">
+              {["review", "risks", "document", "signing"].map((value) => (
                 <button
                   key={value}
                   className={cx("tab", tab === value && "active")}
@@ -901,6 +901,7 @@ export function ContractDetailPage() {
               ))}
             </div>
             {tab === "review" && <ReviewTab review={contractQuery.data.review} />}
+            {tab === "risks" && <RisksTab review={contractQuery.data.review} />}
             {tab === "document" && (
               <DocumentTab
                 contract={contractQuery.data}
@@ -1117,20 +1118,32 @@ export function ContractsTableSkeleton() {
 export function ReviewTab({ review }: { review: ContractReview | null }) {
   if (!review) return <EmptyState title="Review is not ready yet." />;
   return (
-    <div className="detail-grid">
-      <section className={panelClass}>
-        <PanelTitle>Summary</PanelTitle>
-        <dl className="definition-list">
+    <div className="review-tab">
+      <section className={cx(panelCardClass, "review-overview")}>
+        <div>
+          <PanelTitle>Review overview</PanelTitle>
+          <p className="review-overview-copy">The essentials to orient your next decision.</p>
+        </div>
+        <dl className="definition-list review-overview-meta">
           <div>
-            <dt>Type</dt>
+            <dt>Contract type</dt>
             <dd>{review.contract_type}</dd>
           </div>
           <div>
-            <dt>Recommended next action</dt>
-            <dd>{review.recommended_next_action}</dd>
+            <dt>Parties</dt>
+            <dd>{review.parties.length || "Not found"}</dd>
+          </div>
+          <div>
+            <dt>Key terms extracted</dt>
+            <dd>{review.key_terms.length}</dd>
           </div>
         </dl>
+        <div className="review-next-action">
+          <span>Recommended next action</span>
+          <strong>{review.recommended_next_action}</strong>
+        </div>
       </section>
+      <div className="detail-grid review-detail-grid">
       <section className={panelClass}>
         <PanelTitle>Parties</PanelTitle>
         <div className="term-list">
@@ -1156,25 +1169,6 @@ export function ReviewTab({ review }: { review: ContractReview | null }) {
         </div>
       </section>
       <section className={cx(panelClass, "wide")}>
-        <PanelTitle>Risks</PanelTitle>
-        <div className="risk-list">
-          {review.risks.map((risk) => (
-            <article key={`${risk.title}-${risk.evidence.page_number}`} className="risk-item">
-              <div className="risk-heading">
-                <StatusBadge status={risk.severity} />
-                <strong>{risk.title}</strong>
-              </div>
-              <p>{risk.explanation}</p>
-              <blockquote>
-                Page {risk.evidence.page_number}: {risk.evidence.exact_text}
-              </blockquote>
-              <p><b>Recommendation:</b> {risk.recommendation}</p>
-            </article>
-          ))}
-          {!review.risks.length && <span className={mutedText}>No evidence-grounded risks found.</span>}
-        </div>
-      </section>
-      <section className={cx(panelClass, "wide")}>
         <PanelTitle>Limitations</PanelTitle>
         <ul className="plain-list">
           {review.limitations.map((item) => (
@@ -1183,6 +1177,55 @@ export function ReviewTab({ review }: { review: ContractReview | null }) {
           {!review.limitations.length && <li>No limitations recorded.</li>}
         </ul>
       </section>
+      </div>
+    </div>
+  );
+}
+
+export function RisksTab({ review }: { review: ContractReview | null }) {
+  if (!review) return <EmptyState title="Risks will appear when the review is ready." />;
+
+  const counts = review.risks.reduce<Record<RiskSeverity, number>>(
+    (total, risk) => ({ ...total, [risk.severity]: total[risk.severity] + 1 }),
+    { critical: 0, high: 0, medium: 0, low: 0 }
+  );
+
+  return (
+    <div className="risks-tab">
+      <section className={cx(panelCardClass, "risks-overview")}>
+        <div>
+          <PanelTitle>Risk register</PanelTitle>
+          <p>Each finding includes its exact source text and page so you can review the clause in context.</p>
+        </div>
+        <div className="risks-overview-counts" aria-label={`${review.risks.length} risks found`}>
+          <strong>{review.risks.length}</strong>
+          <span>evidence-linked finding{review.risks.length === 1 ? "" : "s"}</span>
+          <RiskCounts counts={counts} />
+        </div>
+      </section>
+
+      {review.risks.length ? (
+        <div className="risk-list risk-list-register">
+          {review.risks.map((risk) => (
+            <article key={`${risk.title}-${risk.evidence.page_number}`} className="risk-item">
+              <div className="risk-heading">
+                <StatusBadge status={risk.severity} />
+                <span className="risk-clause-type">{risk.clause_type}</span>
+              </div>
+              <h2>{risk.title}</h2>
+              <p>{risk.explanation}</p>
+              <blockquote>
+                <span>Page {risk.evidence.page_number}</span>
+                {risk.evidence.exact_text}
+              </blockquote>
+              <div className="risk-recommendation">
+                <span>Recommendation</span>
+                <strong>{risk.recommendation}</strong>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : <EmptyState title="No evidence-grounded risks found." />}
     </div>
   );
 }

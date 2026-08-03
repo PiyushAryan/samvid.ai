@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactNode } from "react";
 import { beforeEach, expect, test, vi } from "vitest";
-import { AppShell, ChatsPage, ContractDetailPage, ContractsPage, ContractsTableSkeleton, ContractTable, ReviewTab, Timeline } from "./App";
+import { AppShell, ChatsPage, ContractDetailPage, ContractsPage, ContractsTableSkeleton, ContractTable, ReviewTab, RisksTab, Timeline } from "./App";
 import { LandingPage } from "./Home";
 import { IntegrationsPage } from "./Integrations";
 import * as api from "./api";
@@ -465,7 +465,7 @@ test("contract loading state exposes one accessible status and hides its placeho
   expect(container.querySelector(".contracts-skeleton")).toHaveAttribute("aria-hidden", "true");
 });
 
-test("review tab renders evidence-grounded risks", () => {
+test("risks tab renders evidence-grounded risks", () => {
   const review: ContractReview = {
     contract_id: "c1",
     contract_type: "Services agreement",
@@ -486,11 +486,12 @@ test("review tab renders evidence-grounded risks", () => {
     limitations: ["Not legal advice."]
   };
 
-  render(<ReviewTab review={review} />);
+  render(<RisksTab review={review} />);
 
-  expect(screen.getByText("Services agreement")).toBeInTheDocument();
+  expect(screen.getByText("Risk register")).toBeInTheDocument();
   expect(screen.getByText("Unlimited liability")).toBeInTheDocument();
-  expect(screen.getByText(/Page 2: liability shall be unlimited/)).toBeInTheDocument();
+  expect(screen.getByText("Page 2")).toBeInTheDocument();
+  expect(screen.getByText("liability shall be unlimited")).toBeInTheDocument();
 });
 
 test("timeline renders immutable events in chronological order", () => {
