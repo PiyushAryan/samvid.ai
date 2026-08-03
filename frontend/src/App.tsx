@@ -778,7 +778,7 @@ export function ContractsPage() {
   });
 
   return (
-    <section className={pageClass}>
+    <section className={cx(pageClass, "contracts-page")}>
       <PageHeader
         eyebrow="Workspace"
         title="Contracts"
@@ -846,7 +846,8 @@ export function ContractDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const tab = params.get("tab") || "review";
+  const requestedTab = params.get("tab");
+  const tab = requestedTab === "risks" ? "review" : requestedTab || "review";
   const contractQuery = useQuery({
     queryKey: ["contract", contractId],
     queryFn: () => getContract(contractId!),
@@ -863,7 +864,7 @@ export function ContractDetailPage() {
   const documentUrl = useObjectUrl(documentQuery.data);
 
   return (
-    <section className={pageClass}>
+    <section className={cx(pageClass, "contract-detail-page", `contract-detail-page-${tab}`)}>
       <QueryState query={contractQuery}>
         {contractQuery.data && (
           <>
@@ -888,7 +889,7 @@ export function ContractDetailPage() {
               }
             />
             <div className="tabs" role="tablist" aria-label="Contract sections">
-              {["review", "risks", "document", "signing"].map((value) => (
+              {["review", "document", "signing"].map((value) => (
                 <button
                   key={value}
                   className={cx("tab", tab === value && "active")}
@@ -901,7 +902,6 @@ export function ContractDetailPage() {
               ))}
             </div>
             {tab === "review" && <ReviewTab review={contractQuery.data.review} />}
-            {tab === "risks" && <RisksTab review={contractQuery.data.review} />}
             {tab === "document" && (
               <DocumentTab
                 contract={contractQuery.data}
@@ -979,7 +979,7 @@ export function SigningPage() {
     queryFn: () => listSigningRequests(status)
   });
   return (
-    <section className={pageClass}>
+    <section className={cx(pageClass, "signing-page")}>
       <PageHeader eyebrow="Signer tracking" title="Signing requests" />
       <div className="toolbar">
         <label className={toolbarControl}>
@@ -1117,6 +1117,7 @@ export function ContractsTableSkeleton() {
 
 export function ReviewTab({ review }: { review: ContractReview | null }) {
   if (!review) return <EmptyState title="Review is not ready yet." />;
+
   return (
     <div className="review-tab">
       <section className={cx(panelCardClass, "review-overview")}>
@@ -1139,45 +1140,47 @@ export function ReviewTab({ review }: { review: ContractReview | null }) {
           </div>
         </dl>
         <div className="review-next-action">
-          <span>Recommended next action</span>
-          <strong>{review.recommended_next_action}</strong>
+          <span>Next step</span>
+          <strong>{nextActionSummary(review.recommended_next_action)}</strong>
+          <p>Use the detailed guidance to prepare the right follow-up with the other party or your legal adviser.</p>
+          <details className="review-guidance">
+            <summary>View detailed guidance</summary>
+            <ul>
+              {guidanceItems(review.recommended_next_action).map((item) => <li key={item}>{item}</li>)}
+            </ul>
+          </details>
         </div>
       </section>
       <div className="detail-grid review-detail-grid">
-      <section className={panelClass}>
-        <PanelTitle>Parties</PanelTitle>
-        <div className="term-list">
-          {review.parties.map((party) => (
-            <div key={`${party.name}-${party.role || "party"}`}>
-              <strong>{party.name}</strong>
-              <span>{party.role || "Party"}</span>
-            </div>
-          ))}
-          {!review.parties.length && <span className={mutedText}>No parties extracted.</span>}
-        </div>
-      </section>
-      <section className={panelClass}>
-        <PanelTitle>Key terms</PanelTitle>
-        <div className="term-list">
-          {review.key_terms.map((term) => (
-            <div key={term.name}>
-              <strong>{term.name}</strong>
-              <span>{term.value || "Not found"}</span>
-            </div>
-          ))}
-          {!review.key_terms.length && <span className={mutedText}>No key terms extracted.</span>}
-        </div>
-      </section>
-      <section className={cx(panelClass, "wide")}>
-        <PanelTitle>Limitations</PanelTitle>
-        <ul className="plain-list">
-          {review.limitations.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-          {!review.limitations.length && <li>No limitations recorded.</li>}
-        </ul>
-      </section>
+        <section className={cx(panelClass, "review-parties")}>
+          <div className="review-panel-heading">
+            <PanelTitle>Parties</PanelTitle>
+            {!!review.parties.length && <span>{review.parties.length}</span>}
+          </div>
+          <div className="term-list">
+            {review.parties.map((party) => (
+              <div key={`${party.name}-${party.role || "party"}`}>
+                <span>{party.role || "Party"}</span>
+                <strong>{party.name}</strong>
+              </div>
+            ))}
+            {!review.parties.length && <span className={mutedText}>No parties extracted.</span>}
+          </div>
+        </section>
+        <section className={panelClass}>
+          <PanelTitle>Key terms</PanelTitle>
+          <div className="term-list">
+            {review.key_terms.map((term) => (
+              <div key={term.name}>
+                <strong>{term.name}</strong>
+                <span>{term.value || "Not found"}</span>
+              </div>
+            ))}
+            {!review.key_terms.length && <span className={mutedText}>No key terms extracted.</span>}
+          </div>
+        </section>
       </div>
+      <p className="review-disclaimer">This review is AI-generated operational assistance and not legal advice.</p>
     </div>
   );
 }
@@ -1226,6 +1229,7 @@ export function RisksTab({ review }: { review: ContractReview | null }) {
           ))}
         </div>
       ) : <EmptyState title="No evidence-grounded risks found." />}
+      <p className="review-disclaimer">This review is AI-generated operational assistance and not legal advice.</p>
     </div>
   );
 }
@@ -1621,6 +1625,25 @@ function EmptyState({ title }: { title: string }) {
 
 function StatusBadge({ status }: { status: string }) {
   return <span className={cx("badge", statusTone(status))}>{label(status)}</span>;
+}
+
+function nextActionSummary(recommendation: string): string {
+  if (/legal review|legal counsel|counsel|lawyer/i.test(recommendation)) {
+    return "Request legal review before accepting or signing.";
+  }
+  if (/request revisions|negotiate|redline/i.test(recommendation)) {
+    return "Request revisions before accepting or signing.";
+  }
+  return "Review the identified findings before proceeding.";
+}
+
+function guidanceItems(recommendation: string): string[] {
+  const numberedItems = recommendation
+    .split(/(?=\d+\)\s)/)
+    .map((item) => item.replace(/^\d+\)\s*/, "").trim())
+    .filter(Boolean);
+
+  return numberedItems.length > 1 ? numberedItems : [recommendation];
 }
 
 function RiskCounts({ counts }: { counts: Record<RiskSeverity, number> }) {

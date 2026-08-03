@@ -160,9 +160,11 @@ p {
 .app-shell {
   --sidebar-width: 248px;
   display: grid;
-  width: calc(100% - 18px);
-  min-height: calc(100vh - 18px);
-  margin: 9px;
+  position: fixed;
+  inset: 9px;
+  width: auto;
+  height: calc(100vh - 18px);
+  margin: 0;
   overflow: clip;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   border: 0.5px solid var(--border-strong);
@@ -175,27 +177,109 @@ p {
 
 .app-shell > main {
   min-width: 0;
-  min-height: calc(100vh - 18px);
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-color: #cfd5d3 transparent;
+  scrollbar-width: thin;
+}
+
+.app-shell > main::-webkit-scrollbar {
+  width: 10px;
+}
+
+.app-shell > main::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-shell > main::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: #cfd5d3;
+  background-clip: padding-box;
+}
+
+.app-shell > main::-webkit-scrollbar-thumb:hover {
+  background-color: #b9c1be;
 }
 
 .workspace-main {
   position: relative;
   isolation: isolate;
+  background: #fff;
 }
 
 .workspace-main::before {
+  display: none;
+}
+
+.contracts-page {
+  position: relative;
+  isolation: isolate;
+  min-height: calc(100vh - 19px);
+}
+
+.contracts-page::before {
   position: absolute;
-  z-index: -1;
+  z-index: 0;
   inset: 0;
   background-image: linear-gradient(var(--workspace-wash), var(--workspace-wash)), url("/blr.webp");
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
   content: "";
+  pointer-events: none;
 }
 
-.app-shell[data-theme="dark"] .workspace-main::before {
+.contracts-page > * {
+  position: relative;
+  z-index: 1;
+}
+
+.app-shell[data-theme="dark"] .contracts-page::before {
   background-image: linear-gradient(var(--workspace-wash), var(--workspace-wash)), url("/blr-dark.webp");
+}
+
+.contract-detail-page,
+.signing-page {
+  --surface: #fff;
+  --surface-muted: #e6f3f1;
+  --surface-subtle: #fff;
+  --accent-soft: #e6f3f1;
+  min-height: calc(100vh - 19px);
+  background: #fff;
+}
+
+.contract-detail-page-review .panel,
+.contract-detail-page-risks .panel,
+.contract-detail-page-risks .risk-item,
+.signing-page .panel,
+.signing-page .notice {
+  box-shadow: none;
+}
+
+.contract-detail-page-review *,
+.contract-detail-page-risks *,
+.signing-page * {
+  box-shadow: none !important;
+}
+
+.contract-detail-page-review .panel,
+.contract-detail-page-risks .panel,
+.contract-detail-page-risks .risk-item,
+.signing-page .panel,
+.signing-page .table-wrap {
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.contract-detail-page-review .panel:hover,
+.contract-detail-page-risks .panel:hover,
+.contract-detail-page-risks .risk-item:hover,
+.signing-page .panel:hover,
+.signing-page .table-wrap:hover {
+  border-color: #c8d7d4;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 12px rgba(29, 45, 42, 0.09) !important;
 }
 
 .sidebar {
@@ -1829,7 +1913,15 @@ p {
 .risks-tab {
   display: grid;
   gap: 20px;
-  font-family: "Geist Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Instrument Sans", "Geist Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.review-disclaimer {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .review-overview,
@@ -1886,8 +1978,89 @@ p {
   line-height: 1.45;
 }
 
+.review-next-action > p {
+  max-width: 680px;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.review-guidance {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.review-guidance summary {
+  padding-top: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.review-guidance summary:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.review-guidance > ul {
+  max-width: 780px;
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.review-guidance li::marker {
+  color: var(--text-muted);
+}
+
 .review-detail-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(260px, 0.82fr) minmax(0, 1.18fr);
+  align-items: start;
+}
+
+.review-detail-grid > .panel {
+  align-self: start;
+}
+
+.review-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.review-panel-heading > span {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.review-parties .term-list {
+  gap: 0;
+}
+
+.review-parties .term-list > div {
+  grid-template-columns: minmax(116px, 0.9fr) minmax(0, 1.1fr);
+  align-items: center;
+  padding: 10px 0;
+}
+
+.review-parties .term-list > div:last-child {
+  padding-bottom: 2px;
 }
 
 .risks-overview-counts {
@@ -3022,18 +3195,20 @@ textarea.field-control {
   }
 
   .app-shell {
-    width: calc(100% - 16px);
-    min-height: calc(100vh - 16px);
-    margin: 8px;
+    inset: 8px;
+    width: auto;
+    height: calc(100vh - 16px);
+    margin: 0;
     grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .app-shell > main {
-    min-height: auto;
+    min-height: 0;
   }
 
   .sidebar {
-    top: 8px;
+    position: static;
     display: grid;
     height: auto;
     grid-template-columns: minmax(0, 1fr) auto;
