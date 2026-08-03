@@ -31,7 +31,7 @@ import {
   listAdminUsers,
   type CollectionResponse
 } from "./api";
-import { ReviewTab, RisksTab, Timeline } from "./App";
+import { PdfDocumentView, ReviewTab, RisksTab, Timeline } from "./App";
 import { useAuth } from "./AuthProvider";
 import { Skeleton } from "./components/ui/skeleton";
 import { setFaviconTheme } from "./favicon";
@@ -372,11 +372,9 @@ export function AdminContractDetailPage() {
             {tab === "document" && (
               <AdminQueryState query={documentQuery} loading={<AdminDocumentSkeleton />}>
                 {documentUrl ? (
-                  <div className="document-panel admin-document-panel">
-                    {contractQuery.data.current_version?.mime_type === "application/pdf"
-                      ? <iframe title={contractQuery.data.title} src={documentUrl} />
-                      : <div className="admin-document-fallback"><FileText size={28} /><p>Browser preview is not available for this file type.</p><a className="secondary" href={documentUrl} target="_blank" rel="noreferrer">Open original</a></div>}
-                  </div>
+                  contractQuery.data.current_version?.mime_type === "application/pdf"
+                    ? <PdfDocumentView title={contractQuery.data.title} url={documentUrl} />
+                    : <div className="document-panel admin-document-panel"><div className="admin-document-fallback"><FileText size={28} /><p>Browser preview is not available for this file type.</p><a className="secondary" href={documentUrl} target="_blank" rel="noreferrer">Open original</a></div></div>
                 ) : <AdminEmpty title="No original document is available." />}
               </AdminQueryState>
             )}
