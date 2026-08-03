@@ -1117,6 +1117,8 @@ export function ContractsTableSkeleton() {
 }
 
 export function ReviewTab({ review }: { review: ContractReview | null }) {
+  const [guidanceOpen, setGuidanceOpen] = useState(false);
+  const reduceMotion = useReducedMotion();
   if (!review) return <EmptyState title="Review is not ready yet." />;
 
   return (
@@ -1144,12 +1146,30 @@ export function ReviewTab({ review }: { review: ContractReview | null }) {
           <span>Next step</span>
           <strong>{nextActionSummary(review.recommended_next_action)}</strong>
           <p>Use the detailed guidance to prepare the right follow-up with the other party or your legal adviser.</p>
-          <details className="review-guidance">
-            <summary>View detailed guidance</summary>
-            <ul>
-              {guidanceItems(review.recommended_next_action).map((item) => <li key={item}>{item}</li>)}
-            </ul>
-          </details>
+          <div className="review-guidance">
+            <button
+              className="review-guidance-toggle"
+              type="button"
+              aria-expanded={guidanceOpen}
+              aria-controls="review-guidance-content"
+              onClick={() => setGuidanceOpen((open) => !open)}
+            >
+              View detailed guidance
+              <ChevronRight className={cx("review-guidance-chevron", guidanceOpen && "open")} size={15} aria-hidden="true" />
+            </button>
+            <motion.div
+              id="review-guidance-content"
+              className="review-guidance-content"
+              aria-hidden={!guidanceOpen}
+              initial={false}
+              animate={{ height: guidanceOpen ? "auto" : 0, opacity: guidanceOpen ? 1 : 0 }}
+              transition={reduceMotion ? { duration: 0 } : { duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <ul>
+                {guidanceItems(review.recommended_next_action).map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            </motion.div>
+          </div>
         </div>
       </section>
       <div className="detail-grid review-detail-grid">

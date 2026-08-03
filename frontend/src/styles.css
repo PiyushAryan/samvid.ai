@@ -1991,21 +1991,42 @@ p {
   border-top: 1px solid var(--border);
 }
 
-.review-guidance summary {
+.review-guidance-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding-top: 11px;
+  border: 0;
+  background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
+  font: inherit;
   font-size: 12px;
   font-weight: 600;
+  text-align: left;
 }
 
-.review-guidance summary:focus-visible {
+.review-guidance-toggle:focus-visible {
   border-radius: 3px;
   outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
 }
 
-.review-guidance > ul {
+.review-guidance-chevron {
+  flex: 0 0 auto;
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.review-guidance-chevron.open {
+  transform: rotate(90deg);
+}
+
+.review-guidance-content {
+  overflow: hidden;
+}
+
+.review-guidance-content > ul {
   max-width: 780px;
   display: grid;
   gap: 8px;
