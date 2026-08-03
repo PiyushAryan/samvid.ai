@@ -846,8 +846,7 @@ export function ContractDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const requestedTab = params.get("tab");
-  const tab = requestedTab === "risks" ? "review" : requestedTab || "review";
+  const tab = params.get("tab") || "review";
   const contractQuery = useQuery({
     queryKey: ["contract", contractId],
     queryFn: () => getContract(contractId!),
@@ -889,7 +888,7 @@ export function ContractDetailPage() {
               }
             />
             <div className="tabs" role="tablist" aria-label="Contract sections">
-              {["review", "document", "signing"].map((value) => (
+              {["review", "risks", "document", "signing"].map((value) => (
                 <button
                   key={value}
                   className={cx("tab", tab === value && "active")}
@@ -902,6 +901,7 @@ export function ContractDetailPage() {
               ))}
             </div>
             {tab === "review" && <ReviewTab review={contractQuery.data.review} />}
+            {tab === "risks" && <RisksTab review={contractQuery.data.review} />}
             {tab === "document" && (
               <DocumentTab
                 contract={contractQuery.data}

@@ -31,7 +31,7 @@ import {
   listAdminUsers,
   type CollectionResponse
 } from "./api";
-import { ReviewTab, Timeline } from "./App";
+import { ReviewTab, RisksTab, Timeline } from "./App";
 import { useAuth } from "./AuthProvider";
 import { Skeleton } from "./components/ui/skeleton";
 import { setFaviconTheme } from "./favicon";
@@ -328,8 +328,7 @@ function AdminContractsTable({ contracts }: { contracts: ContractListItem[] }) {
 export function AdminContractDetailPage() {
   const { contractId = "" } = useParams();
   const [params, setParams] = useSearchParams();
-  const requestedTab = params.get("tab");
-  const tab = requestedTab === "risks" ? "review" : requestedTab || "review";
+  const tab = params.get("tab") || "review";
   const contractQuery = useQuery({
     queryKey: ["admin", "contract", contractId],
     queryFn: () => getAdminContract(contractId),
@@ -362,13 +361,14 @@ export function AdminContractDetailPage() {
             />
             <div className="admin-readonly-notice"><ShieldCheck size={17} /><span>Super-admin access is logged. This view cannot modify user data.</span></div>
             <div className="tabs" role="tablist" aria-label="Contract oversight sections">
-              {["review", "document", "signing"].map((value) => (
+              {["review", "risks", "document", "signing"].map((value) => (
                 <button key={value} className={cx("tab", tab === value && "active")} onClick={() => setParams({ tab: value })} role="tab" aria-selected={tab === value}>
                   {formatLabel(value)}
                 </button>
               ))}
             </div>
             {tab === "review" && <ReviewTab review={contractQuery.data.review} />}
+            {tab === "risks" && <RisksTab review={contractQuery.data.review} />}
             {tab === "document" && (
               <AdminQueryState query={documentQuery} loading={<AdminDocumentSkeleton />}>
                 {documentUrl ? (
