@@ -2575,6 +2575,7 @@ textarea.field-control {
 
 /* AI contract chat */
 .ai-chat-page {
+  font-family: "Instrument Sans", "Geist Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   position: relative;
   isolation: isolate;
   display: flex;
