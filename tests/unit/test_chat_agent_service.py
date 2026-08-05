@@ -229,5 +229,5 @@ def test_chat_agent_normalizes_stream_events() -> None:
     assert [(event.type, event.content) for event in events] == [
         ("tool", "Searching contracts"),
         ("delta", "Thirty days"),
-        ("completed", ""),
+        ("completed", "Thirty days"),
     ]

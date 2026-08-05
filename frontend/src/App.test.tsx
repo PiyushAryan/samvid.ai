@@ -356,6 +356,7 @@ test("new chat streams an answer and exposes its sources", async () => {
 
 test("new chats show the first message in the sidebar while the response is streaming", async () => {
   const prompt = "What is the termination notice?";
+  let streamSignal: AbortSignal | undefined;
   vi.mocked(api.createChatSession).mockResolvedValueOnce({
     id: "chat-new",
     title: prompt,
@@ -364,7 +365,10 @@ test("new chats show the first message in the sidebar while the response is stre
     updated_at: "2026-07-20T10:00:00Z",
     messages: []
   });
-  vi.mocked(api.streamChatMessage).mockImplementationOnce(() => new Promise(() => undefined));
+  vi.mocked(api.streamChatMessage).mockImplementationOnce((_sessionId, _content, _handlers, signal) => {
+    streamSignal = signal;
+    return new Promise(() => undefined);
+  });
 
   setTestUrl("/chats");
   const { container } = render(
@@ -384,6 +388,7 @@ test("new chats show the first message in the sidebar while the response is stre
     expect.any(Object),
     expect.any(AbortSignal)
   );
+  expect(streamSignal?.aborted).toBe(false);
   expect(within(container).queryByRole("heading", { name: "Hello, Piyush" })).not.toBeInTheDocument();
   expect(within(container).getByText("Searching your contracts...")).toBeInTheDocument();
   expect(container.querySelector(".ai-chat-page")).toHaveAttribute("data-conversation", "true");

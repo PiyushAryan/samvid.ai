@@ -143,6 +143,7 @@ class ChatStreamEvent:
     type: str
     content: str = ""
     event: str | None = None
+    sources: tuple[ChatEvidenceSource, ...] = ()
 
 
 @dataclass
@@ -191,6 +192,7 @@ class AgnoChatAgentService:
         user_id: str,
         session_id: str,
         message: str,
+        history: Sequence[Mapping[str, str]] = (),
     ) -> Iterator[ChatStreamEvent]:
         normalized_message = _validate_run_input(
             workspace_id=workspace_id,
@@ -198,9 +200,10 @@ class AgnoChatAgentService:
             session_id=session_id,
             message=message,
         )
-        agent = self._build_agent(workspace_id, _RunEvidenceRegistry())
+        evidence = _RunEvidenceRegistry()
+        agent = self._build_agent(workspace_id, evidence)
         response = agent.run(
-            normalized_message,
+            _conversation_prompt(history=history, message=normalized_message),
             user_id=user_id,
             session_id=session_id,
             metadata={"workspace_id": workspace_id},
@@ -209,6 +212,7 @@ class AgnoChatAgentService:
         )
         if isinstance(response, (str, bytes)) or not isinstance(response, Iterable):
             raise RuntimeError("Agno did not return a stream iterator.")
+        content_parts: list[str] = []
         for item in response:
             event_name = _event_name(item)
             content = _response_content(item, allow_empty=True)
@@ -218,8 +222,17 @@ class AgnoChatAgentService:
             elif "error" in normalized_name or "cancel" in normalized_name:
                 yield ChatStreamEvent(type="error", content=content, event=event_name)
             elif "complete" in normalized_name:
-                yield ChatStreamEvent(type="completed", content=content, event=event_name)
+                final_content = content or "".join(content_parts)
+                if not final_content.strip():
+                    raise RuntimeError("Agno completed the chat stream without text content.")
+                yield ChatStreamEvent(
+                    type="completed",
+                    content=final_content,
+                    event=event_name,
+                    sources=evidence.resolve_citations(final_content),
+                )
             elif content:
+                content_parts.append(content)
                 yield ChatStreamEvent(type="delta", content=content, event=event_name)
 
     def _build_agent(self, workspace_id: str, evidence: _RunEvidenceRegistry) -> AgentLike:

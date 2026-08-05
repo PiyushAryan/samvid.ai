@@ -337,28 +337,6 @@ def create_api_router(settings: Settings):
                 for message in chats.list_messages(workspace_id=workspace, session_id=session_id)[-13:-1]
                 if message.role in {"user", "assistant"}
             ]
-            answer = agent.answer(
-                workspace_id=workspace,
-                user_id=access.account_id,
-                session_id=session_id,
-                message=content,
-                history=history,
-            )
-            sources = chat_source_cards(
-                connection=connection,
-                workspace_id=workspace,
-                evidence_sources=answer.sources,
-            )
-            assistant_message = chats.append_message(
-                workspace_id=workspace,
-                session_id=session_id,
-                role="assistant",
-                content=answer.content,
-                citations=sources,
-                model_provider="openai",
-                model_name=settings.chat_model_id,
-                metadata={"citation_labels": list(answer.citations), "retrieval_count": len(sources)},
-            )
         except Exception as exc:
             logger.exception("Contract chat failed for session %s", session_id)
             raise HTTPException(
@@ -367,14 +345,52 @@ def create_api_router(settings: Settings):
             ) from exc
 
         def event_stream() -> Iterator[str]:
-            if sources:
-                yield _sse_event("message.sources", {"type": "message.sources", "sources": sources})
-            for fragment in _stream_fragments(answer.content):
-                yield _sse_event("message.delta", {"type": "message.delta", "delta": fragment})
-            yield _sse_event(
-                "message.completed",
-                {"type": "message.completed", "message": chat_message_response(assistant_message)},
-            )
+            try:
+                for event in agent.stream(
+                    workspace_id=workspace,
+                    user_id=access.account_id,
+                    session_id=session_id,
+                    message=content,
+                    history=history,
+                ):
+                    if event.type == "delta":
+                        yield _sse_event("message.delta", {"type": "message.delta", "delta": event.content})
+                        continue
+                    if event.type == "completed":
+                        sources = chat_source_cards(
+                            connection=connection,
+                            workspace_id=workspace,
+                            evidence_sources=event.sources,
+                        )
+                        assistant_message = chats.append_message(
+                            workspace_id=workspace,
+                            session_id=session_id,
+                            role="assistant",
+                            content=event.content,
+                            citations=sources,
+                            model_provider="openai",
+                            model_name=settings.chat_model_id,
+                            metadata={
+                                "citation_labels": [source.source_id for source in event.sources],
+                                "retrieval_count": len(sources),
+                            },
+                        )
+                        if sources:
+                            yield _sse_event("message.sources", {"type": "message.sources", "sources": sources})
+                        yield _sse_event(
+                            "message.completed",
+                            {"type": "message.completed", "message": chat_message_response(assistant_message)},
+                        )
+                        return
+                    if event.type == "error":
+                        raise RuntimeError(event.content or "The chat model stopped before completing its answer.")
+                raise RuntimeError("The chat model ended without a completion event.")
+            except Exception as exc:
+                logger.exception("Contract chat stream failed for session %s", session_id)
+                yield _sse_event(
+                    "error",
+                    {"type": "error", "code": "chat_generation_failed", "message": "Samvid could not complete that contract answer."},
+                )
 
         return StreamingResponse(
             event_stream(),
@@ -1267,19 +1283,3 @@ def _http_signing_error(exc: SigningError):
 
 def _sse_event(event: str, payload: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
-
-
-def _stream_fragments(content: str, *, max_chars: int = 80) -> Iterator[str]:
-    """Emit sentence-friendly chunks after the model response has been persisted."""
-    remaining = content.strip()
-    while remaining:
-        if len(remaining) <= max_chars:
-            yield remaining
-            return
-        split_at = max(remaining.rfind(" ", 0, max_chars), remaining.rfind("\n", 0, max_chars))
-        if split_at < 1:
-            split_at = max_chars
-        else:
-            split_at += 1
-        yield remaining[:split_at]
-        remaining = remaining[split_at:]

@@ -537,7 +537,10 @@ export function ChatsPage() {
     setStreamError("");
     setAnnouncement("");
     setIsSending(false);
-  }, [activeChatId, liveConversation?.sessionId]);
+  // A new chat sets its live conversation before Next.js finishes updating the
+  // URL. Only a URL change represents a user switching conversations; reacting
+  // to the live session ID here would cancel that first response mid-start.
+  }, [activeChatId]);
 
   useEffect(() => () => streamControllerRef.current?.abort(), []);
 
