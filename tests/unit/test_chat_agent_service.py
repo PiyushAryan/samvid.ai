@@ -86,11 +86,13 @@ class FakeAgent:
 def test_openai_chat_config_reads_existing_environment_contract(monkeypatch: Any) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
     monkeypatch.setenv("CHAT_MODEL_ID", "gpt-5-mini")
+    monkeypatch.setenv("CHAT_REASONING_EFFORT", "medium")
 
     config = OpenAIChatConfig.from_env()
 
     assert config.api_key == "openai-key"
     assert config.model_id == "gpt-5-mini"
+    assert config.reasoning_effort == "medium"
 
 
 def test_chat_agent_exposes_only_scoped_read_tools_and_resolves_run_evidence() -> None:

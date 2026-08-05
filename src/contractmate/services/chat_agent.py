@@ -4,7 +4,7 @@ import os
 import re
 from dataclasses import dataclass
 from dataclasses import field
-from typing import Any, Callable, Iterable, Iterator, Mapping, Protocol, Sequence
+from typing import Any, Callable, Iterable, Iterator, Literal, Mapping, Protocol, Sequence, cast
 
 from contractmate.ai.retrieval import HybridRetrievalService, RetrievalQuery
 
@@ -18,7 +18,9 @@ CHAT_AGENT_INSTRUCTIONS = (
     "search_contract_context, using square brackets such as [S1]. "
     "Never invent, alter, or expose any other citation identifier. "
     "Say when the available context does not support an answer. "
-    "Clearly separate document facts from interpretation, and state that responses are not legal advice."
+    "Clearly separate document facts from interpretation, and state that responses are not legal advice. "
+    "Format answers as concise Markdown: use short paragraphs, headings only when helpful, and bullet lists for two or more facts, terms, or actions. "
+    "Answer the user's question directly; do not open with a generic capability menu or ask for a contract ID unless it is necessary to answer the request."
 )
 
 _BRACKET_PATTERN = re.compile(r"\[([^\[\]\n]{1,120})\]")
@@ -47,12 +49,15 @@ AgentBuilder = Callable[[Sequence[Callable[..., Any]]], AgentLike]
 class OpenAIChatConfig:
     api_key: str
     model_id: str = "gpt-5-mini"
+    reasoning_effort: Literal["low", "medium", "high"] = "low"
     timeout_seconds: float = 60.0
     max_tool_calls: int = 8
 
     def __post_init__(self) -> None:
         if not self.api_key.strip() or not self.model_id.strip():
             raise ValueError("OpenAI API key and chat model ID are required.")
+        if self.reasoning_effort not in {"low", "medium", "high"}:
+            raise ValueError("reasoning_effort must be 'low', 'medium', or 'high'.")
         if self.timeout_seconds <= 0 or self.max_tool_calls < 1:
             raise ValueError("timeout_seconds and max_tool_calls must be positive.")
 
@@ -61,6 +66,10 @@ class OpenAIChatConfig:
         return cls(
             api_key=os.getenv("OPENAI_API_KEY", ""),
             model_id=os.getenv("CHAT_MODEL_ID") or "gpt-5-mini",
+            reasoning_effort=cast(
+                Literal["low", "medium", "high"],
+                os.getenv("CHAT_REASONING_EFFORT", "low").casefold(),
+            ),
         )
 
 
@@ -254,6 +263,7 @@ class AgnoChatAgentService:
         model_options: dict[str, Any] = {
             "id": self.config.model_id,
             "api_key": self.config.api_key,
+            "reasoning_effort": self.config.reasoning_effort,
             "timeout": self.config.timeout_seconds,
             "max_retries": 1,
         }

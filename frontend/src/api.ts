@@ -104,6 +104,7 @@ export function getChatSession(sessionId: string) {
 }
 
 export interface ChatStreamHandlers {
+  onStatus?: (status: string) => void;
   onDelta?: (delta: string) => void;
   onSources?: (sources: ChatSource[]) => void;
   onMessage?: (message: ChatMessage) => void;
@@ -171,6 +172,10 @@ function dispatchChatStreamBlock(block: string, handlers: ChatStreamHandlers) {
     payload = { delta: raw };
   }
   const type = String(payload.type || eventName).replace(/_/g, ".");
+  if (["message.status", "status"].includes(type)) {
+    if (typeof payload.status === "string") handlers.onStatus?.(payload.status);
+    return;
+  }
   if (["message.delta", "delta", "token"].includes(type)) {
     const delta = payload.delta ?? payload.token ?? payload.content;
     if (typeof delta === "string") handlers.onDelta?.(delta);

@@ -20,6 +20,7 @@ test("chat stream consumes authenticated SSE deltas, sources, and completion", a
     created_at: "2026-07-20T10:00:00Z"
   };
   const stream = [
+    'event: message.status\ndata: {"status":"Reading relevant contract evidence..."}\n\n',
     'event: message.delta\ndata: {"delta":"The notice "}\n\n',
     'event: message_delta\ndata: {"delta":"period is 30 days."}\n\n',
     'event: message.sources\ndata: {"sources":[{"contract_id":"contract-1","contract_title":"Services agreement","page_number":11,"excerpt":"Thirty days notice."}]}\n\n',
@@ -30,10 +31,12 @@ test("chat stream consumes authenticated SSE deltas, sources, and completion", a
     headers: { "Content-Type": "text/event-stream" }
   }));
   const deltas: string[] = [];
+  const statuses: string[] = [];
   const sources: string[] = [];
   let finalContent = "";
 
   await streamChatMessage("chat/one", "What is the notice period?", {
+    onStatus: (status) => statuses.push(status),
     onDelta: (delta) => deltas.push(delta),
     onSources: (items) => sources.push(...items.map((item) => item.contract_title)),
     onMessage: (message) => { finalContent = message.content; }
@@ -48,6 +51,7 @@ test("chat stream consumes authenticated SSE deltas, sources, and completion", a
     })
   );
   expect(deltas.join("")).toBe("The notice period is 30 days.");
+  expect(statuses).toEqual(["Reading relevant contract evidence..."]);
   expect(sources).toEqual(["Services agreement"]);
   expect(finalContent).toBe("The notice period is 30 days.");
 });

@@ -306,6 +306,25 @@ test("chat session renders persisted history and contract sources", async () => 
   expect(within(container).getByText(/successive twelve-month periods/)).toBeInTheDocument();
 });
 
+test("assistant replies render Markdown headings and lists", async () => {
+  vi.mocked(api.getChatSession).mockResolvedValueOnce({
+    ...chatSession,
+    messages: [{
+      id: "message-markdown",
+      role: "assistant",
+      content: "## Summary\n\n- **Notice period:** Thirty days [S1]\n- **Renewal:** Annual [S2]",
+      sources: [],
+      created_at: "2026-07-20T10:00:00Z"
+    }]
+  });
+  setTestUrl("/chats?chat=chat-markdown");
+  const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
+
+  expect(await within(container).findByRole("heading", { name: "Summary" })).toBeInTheDocument();
+  expect(within(container).getByRole("list")).toHaveTextContent("Notice period: Thirty days [S1]");
+  expect(within(container).getByRole("list")).toHaveTextContent("Renewal: Annual [S2]");
+});
+
 test("chat session exposes a recoverable history error", async () => {
   vi.mocked(api.getChatSession).mockRejectedValue(new Error("Knowledge index unavailable"));
   setTestUrl("/chats?chat=chat-missing");
@@ -365,8 +384,9 @@ test("new chats show the first message in the sidebar while the response is stre
     updated_at: "2026-07-20T10:00:00Z",
     messages: []
   });
-  vi.mocked(api.streamChatMessage).mockImplementationOnce((_sessionId, _content, _handlers, signal) => {
+  vi.mocked(api.streamChatMessage).mockImplementationOnce((_sessionId, _content, handlers, signal) => {
     streamSignal = signal;
+    handlers.onStatus?.("Reading relevant contract evidence...");
     return new Promise(() => undefined);
   });
 
@@ -390,7 +410,7 @@ test("new chats show the first message in the sidebar while the response is stre
   );
   expect(streamSignal?.aborted).toBe(false);
   expect(within(container).queryByRole("heading", { name: "Hello, Piyush" })).not.toBeInTheDocument();
-  expect(within(container).getByText("Searching your contracts...")).toBeInTheDocument();
+  expect(within(container).getByText("Reading relevant contract evidence...")).toBeInTheDocument();
   expect(container.querySelector(".ai-chat-page")).toHaveAttribute("data-conversation", "true");
 });
 

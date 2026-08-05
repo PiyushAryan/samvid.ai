@@ -328,7 +328,11 @@ def create_api_router(settings: Settings):
                 repository=KnowledgeRepository(connection),
             )
             agent = AgnoChatAgentService(
-                config=OpenAIChatConfig(api_key=settings.model_api_key or "", model_id=settings.chat_model_id),
+                config=OpenAIChatConfig(
+                    api_key=settings.model_api_key or "",
+                    model_id=settings.chat_model_id,
+                    reasoning_effort=settings.chat_reasoning_effort,
+                ),
                 retriever=retriever,
                 reader=DatabaseContractReader(connection),
             )
@@ -346,6 +350,10 @@ def create_api_router(settings: Settings):
 
         def event_stream() -> Iterator[str]:
             try:
+                yield _sse_event(
+                    "message.status",
+                    {"type": "message.status", "status": "Connecting to contract search..."},
+                )
                 for event in agent.stream(
                     workspace_id=workspace,
                     user_id=access.account_id,
@@ -353,6 +361,12 @@ def create_api_router(settings: Settings):
                     message=content,
                     history=history,
                 ):
+                    if event.type == "tool":
+                        yield _sse_event(
+                            "message.status",
+                            {"type": "message.status", "status": "Reading relevant contract evidence..."},
+                        )
+                        continue
                     if event.type == "delta":
                         yield _sse_event("message.delta", {"type": "message.delta", "delta": event.content})
                         continue

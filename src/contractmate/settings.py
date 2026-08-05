@@ -81,6 +81,7 @@ class Settings(BaseModel):
     model_api_key: str | None = None
     agentic_chat_enabled: bool = False
     chat_model_id: str = "gpt-5-mini"
+    chat_reasoning_effort: Literal["low", "medium", "high"] = "low"
     chat_max_input_chars: int = Field(default=4_000, ge=100, le=20_000)
     fireworks_api_key: str | None = None
     fireworks_base_url: str = "https://api.fireworks.ai/inference/v1"
@@ -288,6 +289,7 @@ class Settings(BaseModel):
             model_api_key=os.getenv("MODEL_API_KEY") or os.getenv("OPENAI_API_KEY") or None,
             agentic_chat_enabled=bool_env("AGENTIC_CHAT_ENABLED", False),
             chat_model_id=os.getenv("CHAT_MODEL_ID", os.getenv("MODEL_ID", "gpt-5-mini")),
+            chat_reasoning_effort=os.getenv("CHAT_REASONING_EFFORT", "low").casefold(),
             chat_max_input_chars=int(os.getenv("CHAT_MAX_INPUT_CHARS", "4000")),
             fireworks_api_key=os.getenv("FIREWORKS_API_KEY") or None,
             fireworks_base_url=os.getenv("FIREWORKS_BASE_URL", "https://api.fireworks.ai/inference/v1").rstrip("/"),

@@ -82,6 +82,73 @@ function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+function renderInlineMarkdown(value: string): ReactNode[] {
+  const parts = value.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter(Boolean);
+  return parts.map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return <code key={index}>{part.slice(1, -1)}</code>;
+    }
+    return part;
+  });
+}
+
+function ChatResponseContent({ content }: { content: string }) {
+  const lines = content.split(/\r?\n/);
+  const blocks: ReactNode[] = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index].trim();
+    if (!line) {
+      index += 1;
+      continue;
+    }
+
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      const Heading = heading[1].length === 1 ? "h2" : "h3";
+      blocks.push(<Heading key={`heading-${index}`}>{renderInlineMarkdown(heading[2])}</Heading>);
+      index += 1;
+      continue;
+    }
+
+    const unordered = line.match(/^[-*]\s+(.+)$/);
+    const ordered = line.match(/^\d+[.)]\s+(.+)$/);
+    if (unordered || ordered) {
+      const isOrdered = Boolean(ordered);
+      const items: string[] = [];
+      while (index < lines.length) {
+        const item = lines[index].trim().match(isOrdered ? /^\d+[.)]\s+(.+)$/ : /^[-*]\s+(.+)$/);
+        if (!item) break;
+        items.push(item[1]);
+        index += 1;
+      }
+      const List = isOrdered ? "ol" : "ul";
+      blocks.push(
+        <List key={`list-${index}`}>
+          {items.map((item, itemIndex) => <li key={itemIndex}>{renderInlineMarkdown(item)}</li>)}
+        </List>
+      );
+      continue;
+    }
+
+    const paragraph: string[] = [line];
+    index += 1;
+    while (index < lines.length) {
+      const next = lines[index].trim();
+      if (!next || /^(#{1,3})\s+|^[-*]\s+|^\d+[.)]\s+/.test(next)) break;
+      paragraph.push(next);
+      index += 1;
+    }
+    blocks.push(<p key={`paragraph-${index}`}>{renderInlineMarkdown(paragraph.join(" "))}</p>);
+  }
+
+  return <div className="ai-chat-markdown">{blocks}</div>;
+}
+
 const mono = "mono";
 const mutedText = "muted";
 const primaryButton = "primary";
@@ -588,6 +655,7 @@ export function ChatsPage() {
       const controller = new AbortController();
       streamControllerRef.current = controller;
       await streamChatMessage(sessionId, content, {
+        onStatus: (status) => setAnnouncement(status),
         onDelta: (delta) => setLiveConversation((current) => updateChatMessage(current, sessionId!, assistantId, (message) => ({
           ...message,
           content: message.content + delta
@@ -655,13 +723,17 @@ export function ChatsPage() {
                 <span className="ai-chat-message-role">
                   {message.role === "user" ? "You" : "Samvid"}
                 </span>
-                <p>
-                  {message.content || (
-                    isSending && message.id.startsWith("pending-assistant-")
-                      ? <TextShimmer duration={1}>Searching your contracts...</TextShimmer>
-                      : "No response was returned."
-                  )}
-                </p>
+                {message.content ? (
+                  message.role === "assistant"
+                    ? <ChatResponseContent content={message.content} />
+                    : <p>{message.content}</p>
+                ) : (
+                  <p>
+                    {isSending && message.id.startsWith("pending-assistant-")
+                      ? <TextShimmer duration={1}>{announcement || "Searching your contracts..."}</TextShimmer>
+                      : "No response was returned."}
+                  </p>
+                )}
                 {message.sources.length > 0 && (
                   <ul className="ai-chat-sources" aria-label="Sources">
                     {message.sources.map((source, index) => (
