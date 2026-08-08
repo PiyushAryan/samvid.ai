@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactNode } from "react";
-import { beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { AppShell, ChatsPage, ContractDetailPage, ContractsPage, ContractsTableSkeleton, ContractTable, ReviewTab, RisksTab, Timeline } from "./App";
 import { LandingPage } from "./Home";
 import { IntegrationsPage } from "./Integrations";
@@ -128,6 +128,10 @@ beforeEach(() => {
   vi.mocked(api.streamChatMessage).mockResolvedValue(undefined);
 });
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 function QueryProvider({ children }: { children: ReactNode }) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
@@ -139,6 +143,15 @@ test("landing simulator switches between customer workflow previews", async () =
   vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
 
   render(<LandingPage />);
+
+  [
+    "hero-pink-file",
+    "hero-stamp-paper",
+    "hero-policy-paper",
+    "hero-contract-paper",
+    "hero-nda-paper",
+    "hero-rubber-stamp"
+  ].forEach((testId) => expect(screen.getByTestId(testId)).toBeInTheDocument());
 
   expect(screen.getByRole("heading", { name: "Every contract your business touches." })).toBeInTheDocument();
   expect(screen.getByText("Re: Acme vendor agreement")).toBeInTheDocument();
@@ -156,6 +169,19 @@ test("landing simulator switches between customer workflow previews", async () =
 
   fireEvent.click(screen.getByRole("tab", { name: "Signature" }));
   expect(await screen.findByText("Follow-up scheduled")).toBeInTheDocument();
+});
+
+test("landing hero uses the static collage when reduced motion is requested", async () => {
+  vi.stubGlobal("matchMedia", vi.fn().mockImplementation((query: string) => ({
+    matches: query === "(prefers-reduced-motion: reduce)" || query === "(max-width: 960px)",
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn()
+  })));
+
+  const { container } = render(<LandingPage />);
+  const pinkFile = container.querySelector('[data-testid="hero-pink-file"]');
+  await waitFor(() => expect(pinkFile).toHaveStyle({ opacity: "1" }));
 });
 
 test("contract refresh rotates until updated API data arrives", async () => {

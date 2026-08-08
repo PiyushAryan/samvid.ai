@@ -251,8 +251,9 @@
   position: relative;
   width: 100%;
   max-width: 1200px;
+  min-height: 150svh;
   margin: 0 auto;
-  padding: 40px 0 0;
+  padding: 40px 0;
 }
 
 .hero-container {
@@ -260,14 +261,24 @@
   grid-template-columns: 1fr 1.15fr;
   gap: 40px;
   align-items: center;
-  position: relative;
+  position: sticky;
+  top: 74px;
+  min-height: calc(100svh - 74px);
   z-index: 2;
 }
 
 @media (max-width: 960px) {
+  .hero-section {
+    min-height: 0;
+    padding: 40px 0 0;
+  }
+
   .hero-container {
     grid-template-columns: 1fr;
     gap: 48px;
+    position: relative;
+    top: auto;
+    min-height: 0;
   }
 }
 
@@ -417,6 +428,7 @@
   padding: 16px 14px;
   color: #2f3935;
   font-family: var(--lp-font-sans);
+  transform-origin: center;
 }
 
 .hero-paper-eyebrow {
@@ -462,7 +474,6 @@
   border: 0;
   background: url("/stamp-paper.webp") center / contain no-repeat;
   box-shadow: none;
-  transform: rotate(-7deg);
 }
 
 .hero-pink-file {
@@ -476,7 +487,6 @@
   border: 0;
   background: url("/pink-file.webp") center / contain no-repeat;
   box-shadow: none;
-  transform: rotate(9deg);
 }
 
 .hero-policy-paper {
@@ -490,7 +500,6 @@
   border: 0;
   background: url("/emp-bond.webp") center / contain no-repeat;
   box-shadow: none;
-  transform: rotate(2deg);
 }
 
 .hero-contract-paper {
@@ -501,7 +510,6 @@
   border: 1px solid #cfc4b2;
   background: #faf7ef;
   box-shadow: 3px 4px 0 rgba(89, 77, 60, 0.08);
-  transform: rotate(-2deg);
 }
 
 .hero-nda-paper {
@@ -515,7 +523,6 @@
   border: 0;
   background: url("/NDA.webp") center / contain no-repeat;
   box-shadow: none;
-  transform: rotate(6deg);
 }
 
 .hero-rubber-stamp {
@@ -534,7 +541,7 @@
   line-height: 0.9;
   text-align: center;
   text-transform: uppercase;
-  transform: rotate(14deg);
+  transform-origin: center;
 }
 
 .hero-bengaluru-artwork {

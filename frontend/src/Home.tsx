@@ -63,6 +63,7 @@ export function LandingPage() {
   const [isPastHero, setIsPastHero] = useState(false);
   const [navShift, setNavShift] = useState(0);
   const [edgeShift, setEdgeShift] = useState(0);
+  const [isCompactHero, setIsCompactHero] = useState(false);
   const heroRef = useRef<HTMLElement>(null);
   const demoScrollRef = useRef<HTMLDivElement>(null);
   const previewManualOverrideUntilRef = useRef(0);
@@ -70,6 +71,10 @@ export function LandingPage() {
   const navCtaRef = useRef<HTMLDivElement>(null);
   const prefersReducedMotion = useReducedMotion();
   const { scrollY } = useScroll();
+  const { scrollYProgress: heroScrollProgress } = useScroll({
+    target: heroRef,
+    offset: ["start start", "end end"]
+  });
   const { scrollYProgress: demoScrollProgress } = useScroll({
     target: demoScrollRef,
     offset: ["start start", "end end"]
@@ -78,6 +83,27 @@ export function LandingPage() {
   const brandX = useTransform(scrollY, [0, 320], [0, -edgeShift]);
   const ctaX = useTransform(scrollY, [0, 320], [0, edgeShift]);
   const smoothDemoProgress = useSpring(demoScrollProgress, { stiffness: 170, damping: 30, mass: 0.32 });
+  const smoothHeroProgress = useSpring(heroScrollProgress, { stiffness: 120, damping: 26, mass: 0.3 });
+  const stampPaperX = useTransform(smoothHeroProgress, [0, 0.5, 1], ["-80vw", "0px", "0px"]);
+  const stampPaperY = useTransform(smoothHeroProgress, [0, 0.5, 1], ["-70vh", "0px", "0px"]);
+  const stampPaperRotate = useTransform(smoothHeroProgress, [0, 0.5, 1], [-24, -7, -7]);
+  const policyPaperX = useTransform(smoothHeroProgress, [0, 0.5, 1], ["75vw", "0px", "0px"]);
+  const policyPaperY = useTransform(smoothHeroProgress, [0, 0.5, 1], ["-75vh", "0px", "0px"]);
+  const policyPaperRotate = useTransform(smoothHeroProgress, [0, 0.5, 1], [18, 2, 2]);
+  const contractPaperX = useTransform(smoothHeroProgress, [0, 0.5, 1], ["-80vw", "0px", "0px"]);
+  const contractPaperY = useTransform(smoothHeroProgress, [0, 0.5, 1], ["80vh", "0px", "0px"]);
+  const contractPaperRotate = useTransform(smoothHeroProgress, [0, 0.5, 1], [-18, -2, -2]);
+  const ndaPaperX = useTransform(smoothHeroProgress, [0, 0.5, 1], ["80vw", "0px", "0px"]);
+  const ndaPaperY = useTransform(smoothHeroProgress, [0, 0.5, 1], ["-55vh", "0px", "0px"]);
+  const ndaPaperRotate = useTransform(smoothHeroProgress, [0, 0.5, 1], [20, 6, 6]);
+  const pinkFileX = useTransform(smoothHeroProgress, [0, 0.5, 1], ["80vw", "0px", "0px"]);
+  const pinkFileY = useTransform(smoothHeroProgress, [0, 0.5, 1], ["80vh", "0px", "0px"]);
+  const pinkFileRotate = useTransform(smoothHeroProgress, [0, 0.5, 1], [24, 9, 9]);
+  const legalStampX = useTransform(smoothHeroProgress, [0, 0.5, 1], ["65vw", "0px", "0px"]);
+  const legalStampY = useTransform(smoothHeroProgress, [0, 0.5, 1], ["70vh", "0px", "0px"]);
+  const legalStampRotate = useTransform(smoothHeroProgress, [0, 0.5, 1], [36, 14, 14]);
+  const heroCardOpacity = useTransform(smoothHeroProgress, [0, 0.22, 1], [0, 1, 1]);
+  const heroCardScale = useTransform(smoothHeroProgress, [0, 0.5, 1], [0.82, 1, 1]);
   const demoRailDotTop = useTransform(
     smoothDemoProgress,
     [0, 0.296, 0.321, 0.434, 0.458, 0.642, 0.667, 0.779, 0.804, 1],
@@ -105,6 +131,15 @@ export function LandingPage() {
       window.removeEventListener("scroll", updateNavbar);
       window.removeEventListener("resize", updateNavbar);
     };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia("(max-width: 960px)");
+    const updateCompactHero = () => setIsCompactHero(media.matches);
+    updateCompactHero();
+    media.addEventListener("change", updateCompactHero);
+    return () => media.removeEventListener("change", updateCompactHero);
   }, []);
 
   useEffect(() => {
@@ -149,6 +184,7 @@ export function LandingPage() {
   }, [isSignupNudgeOpen]);
 
   const activePreviewIndex = previewSteps.findIndex((step) => step.id === activePreviewStep);
+  const shouldAnimateHeroCards = !prefersReducedMotion && !isCompactHero;
   const activePreviewLabel = String(activePreviewIndex + 1).padStart(2, "0");
   const handlePreviewStepSelect = (stepId: PreviewStepId) => {
     previewManualOverrideUntilRef.current = Date.now() + 1800;
@@ -276,17 +312,41 @@ export function LandingPage() {
             {/* Right Column: Bengaluru artwork */}
             <div className="hero-visual-stage">
               <div className="hero-paperwork" aria-hidden="true">
-                <div className="hero-paper hero-pink-file" />
-                <div className="hero-paper hero-stamp-paper" />
-                <div className="hero-paper hero-policy-paper" />
-                <div className="hero-paper hero-contract-paper">
+                <motion.div
+                  className="hero-paper hero-pink-file"
+                  data-testid="hero-pink-file"
+                  style={{ x: shouldAnimateHeroCards ? pinkFileX : 0, y: shouldAnimateHeroCards ? pinkFileY : 0, rotate: shouldAnimateHeroCards ? pinkFileRotate : 9, opacity: shouldAnimateHeroCards ? heroCardOpacity : 1, scale: shouldAnimateHeroCards ? heroCardScale : 1 }}
+                />
+                <motion.div
+                  className="hero-paper hero-stamp-paper"
+                  data-testid="hero-stamp-paper"
+                  style={{ x: shouldAnimateHeroCards ? stampPaperX : 0, y: shouldAnimateHeroCards ? stampPaperY : 0, rotate: shouldAnimateHeroCards ? stampPaperRotate : -7, opacity: shouldAnimateHeroCards ? heroCardOpacity : 1, scale: shouldAnimateHeroCards ? heroCardScale : 1 }}
+                />
+                <motion.div
+                  className="hero-paper hero-policy-paper"
+                  data-testid="hero-policy-paper"
+                  style={{ x: shouldAnimateHeroCards ? policyPaperX : 0, y: shouldAnimateHeroCards ? policyPaperY : 0, rotate: shouldAnimateHeroCards ? policyPaperRotate : 2, opacity: shouldAnimateHeroCards ? heroCardOpacity : 1, scale: shouldAnimateHeroCards ? heroCardScale : 1 }}
+                />
+                <motion.div
+                  className="hero-paper hero-contract-paper"
+                  data-testid="hero-contract-paper"
+                  style={{ x: shouldAnimateHeroCards ? contractPaperX : 0, y: shouldAnimateHeroCards ? contractPaperY : 0, rotate: shouldAnimateHeroCards ? contractPaperRotate : -2, opacity: shouldAnimateHeroCards ? heroCardOpacity : 1, scale: shouldAnimateHeroCards ? heroCardScale : 1 }}
+                >
                   <span className="hero-paper-eyebrow">CONTRACT</span>
                   <strong>Terms reviewed</strong>
                   <i />
                   <i />
-                </div>
-                <div className="hero-paper hero-nda-paper" />
-                <span className="hero-rubber-stamp">Reviewed<br />Legal</span>
+                </motion.div>
+                <motion.div
+                  className="hero-paper hero-nda-paper"
+                  data-testid="hero-nda-paper"
+                  style={{ x: shouldAnimateHeroCards ? ndaPaperX : 0, y: shouldAnimateHeroCards ? ndaPaperY : 0, rotate: shouldAnimateHeroCards ? ndaPaperRotate : 6, opacity: shouldAnimateHeroCards ? heroCardOpacity : 1, scale: shouldAnimateHeroCards ? heroCardScale : 1 }}
+                />
+                <motion.span
+                  className="hero-rubber-stamp"
+                  data-testid="hero-rubber-stamp"
+                  style={{ x: shouldAnimateHeroCards ? legalStampX : 0, y: shouldAnimateHeroCards ? legalStampY : 0, rotate: shouldAnimateHeroCards ? legalStampRotate : 14, opacity: shouldAnimateHeroCards ? heroCardOpacity : 1, scale: shouldAnimateHeroCards ? heroCardScale : 1 }}
+                >Reviewed<br />Legal</motion.span>
               </div>
               <motion.div
                 className="hero-bengaluru-artwork"
