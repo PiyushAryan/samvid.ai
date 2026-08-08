@@ -2700,7 +2700,7 @@ textarea.field-control {
   justify-items: center;
   gap: 8px;
   padding-top: 8px;
-  color: var(--text-muted);
+  color: #000;
   font-size: 12px;
   text-align: center;
 }
@@ -2715,13 +2715,13 @@ textarea.field-control {
   padding: 2px 0;
   border: 0;
   background: transparent;
-  color: var(--accent);
+  color: #000;
   font: inherit;
   transition: color 150ms ease, transform 150ms ease;
 }
 
 .ai-chat-suggestions button:hover {
-  color: var(--accent-dark);
+  color: #333;
   transform: translateX(2px);
 }
 

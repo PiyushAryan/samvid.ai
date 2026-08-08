@@ -460,7 +460,7 @@
   aspect-ratio: 1491 / 1055;
   padding: 0;
   border: 0;
-  background: url("/stamp-paper.png") center / contain no-repeat;
+  background: url("/stamp-paper.webp") center / contain no-repeat;
   box-shadow: none;
   transform: rotate(-7deg);
 }
@@ -474,7 +474,7 @@
   aspect-ratio: 558 / 447;
   padding: 0;
   border: 0;
-  background: url("/pink-file.png") center / contain no-repeat;
+  background: url("/pink-file.webp") center / contain no-repeat;
   box-shadow: none;
   transform: rotate(9deg);
 }
@@ -488,7 +488,7 @@
   aspect-ratio: 1024 / 1536;
   padding: 0;
   border: 0;
-  background: url("/emp-bond.png") center / contain no-repeat;
+  background: url("/emp-bond.webp") center / contain no-repeat;
   box-shadow: none;
   transform: rotate(2deg);
 }
@@ -513,7 +513,7 @@
   aspect-ratio: 1055 / 1491;
   padding: 0;
   border: 0;
-  background: url("/NDA.png") center / contain no-repeat;
+  background: url("/NDA.webp") center / contain no-repeat;
   box-shadow: none;
   transform: rotate(6deg);
 }
@@ -543,7 +543,7 @@
   bottom: -110px;
   width: min(720px, 58vw);
   height: 500px;
-  background: url("/blr-s124.png") right bottom / contain no-repeat;
+  background: url("/blr-s124.webp") right bottom / contain no-repeat;
   filter: saturate(0.92) contrast(0.98);
   -webkit-mask-image: radial-gradient(ellipse 76% 68% at 70% 60%, #000 16%, rgba(0, 0, 0, 0.8) 44%, transparent 100%);
   mask-image: radial-gradient(ellipse 76% 68% at 70% 60%, #000 16%, rgba(0, 0, 0, 0.8) 44%, transparent 100%);
@@ -3456,7 +3456,7 @@
   bottom: -18px;
   width: 154px;
   height: 154px;
-  background: url("/stamp-rubber.png") center / contain no-repeat;
+  background: url("/stamp-rubber.webp") center / contain no-repeat;
   opacity: 0.18;
   pointer-events: none;
   transform: rotate(-12deg);
