@@ -368,7 +368,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       animate={{ "--sidebar-width": sidebarCollapsed ? "68px" : "248px" }}
       transition={sidebarTransition}
     >
-      <aside className="sidebar">
+      <aside className={cx("sidebar", workspaceView === "chats" && "sidebar--chats")}>
         <div className="sidebar-brand-row">
           <Link to="/chats" className="brand" aria-label="Samvid workspace">
             <motion.span

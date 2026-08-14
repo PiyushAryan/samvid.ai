@@ -298,6 +298,10 @@ p {
   background: rgba(251, 252, 249, 0.96);
 }
 
+.sidebar--chats {
+  justify-content: space-between;
+}
+
 .app-shell[data-theme="dark"] .sidebar {
   background: rgba(15, 16, 18, 0.97);
 }
