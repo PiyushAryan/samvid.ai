@@ -2624,7 +2624,7 @@ textarea.field-control {
   width: 100%;
   min-height: calc(100vh - 19px);
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   background: transparent;
 }
 
@@ -2679,7 +2679,7 @@ textarea.field-control {
   justify-content: center;
   gap: 22px;
   margin: 0 auto;
-  padding: clamp(40px, 8vh, 88px) 28px;
+  padding: clamp(40px, 8vh, 88px) 28px 124px;
 }
 
 .ai-chat-content:has(.ai-chat-messages),
@@ -2738,6 +2738,7 @@ textarea.field-control {
 }
 
 .ai-chat-suggestions {
+  order: 1;
   display: grid;
   justify-items: center;
   gap: 8px;
@@ -2837,11 +2838,14 @@ textarea.field-control {
 }
 
 .ai-chat-composer {
-  position: relative;
+  position: sticky;
+  z-index: 2;
+  bottom: 24px;
   display: grid;
   width: min(720px, 100%);
   gap: 6px;
-  margin-inline: auto;
+  order: 2;
+  margin: auto auto 0;
   padding: 9px 10px;
   border: 0.5px solid var(--border-strong);
   border-radius: 14px;
@@ -3549,10 +3553,11 @@ textarea.field-control {
 
   .ai-chat-content {
     gap: 22px;
-    padding: 36px 18px 22px;
+    padding: 36px 18px 108px;
   }
 
   .ai-chat-composer {
+    bottom: 14px;
     padding: 9px 10px;
     border-radius: 12px;
   }
@@ -3607,7 +3612,7 @@ textarea.field-control {
   .ai-chat-content {
     justify-content: flex-start;
     gap: 20px;
-    padding: 46px 12px 14px;
+    padding: 46px 12px 100px;
   }
 
   .ai-chat-header h1 {
