@@ -971,7 +971,12 @@ export function ContractDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const tab = params.get("tab") || "review";
+  const urlTab = params.get("tab") || "review";
+  const [tab, setTab] = useState(urlTab);
+
+  useEffect(() => {
+    setTab(urlTab);
+  }, [urlTab]);
   const contractQuery = useQuery({
     queryKey: ["contract", contractId],
     queryFn: () => getContract(contractId!),
@@ -982,7 +987,7 @@ export function ContractDetailPage() {
   const documentQuery = useQuery({
     queryKey: ["contract-document", contractId],
     queryFn: () => getContractDocument(contractId!),
-    enabled: Boolean(contractQuery.data?.current_version),
+    enabled: tab === "document" && Boolean(contractQuery.data?.current_version),
     staleTime: 5 * 60 * 1000
   });
   const documentUrl = useObjectUrl(documentQuery.data);
@@ -1017,7 +1022,10 @@ export function ContractDetailPage() {
                 <button
                   key={value}
                   className={cx("tab", tab === value && "active")}
-                  onClick={() => setParams({ tab: value })}
+                  onClick={() => {
+                    setTab(value);
+                    setParams({ tab: value });
+                  }}
                   role="tab"
                   aria-selected={tab === value}
                 >
