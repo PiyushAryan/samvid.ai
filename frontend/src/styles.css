@@ -3241,15 +3241,17 @@ textarea.field-control {
 
 .ai-chat-citation-trigger {
   display: inline-flex;
-  min-height: 28px;
+  min-height: 20px;
   cursor: pointer;
   align-items: center;
-  padding: 4px 10px;
-  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border));
-  background: color-mix(in srgb, var(--accent-soft) 78%, var(--surface));
-  color: var(--accent-dark);
-  font-size: 11px;
-  font-weight: 650;
+  gap: 4px;
+  padding: 2px 5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 500;
   line-height: 1;
   vertical-align: middle;
   transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
@@ -3257,9 +3259,13 @@ textarea.field-control {
 
 .ai-chat-citation-trigger:hover,
 .ai-chat-citation-trigger:focus-visible {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent-dark);
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+}
+
+.ai-chat-message-assistant .ai-chat-message-content strong {
+  color: var(--text);
+  font-weight: 650;
 }
 
 .ai-chat-citation-card {

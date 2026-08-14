@@ -123,7 +123,8 @@ function ContractCitation({ source }: { source: ChatSource }) {
           onFocus={() => setIsOpen(true)}
           sources={[sourceUrl]}
         >
-          [{citationId}]
+          <FileText size={11} aria-hidden="true" />
+          Source
         </InlineCitationCardTrigger>
         <InlineCitationCardBody className="ai-chat-citation-card">
           <div className="ai-chat-citation-meta">
@@ -163,7 +164,7 @@ function renderInlineMarkdown(value: string, sources: ChatSource[]): ReactNode[]
     }
     const citation = part.match(/^\[(S\d+)\]$/)?.[1];
     const source = citation ? sources.find((item) => item.id === citation) : undefined;
-    if (source) return <ContractCitation key={index} source={source} />;
+    if (citation) return source ? <ContractCitation key={index} source={source} /> : null;
     return part;
   });
 }

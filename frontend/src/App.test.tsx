@@ -347,8 +347,10 @@ test("assistant replies render Markdown headings and lists", async () => {
   const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
 
   expect(await within(container).findByRole("heading", { name: "Summary" })).toBeInTheDocument();
-  expect(within(container).getByRole("list")).toHaveTextContent("Notice period: Thirty days [S1]");
-  expect(within(container).getByRole("list")).toHaveTextContent("Renewal: Annual [S2]");
+  expect(within(container).getByRole("list")).toHaveTextContent("Notice period: Thirty days");
+  expect(within(container).getByRole("list")).toHaveTextContent("Renewal: Annual");
+  expect(within(container).getByRole("list")).not.toHaveTextContent("[S1]");
+  expect(within(container).getByRole("list")).not.toHaveTextContent("[S2]");
 });
 
 test("assistant citations open a keyboard-accessible contract evidence preview", async () => {
@@ -372,7 +374,7 @@ test("assistant citations open a keyboard-accessible contract evidence preview",
   const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
 
   const citation = await within(container).findByRole("button", { name: "View source S1: Services agreement" });
-  expect(citation).toHaveTextContent("[S1]");
+  expect(citation).toHaveTextContent("Source");
   fireEvent.focus(citation);
   expect(await screen.findByRole("blockquote")).toHaveTextContent("Either party may terminate on thirty days' notice.");
   expect(screen.getByRole("link", { name: /open contract/i })).toHaveAttribute("href", "/contracts/contract-1");
