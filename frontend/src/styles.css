@@ -3241,23 +3241,24 @@ textarea.field-control {
 
 .ai-chat-citation-trigger {
   display: inline-flex;
-  min-height: 20px;
+  min-height: 28px;
   cursor: pointer;
   align-items: center;
-  padding: 1px 6px;
-  border: 0.5px solid color-mix(in srgb, var(--accent) 28%, var(--border));
-  background: var(--accent-soft);
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 78%, var(--surface));
   color: var(--accent-dark);
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 650;
   line-height: 1;
   vertical-align: middle;
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
 }
 
 .ai-chat-citation-trigger:hover,
 .ai-chat-citation-trigger:focus-visible {
   border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent-soft) 72%, var(--surface));
+  background: var(--accent-soft);
   color: var(--accent-dark);
 }
 
@@ -3266,8 +3267,8 @@ textarea.field-control {
   width: min(360px, calc(100vw - 32px));
   min-width: 0;
   max-width: min(360px, calc(100vw - 32px));
-  gap: 10px;
-  padding: 14px;
+  gap: 9px;
+  padding: 15px 16px 14px;
   border: 0.5px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
@@ -3318,19 +3319,35 @@ textarea.field-control {
 }
 
 .ai-chat-citation-excerpt {
-  display: -webkit-box;
-  overflow: hidden;
-  padding: 9px 10px;
+  max-height: 176px;
+  overflow-y: auto;
+  padding: 2px 8px 2px 0;
   border: 0;
-  border-radius: 8px;
-  background: var(--surface-muted);
+  border-radius: 0;
+  background: transparent;
   color: var(--text-secondary);
   font-size: 12px;
   font-style: normal;
   line-height: 1.5;
   overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
+}
+
+.ai-chat-citation-excerpt:focus-visible {
+  outline: 2px solid var(--focus-border);
+  outline-offset: 3px;
+}
+
+.ai-chat-citation-excerpt::-webkit-scrollbar {
+  width: 7px;
+}
+
+.ai-chat-citation-excerpt::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--border-strong);
+  background-clip: padding-box;
 }
 
 .ai-chat-citation-link {

@@ -134,7 +134,15 @@ function ContractCitation({ source }: { source: ChatSource }) {
             className="ai-chat-citation-source"
             title={source.contract_title}
           />
-          {source.excerpt && <InlineCitationQuote className="ai-chat-citation-excerpt">{source.excerpt}</InlineCitationQuote>}
+          {source.excerpt && (
+            <InlineCitationQuote
+              aria-label="Evidence excerpt"
+              className="ai-chat-citation-excerpt"
+              tabIndex={0}
+            >
+              {source.excerpt}
+            </InlineCitationQuote>
+          )}
           <Link className="ai-chat-citation-link" to={href}>
             Open contract <ArrowUpRight size={13} aria-hidden="true" />
           </Link>
