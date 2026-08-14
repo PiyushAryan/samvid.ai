@@ -67,12 +67,6 @@ import type {
 import { Skeleton } from "./components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
 import {
-  ChainOfThought,
-  ChainOfThoughtContent,
-  ChainOfThoughtHeader,
-  ChainOfThoughtStep
-} from "@/components/ai-elements/chain-of-thought";
-import {
   Conversation,
   ConversationContent,
   ConversationScrollButton
@@ -638,50 +632,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-type ChatActivity = {
-  id: string;
-  label: string;
-  status: "active" | "complete" | "pending";
-};
-
-function appendChatActivity(activities: ChatActivity[], label: string): ChatActivity[] {
-  if (activities[activities.length - 1]?.label === label) return activities;
-  return [
-    ...activities.map((activity) => ({ ...activity, status: "complete" as const })),
-    { id: `activity-${activities.length}`, label, status: "active" }
-  ];
-}
-
-function completeChatActivities(activities: ChatActivity[]): ChatActivity[] {
-  return activities.map((activity) => ({ ...activity, status: "complete" }));
-}
-
-function ChatActivityTrail({ activities }: { activities: ChatActivity[] }) {
-  if (!activities.length) return null;
-  const isStreaming = activities.some((activity) => activity.status === "active");
-
-  return (
-    <ChainOfThought className="ai-chat-activity" open={isStreaming}>
-      <ChainOfThoughtHeader className="ai-chat-activity-header">
-        {isStreaming
-          ? <Shimmer as="span" duration={1.25}>Researching your contracts</Shimmer>
-          : "Research activity"}
-      </ChainOfThoughtHeader>
-      <ChainOfThoughtContent className="ai-chat-activity-content">
-        {activities.map((activity, index) => (
-          <ChainOfThoughtStep
-            description={activity.status === "active" ? "In progress" : undefined}
-            icon={index === activities.length - 1 && activity.status === "active" ? Loader2 : FileText}
-            key={activity.id}
-            label={activity.label}
-            status={activity.status}
-          />
-        ))}
-      </ChainOfThoughtContent>
-    </ChainOfThought>
-  );
-}
-
 export function ChatsPage() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -695,7 +645,6 @@ export function ChatsPage() {
   const [isSending, setIsSending] = useState(false);
   const [streamError, setStreamError] = useState("");
   const [announcement, setAnnouncement] = useState("");
-  const [messageActivities, setMessageActivities] = useState<Record<string, ChatActivity[]>>({});
   const streamControllerRef = useRef<AbortController | null>(null);
   const sessionQuery = useQuery({
     queryKey: ["chat-session", activeChatId],
@@ -717,7 +666,6 @@ export function ChatsPage() {
     setPendingMessages([]);
     setStreamError("");
     setAnnouncement("");
-    setMessageActivities({});
     setIsSending(false);
   // A new chat sets its live conversation before Next.js finishes updating the
   // URL. Only a URL change represents a user switching conversations; reacting
@@ -751,10 +699,6 @@ export function ChatsPage() {
       sources: [],
       created_at: now
     };
-    setMessageActivities((current) => ({
-      ...current,
-      [assistantId]: [{ id: "queued", label: "Preparing contract search", status: "active" }]
-    }));
     const baseMessages = sessionId === activeChatId ? messages : [];
     const nextMessages = [...baseMessages, userMessage, assistantMessage];
     if (!sessionId) setPendingMessages(nextMessages);
@@ -776,10 +720,6 @@ export function ChatsPage() {
       await streamChatMessage(sessionId, content, {
         onStatus: (status) => {
           setAnnouncement(status);
-          setMessageActivities((current) => ({
-            ...current,
-            [assistantId]: appendChatActivity(current[assistantId] || [], status)
-          }));
         },
         onDelta: (delta) => setLiveConversation((current) => updateChatMessage(current, sessionId!, assistantId, (message) => ({
           ...message,
@@ -791,11 +731,6 @@ export function ChatsPage() {
         }))),
         onMessage: (message) => {
           setLiveConversation((current) => updateChatMessage(current, sessionId!, assistantId, () => message));
-          setMessageActivities((current) => {
-            const activities = current[assistantId] || [];
-            const { [assistantId]: _pendingActivities, ...remaining } = current;
-            return { ...remaining, [message.id]: completeChatActivities(activities) };
-          });
         }
       }, controller.signal);
       setAnnouncement("Answer ready");
@@ -808,10 +743,6 @@ export function ChatsPage() {
       setStreamError(chatErrorMessage(error));
       setDraft(content);
       setPendingMessages([]);
-      setMessageActivities((current) => {
-        const { [assistantId]: _failedActivities, ...remaining } = current;
-        return remaining;
-      });
       setLiveConversation((current) => current?.sessionId === sessionId
         ? { ...current, messages: current.messages.filter((message) => !message.id.startsWith("pending-assistant-")) }
         : current);
@@ -866,14 +797,13 @@ export function ChatsPage() {
                     message.role === "assistant"
                       ? <ChatResponseContent content={message.content} sources={message.sources} />
                       : <p>{message.content}</p>
-                  ) : !messageActivities[message.id]?.length ? (
+                  ) : message.id.startsWith("pending-assistant-") ? (
                     <p>
                       {isSending && message.id.startsWith("pending-assistant-")
                         ? <Shimmer as="span" duration={1}>{announcement || "Searching your contracts..."}</Shimmer>
                         : "No response was returned."}
                     </p>
                   ) : null}
-                  <ChatActivityTrail activities={messageActivities[message.id] || []} />
                   {message.sources.length > 0 && (
                     <Sources className="ai-chat-sources" defaultOpen>
                       <SourcesTrigger className="ai-chat-sources-trigger" count={message.sources.length} />

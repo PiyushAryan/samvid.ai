@@ -2839,6 +2839,7 @@ textarea.field-control {
   resize: none;
   padding: 2px 3px;
   border: 0;
+  box-shadow: none;
   outline: 0;
   background: transparent;
   color: var(--text);
@@ -3246,25 +3247,6 @@ textarea.field-control {
 .ai-chat-citation-link:focus-visible {
   color: var(--accent);
   text-decoration: underline;
-}
-
-.ai-chat-activity {
-  margin-top: 4px;
-  padding-top: 7px;
-  border-top: 0.5px solid var(--border);
-}
-
-.ai-chat-activity-header {
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
-.ai-chat-activity-content {
-  padding: 2px 0 0 2px;
-}
-
-.ai-chat-activity-content svg {
-  color: var(--accent);
 }
 
 .ai-chat-scroll-button {
