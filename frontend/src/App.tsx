@@ -28,7 +28,7 @@ import {
   UserPlus,
   X
 } from "lucide-react";
-import { FormEvent, KeyboardEvent, ReactNode, useEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from "./next-router-compat";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "motion/react";
@@ -211,7 +211,14 @@ function SidebarChatHistory({
 
   return (
     <section className="sidebar-chat-section" aria-labelledby="sidebar-chat-history-title">
-      <button className="sidebar-new-chat" type="button" onClick={() => onSelect(null)}>
+      <button
+        className="sidebar-new-chat"
+        type="button"
+        onClick={() => {
+          window.dispatchEvent(new Event("samvid:new-chat"));
+          onSelect(null);
+        }}
+      >
         <SquarePen size={16} aria-hidden="true" />
         <span>New chat</span>
       </button>
@@ -625,6 +632,22 @@ export function ChatsPage() {
       : sessionQuery.data?.messages || [];
   const isConversationView = Boolean(activeChatId || liveConversation || pendingMessages.length || isSending);
 
+  const resetForNewChat = useCallback(() => {
+    streamControllerRef.current?.abort();
+    streamControllerRef.current = null;
+    setDraft("");
+    setLiveConversation(null);
+    setPendingMessages([]);
+    setStreamError("");
+    setAnnouncement("");
+    setIsSending(false);
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("samvid:new-chat", resetForNewChat);
+    return () => window.removeEventListener("samvid:new-chat", resetForNewChat);
+  }, [resetForNewChat]);
+
   useEffect(() => {
     if (activeChatId && liveConversation?.sessionId === activeChatId) return;
     streamControllerRef.current?.abort();
@@ -722,7 +745,7 @@ export function ChatsPage() {
 
   return (
     <section className="ai-chat-page" aria-label="Contract chat" data-conversation={isConversationView}>
-      <div className="ai-chat-content">
+      <div className={cx("ai-chat-content", isConversationView && "ai-chat-content--conversation")}>
         {!isConversationView && (
           <header className="ai-chat-header">
             <h1>Hello, {accountName}</h1>

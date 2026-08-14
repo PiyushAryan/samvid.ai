@@ -460,6 +460,14 @@ test("new chats show the first message in the sidebar while the response is stre
   expect(within(container).queryByRole("heading", { name: "Hello, Piyush" })).not.toBeInTheDocument();
   expect(within(container).getByText("Reading relevant contract evidence...")).toBeInTheDocument();
   expect(container.querySelector(".ai-chat-page")).toHaveAttribute("data-conversation", "true");
+
+  fireEvent.click(within(container).getByRole("button", { name: "New chat" }));
+
+  expect(streamSignal?.aborted).toBe(true);
+  expect(await within(container).findByRole("heading", { name: "Hello, Piyush" })).toBeInTheDocument();
+  expect(within(container).getByRole("textbox", { name: "Ask about a contract" })).toHaveValue("");
+  expect(window.location.pathname).toBe("/chats");
+  expect(window.location.search).toBe("");
 });
 
 test("new chat titles preserve normalized input up to the backend limit", async () => {

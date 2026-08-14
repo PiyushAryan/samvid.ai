@@ -50,6 +50,7 @@
   --tooltip-text: #fff;
   --menu-shadow: 0 16px 40px rgba(23, 27, 26, 0.16), 0 2px 8px rgba(23, 27, 26, 0.08);
   --workspace-wash: rgba(246, 247, 244, 0.2);
+  --workspace-page: #fff;
   --workspace-surface-shadow: 0 16px 38px rgba(23, 27, 26, 0.1), 0 3px 10px rgba(23, 27, 26, 0.06);
   --radius: 8px;
   --app-font: "Geist Pixel Square", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -99,6 +100,7 @@
   --tooltip-text: #f1f3f5;
   --menu-shadow: 0 18px 46px rgba(0, 0, 0, 0.48), 0 2px 10px rgba(0, 0, 0, 0.3);
   --workspace-wash: rgba(11, 12, 14, 0.28);
+  --workspace-page: var(--app-bg);
   --workspace-surface-shadow: 0 18px 44px rgba(0, 0, 0, 0.38), 0 3px 12px rgba(0, 0, 0, 0.24);
 }
 
@@ -242,12 +244,8 @@ p {
 
 .contract-detail-page,
 .signing-page {
-  --surface: #fff;
-  --surface-muted: #e6f3f1;
-  --surface-subtle: #fff;
-  --accent-soft: #e6f3f1;
   min-height: calc(100vh - 19px);
-  background: #fff;
+  background: var(--workspace-page);
 }
 
 .contract-detail-page-review .panel,
@@ -277,9 +275,9 @@ p {
 .contract-detail-page-risks .risk-item:hover,
 .signing-page .panel:hover,
 .signing-page .table-wrap:hover {
-  border-color: #c8d7d4;
+  border-color: var(--border-strong);
   transform: translateY(-2px);
-  box-shadow: 0 5px 12px rgba(29, 45, 42, 0.09) !important;
+  box-shadow: var(--workspace-surface-shadow) !important;
 }
 
 .sidebar {
@@ -2682,8 +2680,7 @@ textarea.field-control {
   padding: clamp(40px, 8vh, 88px) 28px 124px;
 }
 
-.ai-chat-content:has(.ai-chat-messages),
-.ai-chat-content:has(.ai-chat-conversation-state) {
+.ai-chat-content--conversation {
   justify-content: flex-start;
 }
 
@@ -2743,7 +2740,7 @@ textarea.field-control {
   justify-items: center;
   gap: 8px;
   padding-top: 8px;
-  color: #000;
+  color: var(--text-secondary);
   font-size: 12px;
   text-align: center;
 }
@@ -2758,13 +2755,13 @@ textarea.field-control {
   padding: 2px 0;
   border: 0;
   background: transparent;
-  color: #000;
+  color: inherit;
   font: inherit;
   transition: color 150ms ease, transform 150ms ease;
 }
 
 .ai-chat-suggestions button:hover {
-  color: #333;
+  color: var(--accent-dark);
   transform: translateX(2px);
 }
 
@@ -2772,15 +2769,6 @@ textarea.field-control {
   border-radius: 4px;
   outline: 2px solid var(--focus-border);
   outline-offset: 4px;
-}
-
-.app-shell[data-theme="dark"] .ai-chat-suggestions,
-.app-shell[data-theme="dark"] .ai-chat-suggestions button {
-  color: #f3f0e8;
-}
-
-.app-shell[data-theme="dark"] .ai-chat-suggestions button:hover {
-  color: #fffdf7;
 }
 
 .ai-chat-conversation-state {
@@ -2838,9 +2826,6 @@ textarea.field-control {
 }
 
 .ai-chat-composer {
-  position: sticky;
-  z-index: 2;
-  bottom: 24px;
   display: grid;
   width: min(720px, 100%);
   gap: 6px;
@@ -2853,6 +2838,12 @@ textarea.field-control {
   box-shadow: 0 18px 48px rgba(23, 27, 26, 0.09), 0 2px 8px rgba(23, 27, 26, 0.05);
   backdrop-filter: blur(16px);
   transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.ai-chat-content--conversation .ai-chat-composer {
+  position: sticky;
+  z-index: 2;
+  bottom: 24px;
 }
 
 .ai-chat-composer [data-slot="input-group"] {
