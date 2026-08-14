@@ -211,6 +211,10 @@ p {
   background: #fff;
 }
 
+.app-shell[data-theme="dark"] .workspace-main {
+  background: var(--app-bg);
+}
+
 .workspace-main::before {
   display: none;
 }
@@ -3235,7 +3239,7 @@ textarea.field-control {
 }
 
 .app-shell[data-theme="dark"] .ai-chat-page[data-conversation="true"] {
-  background: #fff;
+  background: var(--app-bg);
 }
 
 .app-shell[data-theme="dark"] .ai-chat-page::before {
