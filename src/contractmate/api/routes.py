@@ -400,7 +400,7 @@ def create_api_router(settings: Settings):
                         raise RuntimeError(event.content or "The chat model stopped before completing its answer.")
                 raise RuntimeError("The chat model ended without a completion event.")
             except Exception as exc:
-                logger.exception("Contract chat stream failed for session %s", session_id)
+                logger.exception("Contract chat stream failed for session %s: %s", session_id, exc)
                 yield _sse_event(
                     "error",
                     {"type": "error", "code": "chat_generation_failed", "message": "Samvid could not complete that contract answer."},

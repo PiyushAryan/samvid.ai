@@ -7,7 +7,7 @@ const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
   {
     key: "Content-Security-Policy",
-    value: "default-src 'self'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'; img-src 'self' data:; font-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://app.cal.com; frame-src 'self' blob: https://app.cal.com; connect-src 'self' https://*.cal.com https://*.neon.build https://*.neon.tech https://blob.vercel-storage.com https://*.blob.vercel-storage.com"
+    value: "default-src 'self'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline' https://app.cal.com; frame-src 'self' blob: https://app.cal.com; connect-src 'self' https://*.cal.com https://*.neon.build https://*.neon.tech https://blob.vercel-storage.com https://*.blob.vercel-storage.com"
   }
 ];
 

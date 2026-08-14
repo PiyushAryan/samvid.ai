@@ -83,6 +83,38 @@ class FakeAgent:
         return SimpleNamespace(content=self.content)
 
 
+class ToolErrorAgent(FakeAgent):
+    def run(self, input: str, **kwargs: Any) -> Any:
+        self.calls.append({"input": input, **kwargs})
+        if kwargs.get("stream"):
+            return iter(
+                [
+                    SimpleNamespace(
+                        event="ToolCallError",
+                        content=None,
+                        error="Vercel AI Gateway rerank request was rejected.",
+                    )
+                ]
+            )
+        return SimpleNamespace(content=self.content)
+
+
+class LifecycleEventAgent(FakeAgent):
+    def run(self, input: str, **kwargs: Any) -> Any:
+        self.calls.append({"input": input, **kwargs})
+        if kwargs.get("stream"):
+            return iter(
+                [
+                    SimpleNamespace(event="ModelRequestStarted", content=None),
+                    SimpleNamespace(event="ModelRequestCompleted", content=None),
+                    SimpleNamespace(event="RunContentCompleted", content=None),
+                    SimpleNamespace(event="RunContent", content="Thirty days"),
+                    SimpleNamespace(event="RunCompleted", content=None),
+                ]
+            )
+        return SimpleNamespace(content=self.content)
+
+
 def test_openai_chat_config_reads_existing_environment_contract(monkeypatch: Any) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
     monkeypatch.setenv("CHAT_MODEL_ID", "gpt-5-mini")
@@ -230,6 +262,51 @@ def test_chat_agent_normalizes_stream_events() -> None:
 
     assert [(event.type, event.content) for event in events] == [
         ("tool", "Searching contracts"),
+        ("delta", "Thirty days"),
+        ("completed", "Thirty days"),
+    ]
+
+
+def test_chat_agent_surfaces_tool_errors_before_tool_events() -> None:
+    service = AgnoChatAgentService(
+        config=OpenAIChatConfig(api_key="openai-key", model_id="gpt-5-mini"),
+        retriever=FakeRetriever(),  # type: ignore[arg-type]
+        reader=FakeReader(),
+        agent_builder=lambda tools: ToolErrorAgent(tools),
+    )
+
+    events = list(
+        service.stream(
+            workspace_id="workspace-a",
+            user_id="user-a",
+            session_id="chat-a",
+            message="Summarize this contract",
+        )
+    )
+
+    assert [(event.type, event.content) for event in events] == [
+        ("error", "Vercel AI Gateway rerank request was rejected."),
+    ]
+
+
+def test_chat_agent_ignores_nonterminal_completed_lifecycle_events() -> None:
+    service = AgnoChatAgentService(
+        config=OpenAIChatConfig(api_key="openai-key", model_id="gpt-5-mini"),
+        retriever=FakeRetriever(),  # type: ignore[arg-type]
+        reader=FakeReader(),
+        agent_builder=lambda tools: LifecycleEventAgent(tools),
+    )
+
+    events = list(
+        service.stream(
+            workspace_id="workspace-a",
+            user_id="user-a",
+            session_id="chat-a",
+            message="Summarize this contract",
+        )
+    )
+
+    assert [(event.type, event.content) for event in events] == [
         ("delta", "Thirty days"),
         ("completed", "Thirty days"),
     ]

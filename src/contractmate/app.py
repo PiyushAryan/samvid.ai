@@ -258,7 +258,8 @@ def _with_security_headers(response, *, settings: Settings):
             connect_sources.append(f"{parsed_auth_url.scheme}://{parsed_auth_url.netloc}")
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; "
-        "img-src 'self' data:; font-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; font-src 'self' https://fonts.gstatic.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         f"script-src 'self'; frame-src 'self' blob:; connect-src {' '.join(connect_sources)}"
     )
     if settings.is_production:
