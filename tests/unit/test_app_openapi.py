@@ -30,7 +30,7 @@ def test_production_api_requires_basic_auth_and_sets_security_headers(tmp_path) 
         local_storage_dir=tmp_path / "contracts",
         inbound_attachment_dir=tmp_path / "inbound",
         model_api_key="model-key",
-        fireworks_api_key="fireworks-key",
+        ai_gateway_api_key="gateway-key",
         auto_send_review_email=False,
     )
     client = TestClient(create_app(settings))

@@ -5,7 +5,7 @@ from typing import Any, Sequence
 import pytest
 
 from contractmate.ai.chunking import PageAwareChunker
-from contractmate.ai.fireworks import EmbeddingVector
+from contractmate.ai.gateway import EmbeddingVector
 from contractmate.schemas.documents import DocumentPage, ParsedDocument
 from contractmate.services.knowledge_indexing import (
     KnowledgeChunkPayload,

@@ -51,7 +51,7 @@ def test_production_settings_accept_vercel_blob_oidc(tmp_path) -> None:
         blob_store_id="store_contracts",
         vercel_oidc_token="oidc-token",
             model_api_key="model-key",
-            fireworks_api_key="fireworks-key",
+            ai_gateway_api_key="gateway-key",
             auto_send_review_email=False,
     )
 
@@ -69,7 +69,7 @@ def test_production_settings_accept_neon_auth_without_basic_password(tmp_path) -
         local_storage_dir=tmp_path / "contracts",
         inbound_attachment_dir=tmp_path / "inbound",
             model_api_key="model-key",
-            fireworks_api_key="fireworks-key",
+            ai_gateway_api_key="gateway-key",
             auto_send_review_email=False,
     )
 

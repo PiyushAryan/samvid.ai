@@ -83,11 +83,11 @@ class Settings(BaseModel):
     chat_model_id: str = "gpt-5-mini"
     chat_reasoning_effort: Literal["low", "medium", "high"] = "low"
     chat_max_input_chars: int = Field(default=4_000, ge=100, le=20_000)
-    fireworks_api_key: str | None = None
-    fireworks_base_url: str = "https://api.fireworks.ai/inference/v1"
-    embedding_model_id: str = "fireworks/qwen3-embedding-8b"
+    ai_gateway_api_key: str | None = None
+    ai_gateway_base_url: str = "https://ai-gateway.vercel.sh/v1"
+    embedding_model_id: str = "openai/text-embedding-3-small"
     embedding_dimensions: int = Field(default=1024, ge=1024, le=1024)
-    rerank_model_id: str = "fireworks/qwen3-reranker-8b"
+    rerank_model_id: str = "cohere/rerank-v3.5"
     max_file_size_mb: int = Field(default=20, ge=1)
     contract_retention_days: int = Field(default=30, ge=1)
     enable_ocr: bool = False
@@ -176,8 +176,8 @@ class Settings(BaseModel):
                 errors.append("NEON_AUTH_REQUIRE_EMAIL_VERIFIED must be true in production when AUTH_MODE=neon")
             if not self.samvid_super_admin_email:
                 errors.append("SAMVID_SUPER_ADMIN_EMAIL is required when AUTH_MODE=neon")
-        if not self.fireworks_api_key:
-            errors.append("FIREWORKS_API_KEY is required for contract chat")
+        if not self.ai_gateway_api_key:
+            errors.append("AI_GATEWAY_API_KEY is required for contract chat")
         if not self.database_url.startswith(("postgres://", "postgresql://", "postgresql+psycopg://")):
             errors.append("Contract chat requires PostgreSQL with pgvector")
         if self.enable_ocr and not self.sarvam_api_key:
@@ -291,11 +291,11 @@ class Settings(BaseModel):
             chat_model_id=os.getenv("CHAT_MODEL_ID", os.getenv("MODEL_ID", "gpt-5-mini")),
             chat_reasoning_effort=os.getenv("CHAT_REASONING_EFFORT", "low").casefold(),
             chat_max_input_chars=int(os.getenv("CHAT_MAX_INPUT_CHARS", "4000")),
-            fireworks_api_key=os.getenv("FIREWORKS_API_KEY") or None,
-            fireworks_base_url=os.getenv("FIREWORKS_BASE_URL", "https://api.fireworks.ai/inference/v1").rstrip("/"),
-            embedding_model_id=os.getenv("EMBEDDING_MODEL_ID", "fireworks/qwen3-embedding-8b"),
+            ai_gateway_api_key=os.getenv("AI_GATEWAY_API_KEY") or None,
+            ai_gateway_base_url=os.getenv("AI_GATEWAY_BASE_URL", "https://ai-gateway.vercel.sh/v1").rstrip("/"),
+            embedding_model_id=os.getenv("EMBEDDING_MODEL_ID", "openai/text-embedding-3-small"),
             embedding_dimensions=int(os.getenv("EMBEDDING_DIMENSIONS", "1024")),
-            rerank_model_id=os.getenv("RERANK_MODEL_ID", "fireworks/qwen3-reranker-8b"),
+            rerank_model_id=os.getenv("RERANK_MODEL_ID", "cohere/rerank-v3.5"),
             max_file_size_mb=int(os.getenv("MAX_FILE_SIZE_MB", "20")),
             contract_retention_days=int(os.getenv("CONTRACT_RETENTION_DAYS", "30")),
             enable_ocr=bool_env("ENABLE_OCR", False),

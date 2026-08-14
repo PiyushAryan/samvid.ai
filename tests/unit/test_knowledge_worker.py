@@ -132,7 +132,7 @@ def test_worker_acknowledges_index_job_for_deleted_contract(monkeypatch) -> None
         settings=Settings(
             database_url="sqlite:///:memory:",
             contract_processing_mode="rabbitmq",
-            fireworks_api_key="test-key",
+            ai_gateway_api_key="test-key",
         ),
         queue=None,  # type: ignore[arg-type]
     )

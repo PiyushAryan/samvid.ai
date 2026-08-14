@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 from contractmate.ai.chunking import DocumentChunk
-from contractmate.ai.fireworks import FireworksEmbeddingsClient, FireworksRerankClient
+from contractmate.ai.gateway import GatewayEmbeddingsClient, GatewayRerankClient
 from contractmate.ai.retrieval import RetrievedChunk, RetrievalQuery
 from contractmate.db.repositories.knowledge import KnowledgeRepository
 from contractmate.settings import Settings
@@ -13,11 +13,11 @@ from contractmate.settings import Settings
 
 @dataclass
 class DatabaseHybridRetriever:
-    """Scoped lexical plus pgvector retrieval, with Fireworks reranking."""
+    """Scoped lexical plus pgvector retrieval, with AI Gateway reranking."""
 
     repository: KnowledgeRepository
-    embeddings: FireworksEmbeddingsClient
-    reranker: FireworksRerankClient
+    embeddings: GatewayEmbeddingsClient
+    reranker: GatewayRerankClient
 
     def retrieve(self, query: RetrievalQuery) -> tuple[RetrievedChunk, ...]:
         vector = self.embeddings.embed_documents([query.text])[0].values
@@ -141,19 +141,19 @@ class DatabaseContractReader:
 
 
 def chat_retriever_from_settings(*, settings: Settings, repository: KnowledgeRepository) -> DatabaseHybridRetriever:
-    if not settings.fireworks_api_key:
-        raise RuntimeError("FIREWORKS_API_KEY is required for contract chat.")
+    if not settings.ai_gateway_api_key:
+        raise RuntimeError("AI_GATEWAY_API_KEY is required for contract chat.")
     return DatabaseHybridRetriever(
         repository=repository,
-        embeddings=FireworksEmbeddingsClient(
-            api_key=settings.fireworks_api_key,
+        embeddings=GatewayEmbeddingsClient(
+            api_key=settings.ai_gateway_api_key,
             model_id=settings.embedding_model_id,
             dimensions=settings.embedding_dimensions,
-            base_url=settings.fireworks_base_url,
+            base_url=settings.ai_gateway_base_url,
         ),
-        reranker=FireworksRerankClient(
-            api_key=settings.fireworks_api_key,
+        reranker=GatewayRerankClient(
+            api_key=settings.ai_gateway_api_key,
             model_id=settings.rerank_model_id,
-            base_url=settings.fireworks_base_url,
+            base_url=settings.ai_gateway_base_url,
         ),
     )

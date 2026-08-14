@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from contractmate.ai.fireworks import FireworksEmbeddingsClient
+from contractmate.ai.gateway import GatewayEmbeddingsClient
 from contractmate.db.repositories.knowledge import KnowledgeRepository
 from contractmate.db.session import connect, initialize_database
 from contractmate.schemas.contracts import ContractReview
@@ -87,11 +87,11 @@ class KnowledgeIndexWorker:
                 contract_version_id=delivery.job.contract_version_id,
             )
             service = KnowledgeIndexingService(
-                embeddings=FireworksEmbeddingsClient(
-                    api_key=self.settings.fireworks_api_key or "",
+                embeddings=GatewayEmbeddingsClient(
+                    api_key=self.settings.ai_gateway_api_key or "",
                     model_id=self.settings.embedding_model_id,
                     dimensions=self.settings.embedding_dimensions,
-                    base_url=self.settings.fireworks_base_url,
+                    base_url=self.settings.ai_gateway_base_url,
                 ),
                 backend=repository,
                 embedding_model=self.settings.embedding_model_id,

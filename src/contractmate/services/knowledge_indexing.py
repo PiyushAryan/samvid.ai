@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol, Sequence
 
 from contractmate.ai.chunking import DocumentChunk, PageAwareChunker, PageContent
-from contractmate.ai.fireworks import EmbeddingVector
+from contractmate.ai.gateway import EmbeddingVector
 from contractmate.schemas.contracts import ContractReview
 from contractmate.schemas.documents import ParsedDocument
 
