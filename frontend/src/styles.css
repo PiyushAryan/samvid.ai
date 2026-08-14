@@ -690,9 +690,7 @@ p {
 .sidebar-chat-section {
   display: grid;
   gap: 8px;
-  margin-bottom: 10px;
-  padding: 4px 0 10px;
-  border-bottom: 0.5px solid var(--border);
+  padding-top: 4px;
 }
 
 .sidebar-new-chat {
@@ -2855,6 +2853,10 @@ textarea.field-control {
   font-weight: 550;
   letter-spacing: -0.035em;
   line-height: 1.15;
+}
+
+.ai-chat-greeting {
+  font-family: "GeistPixelSans", "Geist Pixel Square", ui-monospace, monospace;
 }
 
 .ai-chat-subtitle {
