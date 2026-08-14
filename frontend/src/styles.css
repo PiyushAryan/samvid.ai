@@ -2148,39 +2148,81 @@ p {
   line-height: 1.35;
 }
 
-.risk-item p,
-.risk-item blockquote {
+.risk-item p {
   color: var(--text-secondary);
-  font-family: var(--mono);
-  font-size: 10px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .risk-item p {
   margin-top: 10px;
 }
 
-.risk-item blockquote {
-  margin: 12px 0 0;
-  padding: 10px 12px;
-  border-left: 2px solid var(--quote-border);
-  background: var(--surface-muted);
-}
-
-.risk-list-register .risk-item blockquote {
+.risk-evidence {
   grid-column: 2;
   grid-row: 1 / span 3;
   align-self: start;
-  margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-height: 28px;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
-.risk-item blockquote > span {
-  display: block;
-  margin-bottom: 6px;
+.risk-evidence-label,
+.risk-confidence {
   color: var(--text-muted);
-  font-family: var(--mono);
-  font-size: 9px;
-  text-transform: uppercase;
+  font-size: 12px;
+}
+
+.risk-confidence {
+  margin-left: auto;
+}
+
+.risk-evidence-citation {
+  display: inline-flex;
+}
+
+.risk-evidence-trigger[data-slot="badge"] {
+  margin-left: 0;
+  border-color: var(--border);
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.risk-evidence-trigger[data-slot="badge"]:hover {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.risk-evidence-card {
+  width: min(320px, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--menu-shadow) !important;
+}
+
+.risk-evidence-card-meta {
+  padding: 10px 12px 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.risk-evidence-quote {
+  display: block;
+  margin: 0;
+  padding: 0 12px 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.55;
 }
 
 .risk-recommendation {
@@ -2810,6 +2852,10 @@ textarea.field-control {
 }
 
 .ai-chat-composer [data-slot="input-group"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 6px;
   min-height: 0;
   border: 0;
   border-radius: 0;
@@ -2833,11 +2879,13 @@ textarea.field-control {
 
 .ai-chat-textarea,
 .ai-chat-prompt {
+  grid-column: 1;
+  grid-row: 1;
   width: 100%;
-  min-height: 32px;
+  min-height: 36px !important;
   max-height: 144px;
   resize: none;
-  padding: 2px 3px;
+  padding: 7px 3px !important;
   border: 0;
   box-shadow: none;
   outline: 0;
@@ -2931,11 +2979,16 @@ textarea.field-control {
 
 .ai-chat-composer-actions,
 .ai-chat-actions {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
   display: flex;
   min-width: 0;
+  min-height: 0 !important;
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
+  padding: 0 !important;
 }
 
 .ai-chat-attach,
@@ -3012,16 +3065,11 @@ textarea.field-control {
 }
 
 .ai-chat-messages {
-  position: relative;
-  display: flex;
+  display: block;
   width: 100%;
-  height: min(52vh, 520px);
-  min-height: 220px;
-  max-height: 520px;
-  flex-direction: column;
-  overflow: hidden;
+  min-height: 0;
+  overflow: visible;
   padding: 0;
-  scrollbar-color: var(--border-strong) transparent;
 }
 
 .ai-chat-messages-content {
@@ -3216,6 +3264,8 @@ textarea.field-control {
 .ai-chat-citation-card {
   display: grid;
   width: min(360px, calc(100vw - 32px));
+  min-width: 0;
+  max-width: min(360px, calc(100vw - 32px));
   gap: 10px;
   padding: 14px;
   border: 0.5px solid var(--border);
@@ -3253,14 +3303,18 @@ textarea.field-control {
 }
 
 .ai-chat-citation-source h4 {
+  display: -webkit-box;
   overflow: hidden;
+  min-width: 0;
   margin: 0;
   color: var(--text);
   font-size: 13px;
   font-weight: 650;
   line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .ai-chat-citation-excerpt {
@@ -3274,6 +3328,7 @@ textarea.field-control {
   font-size: 12px;
   font-style: normal;
   line-height: 1.5;
+  overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 4;
 }
@@ -3569,7 +3624,7 @@ textarea.field-control {
     grid-template-columns: 1fr;
   }
 
-  .risk-list-register .risk-item blockquote {
+  .risk-list-register .risk-evidence {
     grid-column: 1;
     grid-row: auto;
     margin-top: 14px;
@@ -3707,7 +3762,7 @@ textarea.field-control {
   }
 
   .ai-chat-messages {
-    max-height: 42vh;
+    max-height: none;
   }
 }
 

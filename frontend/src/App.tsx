@@ -67,11 +67,6 @@ import type {
 import { Skeleton } from "./components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
 import {
-  Conversation,
-  ConversationContent,
-  ConversationScrollButton
-} from "@/components/ai-elements/conversation";
-import {
   InlineCitation,
   InlineCitationCard,
   InlineCitationCardBody,
@@ -106,6 +101,10 @@ function cx(...classes: Array<string | false | null | undefined>) {
 
 function contractChatHref(contractId: string) {
   return `/contracts/${encodeURIComponent(contractId)}`;
+}
+
+function formatConfidence(confidence: number) {
+  return `${Math.round(confidence * 100)}% confidence`;
 }
 
 function ContractCitation({ source }: { source: ChatSource }) {
@@ -779,13 +778,14 @@ export function ChatsPage() {
             <button className={compactButton} type="button" onClick={() => void sessionQuery.refetch()}>Retry</button>
           </div>
         ) : messages.length > 0 ? (
-          <Conversation
+          <div
             aria-busy={isSending}
             aria-label="Contract chat conversation"
             aria-live="polite"
             className="ai-chat-messages"
+            role="log"
           >
-            <ConversationContent className="ai-chat-messages-content">
+            <div className="ai-chat-messages-content">
             {messages.map((message) => (
               <Message
                 from={message.role}
@@ -832,9 +832,8 @@ export function ChatsPage() {
                 </MessageContent>
               </Message>
             ))}
-            </ConversationContent>
-            <ConversationScrollButton aria-label="Scroll to latest message" className="ai-chat-scroll-button" />
-          </Conversation>
+            </div>
+          </div>
         ) : null}
 
         <PromptInput
@@ -1367,10 +1366,26 @@ export function RisksTab({ review }: { review: ContractReview | null }) {
               </div>
               <h2>{risk.title}</h2>
               <p>{risk.explanation}</p>
-              <blockquote>
-                <span>Page {risk.evidence.page_number}</span>
-                {risk.evidence.exact_text}
-              </blockquote>
+              <div className="risk-evidence">
+                <span className="risk-evidence-label">Evidence</span>
+                <InlineCitation className="risk-evidence-citation">
+                  <InlineCitationCard>
+                    <InlineCitationCardTrigger
+                      aria-label={`View evidence from page ${risk.evidence.page_number}: ${risk.evidence.exact_text}`}
+                      className="risk-evidence-trigger"
+                      sources={[]}
+                    >
+                      <FileText size={13} aria-hidden="true" />
+                      Page {risk.evidence.page_number}
+                    </InlineCitationCardTrigger>
+                    <InlineCitationCardBody className="risk-evidence-card">
+                      <div className="risk-evidence-card-meta">Source evidence · Page {risk.evidence.page_number}</div>
+                      <InlineCitationQuote className="risk-evidence-quote">{risk.evidence.exact_text}</InlineCitationQuote>
+                    </InlineCitationCardBody>
+                  </InlineCitationCard>
+                </InlineCitation>
+                <span className="risk-confidence">{formatConfidence(risk.confidence)}</span>
+              </div>
               <div className="risk-recommendation">
                 <span>Recommendation</span>
                 <strong>{risk.recommendation}</strong>

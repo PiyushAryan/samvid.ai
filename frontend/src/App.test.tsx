@@ -569,7 +569,8 @@ test("risks tab renders evidence-grounded risks", () => {
   expect(screen.queryByText("Risk register")).not.toBeInTheDocument();
   expect(screen.getByText("Unlimited liability")).toBeInTheDocument();
   expect(screen.getByText("Page 2")).toBeInTheDocument();
-  expect(screen.getByText("liability shall be unlimited")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "View evidence from page 2: liability shall be unlimited" })).toBeInTheDocument();
+  expect(screen.getByText("95% confidence")).toBeInTheDocument();
 });
 
 test("timeline renders immutable events in chronological order", () => {
