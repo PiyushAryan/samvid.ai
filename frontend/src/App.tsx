@@ -127,12 +127,15 @@ function ContractCitation({ source }: { source: ChatSource }) {
           [{citationId}]
         </InlineCitationCardTrigger>
         <InlineCitationCardBody className="ai-chat-citation-card">
+          <div className="ai-chat-citation-meta">
+            <span>Contract evidence</span>
+            {source.page_number && <span>Page {source.page_number}</span>}
+          </div>
           <InlineCitationSource
-            description={source.page_number ? `Page ${source.page_number}` : "Contract evidence"}
+            className="ai-chat-citation-source"
             title={source.contract_title}
-            url={sourceUrl}
           />
-          {source.excerpt && <InlineCitationQuote>{source.excerpt}</InlineCitationQuote>}
+          {source.excerpt && <InlineCitationQuote className="ai-chat-citation-excerpt">{source.excerpt}</InlineCitationQuote>}
           <Link className="ai-chat-citation-link" to={href}>
             Open contract <ArrowUpRight size={13} aria-hidden="true" />
           </Link>
