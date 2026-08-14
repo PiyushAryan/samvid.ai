@@ -26,8 +26,7 @@ import {
   Trash2,
   Upload,
   UserPlus,
-  X,
-  Undo2
+  X
 } from "lucide-react";
 import { FormEvent, KeyboardEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from "./next-router-compat";
@@ -53,6 +52,7 @@ import { useAuth } from "./AuthProvider";
 import { setFaviconTheme } from "./favicon";
 import type {
   ChatMessage,
+  ChatSource,
   ChatSessionSummary,
   ContractDetail,
   ContractListItem,
@@ -66,7 +66,35 @@ import type {
 } from "./types";
 import { Skeleton } from "./components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
-import { TextShimmer } from "./components/core/text-shimmer";
+import {
+  ChainOfThought,
+  ChainOfThoughtContent,
+  ChainOfThoughtHeader,
+  ChainOfThoughtStep
+} from "@/components/ai-elements/chain-of-thought";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton
+} from "@/components/ai-elements/conversation";
+import {
+  InlineCitation,
+  InlineCitationCard,
+  InlineCitationCardBody,
+  InlineCitationCardTrigger,
+  InlineCitationQuote,
+  InlineCitationSource
+} from "@/components/ai-elements/inline-citation";
+import { Message, MessageContent } from "@/components/ai-elements/message";
+import {
+  PromptInput,
+  PromptInputFooter,
+  PromptInputSubmit,
+  PromptInputTextarea
+} from "@/components/ai-elements/prompt-input";
+import { Shimmer } from "@/components/ai-elements/shimmer";
+import { Sources, SourcesContent, SourcesTrigger } from "@/components/ai-elements/sources";
+import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 
 const MotionPanelLeft = motion.create(PanelLeft);
 const MotionFileText = motion.create(FileText);
@@ -82,20 +110,61 @@ function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
-function renderInlineMarkdown(value: string): ReactNode[] {
-  const parts = value.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter(Boolean);
+function contractChatHref(contractId: string) {
+  return `/contracts/${encodeURIComponent(contractId)}`;
+}
+
+function ContractCitation({ source }: { source: ChatSource }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const href = contractChatHref(source.contract_id);
+  const citationId = source.id || "source";
+  const sourceUrl = `https://samvid.online${href}`;
+
+  return (
+    <InlineCitation className="ai-chat-inline-citation">
+      <InlineCitationCard onOpenChange={setIsOpen} open={isOpen}>
+        <InlineCitationCardTrigger
+          aria-label={`View source ${citationId}: ${source.contract_title}`}
+          className="ai-chat-citation-trigger"
+          onClick={() => setIsOpen((open) => !open)}
+          onFocus={() => setIsOpen(true)}
+          sources={[sourceUrl]}
+        >
+          [{citationId}]
+        </InlineCitationCardTrigger>
+        <InlineCitationCardBody className="ai-chat-citation-card">
+          <InlineCitationSource
+            description={source.page_number ? `Page ${source.page_number}` : "Contract evidence"}
+            title={source.contract_title}
+            url={sourceUrl}
+          />
+          {source.excerpt && <InlineCitationQuote>{source.excerpt}</InlineCitationQuote>}
+          <Link className="ai-chat-citation-link" to={href}>
+            Open contract <ArrowUpRight size={13} aria-hidden="true" />
+          </Link>
+        </InlineCitationCardBody>
+      </InlineCitationCard>
+    </InlineCitation>
+  );
+}
+
+function renderInlineMarkdown(value: string, sources: ChatSource[]): ReactNode[] {
+  const parts = value.split(/(\*\*[^*]+\*\*|`[^`]+`|\[S\d+\])/g).filter(Boolean);
   return parts.map((part, index) => {
     if (part.startsWith("**") && part.endsWith("**")) {
-      return <strong key={index}>{part.slice(2, -2)}</strong>;
+      return <strong key={index}>{renderInlineMarkdown(part.slice(2, -2), sources)}</strong>;
     }
     if (part.startsWith("`") && part.endsWith("`")) {
       return <code key={index}>{part.slice(1, -1)}</code>;
     }
+    const citation = part.match(/^\[(S\d+)\]$/)?.[1];
+    const source = citation ? sources.find((item) => item.id === citation) : undefined;
+    if (source) return <ContractCitation key={index} source={source} />;
     return part;
   });
 }
 
-function ChatResponseContent({ content }: { content: string }) {
+function ChatResponseContent({ content, sources }: { content: string; sources: ChatSource[] }) {
   const lines = content.split(/\r?\n/);
   const blocks: ReactNode[] = [];
   let index = 0;
@@ -110,7 +179,7 @@ function ChatResponseContent({ content }: { content: string }) {
     const heading = line.match(/^(#{1,3})\s+(.+)$/);
     if (heading) {
       const Heading = heading[1].length === 1 ? "h2" : "h3";
-      blocks.push(<Heading key={`heading-${index}`}>{renderInlineMarkdown(heading[2])}</Heading>);
+      blocks.push(<Heading key={`heading-${index}`}>{renderInlineMarkdown(heading[2], sources)}</Heading>);
       index += 1;
       continue;
     }
@@ -129,7 +198,7 @@ function ChatResponseContent({ content }: { content: string }) {
       const List = isOrdered ? "ol" : "ul";
       blocks.push(
         <List key={`list-${index}`}>
-          {items.map((item, itemIndex) => <li key={itemIndex}>{renderInlineMarkdown(item)}</li>)}
+          {items.map((item, itemIndex) => <li key={itemIndex}>{renderInlineMarkdown(item, sources)}</li>)}
         </List>
       );
       continue;
@@ -143,7 +212,7 @@ function ChatResponseContent({ content }: { content: string }) {
       paragraph.push(next);
       index += 1;
     }
-    blocks.push(<p key={`paragraph-${index}`}>{renderInlineMarkdown(paragraph.join(" "))}</p>);
+    blocks.push(<p key={`paragraph-${index}`}>{renderInlineMarkdown(paragraph.join(" "), sources)}</p>);
   }
 
   return <div className="ai-chat-markdown">{blocks}</div>;
@@ -569,6 +638,50 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
+type ChatActivity = {
+  id: string;
+  label: string;
+  status: "active" | "complete" | "pending";
+};
+
+function appendChatActivity(activities: ChatActivity[], label: string): ChatActivity[] {
+  if (activities[activities.length - 1]?.label === label) return activities;
+  return [
+    ...activities.map((activity) => ({ ...activity, status: "complete" as const })),
+    { id: `activity-${activities.length}`, label, status: "active" }
+  ];
+}
+
+function completeChatActivities(activities: ChatActivity[]): ChatActivity[] {
+  return activities.map((activity) => ({ ...activity, status: "complete" }));
+}
+
+function ChatActivityTrail({ activities }: { activities: ChatActivity[] }) {
+  if (!activities.length) return null;
+  const isStreaming = activities.some((activity) => activity.status === "active");
+
+  return (
+    <ChainOfThought className="ai-chat-activity" open={isStreaming}>
+      <ChainOfThoughtHeader className="ai-chat-activity-header">
+        {isStreaming
+          ? <Shimmer as="span" duration={1.25}>Researching your contracts</Shimmer>
+          : "Research activity"}
+      </ChainOfThoughtHeader>
+      <ChainOfThoughtContent className="ai-chat-activity-content">
+        {activities.map((activity, index) => (
+          <ChainOfThoughtStep
+            description={activity.status === "active" ? "In progress" : undefined}
+            icon={index === activities.length - 1 && activity.status === "active" ? Loader2 : FileText}
+            key={activity.id}
+            label={activity.label}
+            status={activity.status}
+          />
+        ))}
+      </ChainOfThoughtContent>
+    </ChainOfThought>
+  );
+}
+
 export function ChatsPage() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -582,6 +695,7 @@ export function ChatsPage() {
   const [isSending, setIsSending] = useState(false);
   const [streamError, setStreamError] = useState("");
   const [announcement, setAnnouncement] = useState("");
+  const [messageActivities, setMessageActivities] = useState<Record<string, ChatActivity[]>>({});
   const streamControllerRef = useRef<AbortController | null>(null);
   const sessionQuery = useQuery({
     queryKey: ["chat-session", activeChatId],
@@ -603,6 +717,7 @@ export function ChatsPage() {
     setPendingMessages([]);
     setStreamError("");
     setAnnouncement("");
+    setMessageActivities({});
     setIsSending(false);
   // A new chat sets its live conversation before Next.js finishes updating the
   // URL. Only a URL change represents a user switching conversations; reacting
@@ -611,8 +726,8 @@ export function ChatsPage() {
 
   useEffect(() => () => streamControllerRef.current?.abort(), []);
 
-  const submitMessage = async () => {
-    const content = draft.trim();
+  const submitMessage = async (submittedContent?: string) => {
+    const content = (submittedContent ?? draft).trim();
     if (!content || isSending) return;
 
     setIsSending(true);
@@ -636,6 +751,10 @@ export function ChatsPage() {
       sources: [],
       created_at: now
     };
+    setMessageActivities((current) => ({
+      ...current,
+      [assistantId]: [{ id: "queued", label: "Preparing contract search", status: "active" }]
+    }));
     const baseMessages = sessionId === activeChatId ? messages : [];
     const nextMessages = [...baseMessages, userMessage, assistantMessage];
     if (!sessionId) setPendingMessages(nextMessages);
@@ -655,7 +774,13 @@ export function ChatsPage() {
       const controller = new AbortController();
       streamControllerRef.current = controller;
       await streamChatMessage(sessionId, content, {
-        onStatus: (status) => setAnnouncement(status),
+        onStatus: (status) => {
+          setAnnouncement(status);
+          setMessageActivities((current) => ({
+            ...current,
+            [assistantId]: appendChatActivity(current[assistantId] || [], status)
+          }));
+        },
         onDelta: (delta) => setLiveConversation((current) => updateChatMessage(current, sessionId!, assistantId, (message) => ({
           ...message,
           content: message.content + delta
@@ -664,7 +789,14 @@ export function ChatsPage() {
           ...message,
           sources
         }))),
-        onMessage: (message) => setLiveConversation((current) => updateChatMessage(current, sessionId!, assistantId, () => message))
+        onMessage: (message) => {
+          setLiveConversation((current) => updateChatMessage(current, sessionId!, assistantId, () => message));
+          setMessageActivities((current) => {
+            const activities = current[assistantId] || [];
+            const { [assistantId]: _pendingActivities, ...remaining } = current;
+            return { ...remaining, [message.id]: completeChatActivities(activities) };
+          });
+        }
       }, controller.signal);
       setAnnouncement("Answer ready");
       await Promise.all([
@@ -676,6 +808,10 @@ export function ChatsPage() {
       setStreamError(chatErrorMessage(error));
       setDraft(content);
       setPendingMessages([]);
+      setMessageActivities((current) => {
+        const { [assistantId]: _failedActivities, ...remaining } = current;
+        return remaining;
+      });
       setLiveConversation((current) => current?.sessionId === sessionId
         ? { ...current, messages: current.messages.filter((message) => !message.id.startsWith("pending-assistant-")) }
         : current);
@@ -684,11 +820,6 @@ export function ChatsPage() {
       streamControllerRef.current = null;
       setIsSending(false);
     }
-  };
-
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    void submitMessage();
   };
 
   return (
@@ -714,98 +845,105 @@ export function ChatsPage() {
             <button className={compactButton} type="button" onClick={() => void sessionQuery.refetch()}>Retry</button>
           </div>
         ) : messages.length > 0 ? (
-          <div className="ai-chat-messages" aria-label="Contract chat conversation" aria-live="polite" aria-busy={isSending}>
+          <Conversation
+            aria-busy={isSending}
+            aria-label="Contract chat conversation"
+            aria-live="polite"
+            className="ai-chat-messages"
+          >
+            <ConversationContent className="ai-chat-messages-content">
             {messages.map((message) => (
-              <article
+              <Message
+                from={message.role}
                 key={message.id}
                 className={cx("ai-chat-message", `ai-chat-message-${message.role}`)}
               >
-                <span className="ai-chat-message-role">
-                  {message.role === "user" ? "You" : "Samvid"}
-                </span>
-                {message.content ? (
-                  message.role === "assistant"
-                    ? <ChatResponseContent content={message.content} />
-                    : <p>{message.content}</p>
-                ) : (
-                  <p>
-                    {isSending && message.id.startsWith("pending-assistant-")
-                      ? <TextShimmer duration={1}>{announcement || "Searching your contracts..."}</TextShimmer>
-                      : "No response was returned."}
-                  </p>
-                )}
-                {message.sources.length > 0 && (
-                  <ul className="ai-chat-sources" aria-label="Sources">
-                    {message.sources.map((source, index) => (
-                      <li key={source.id || `${source.contract_id}-${source.page_number}-${index}`}>
-                        <Link className="ai-chat-source" to={`/contracts/${encodeURIComponent(source.contract_id)}`}>
-                          <FileText size={14} aria-hidden="true" />
-                          <span>
-                            <strong>{source.contract_title}</strong>
-                            {source.page_number && <small>Page {source.page_number}</small>}
-                          </span>
-                          <ArrowUpRight size={13} aria-hidden="true" />
-                        </Link>
-                        {source.excerpt && <blockquote>{source.excerpt}</blockquote>}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </article>
+                <MessageContent className="ai-chat-message-content">
+                  <span className="ai-chat-message-role">
+                    {message.role === "user" ? "You" : "Samvid"}
+                  </span>
+                  {message.content ? (
+                    message.role === "assistant"
+                      ? <ChatResponseContent content={message.content} sources={message.sources} />
+                      : <p>{message.content}</p>
+                  ) : !messageActivities[message.id]?.length ? (
+                    <p>
+                      {isSending && message.id.startsWith("pending-assistant-")
+                        ? <Shimmer as="span" duration={1}>{announcement || "Searching your contracts..."}</Shimmer>
+                        : "No response was returned."}
+                    </p>
+                  ) : null}
+                  <ChatActivityTrail activities={messageActivities[message.id] || []} />
+                  {message.sources.length > 0 && (
+                    <Sources className="ai-chat-sources" defaultOpen>
+                      <SourcesTrigger className="ai-chat-sources-trigger" count={message.sources.length} />
+                      <SourcesContent className="ai-chat-sources-content">
+                        {message.sources.map((source, index) => (
+                          <Link
+                            className="ai-chat-source"
+                            key={source.id || `${source.contract_id}-${source.page_number}-${index}`}
+                            to={contractChatHref(source.contract_id)}
+                          >
+                            <FileText size={14} aria-hidden="true" />
+                            <span>
+                              <strong>{source.contract_title}</strong>
+                              {source.page_number && <small>Page {source.page_number}</small>}
+                              {source.excerpt && <small className="ai-chat-source-excerpt">{source.excerpt}</small>}
+                            </span>
+                            <ArrowUpRight size={13} aria-hidden="true" />
+                          </Link>
+                        ))}
+                      </SourcesContent>
+                    </Sources>
+                  )}
+                </MessageContent>
+              </Message>
             ))}
-          </div>
+            </ConversationContent>
+            <ConversationScrollButton aria-label="Scroll to latest message" className="ai-chat-scroll-button" />
+          </Conversation>
         ) : null}
 
-        <form
+        <PromptInput
           className="ai-chat-composer"
-          onSubmit={handleSubmit}
+          onSubmit={({ text }) => submitMessage(text)}
         >
           <label className="ai-chat-label" htmlFor="ai-chat-prompt">
             Ask about a contract
           </label>
-          <textarea
+          <PromptInputTextarea
             id="ai-chat-prompt"
             className="ai-chat-textarea"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                void submitMessage();
-              }
-            }}
             placeholder="Ask a question about your contracts..."
             rows={1}
             disabled={isSending || Boolean(activeChatId && sessionQuery.isPending)}
           />
 
-          <div className="ai-chat-composer-actions">
-            <button
-              className="ai-chat-send-button"
-              type="submit"
-              disabled={!draft.trim() || isSending || Boolean(activeChatId && sessionQuery.isPending)}
+          <PromptInputFooter className="ai-chat-composer-actions">
+            <PromptInputSubmit
               aria-label="Send message"
-            >
-              {isSending ? <Loader2 className="spin" size={16} aria-hidden="true" /> : <Undo2 size={16} aria-hidden="true" />}
-            </button>
-          </div>
+              className="ai-chat-send-button"
+              disabled={!draft.trim() || isSending || Boolean(activeChatId && sessionQuery.isPending)}
+              onClick={() => void submitMessage()}
+              status={isSending ? "streaming" : "ready"}
+              type="button"
+            />
+          </PromptInputFooter>
           {streamError && <p className="ai-chat-stream-error" role="alert">{streamError}</p>}
-        </form>
+        </PromptInput>
 
         {!isConversationView && (
           <div className="ai-chat-suggestions" aria-label="Suggested questions">
             <p>Try asking</p>
-            <div>
+            <Suggestions className="ai-chat-suggestions-list">
               {[
                 "What changed in my latest contract?",
                 "Which contracts renew in the next 90 days?",
                 "Summarize the risks in this agreement."
-              ].map((suggestion) => (
-                <button key={suggestion} type="button" onClick={() => setDraft(suggestion)}>
-                  {suggestion}
-                </button>
-              ))}
-            </div>
+              ].map((suggestion) => <Suggestion key={suggestion} onClick={setDraft} suggestion={suggestion} />)}
+            </Suggestions>
           </div>
         )}
       </div>

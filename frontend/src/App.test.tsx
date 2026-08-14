@@ -351,6 +351,33 @@ test("assistant replies render Markdown headings and lists", async () => {
   expect(within(container).getByRole("list")).toHaveTextContent("Renewal: Annual [S2]");
 });
 
+test("assistant citations open a keyboard-accessible contract evidence preview", async () => {
+  vi.mocked(api.getChatSession).mockResolvedValueOnce({
+    ...chatSession,
+    messages: [{
+      id: "message-citation",
+      role: "assistant",
+      content: "The notice period is thirty days. [S1]",
+      sources: [{
+        id: "S1",
+        contract_id: "contract-1",
+        contract_title: "Services agreement",
+        page_number: 11,
+        excerpt: "Either party may terminate on thirty days' notice."
+      }],
+      created_at: "2026-07-20T10:00:00Z"
+    }]
+  });
+  setTestUrl("/chats?chat=chat-citation");
+  const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
+
+  const citation = await within(container).findByRole("button", { name: "View source S1: Services agreement" });
+  expect(citation).toHaveTextContent("[S1]");
+  fireEvent.focus(citation);
+  expect(await screen.findByRole("blockquote")).toHaveTextContent("Either party may terminate on thirty days' notice.");
+  expect(screen.getByRole("link", { name: /open contract/i })).toHaveAttribute("href", "/contracts/contract-1");
+});
+
 test("chat session exposes a recoverable history error", async () => {
   vi.mocked(api.getChatSession).mockRejectedValue(new Error("Knowledge index unavailable"));
   setTestUrl("/chats?chat=chat-missing");
