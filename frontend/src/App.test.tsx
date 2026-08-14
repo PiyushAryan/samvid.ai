@@ -320,16 +320,14 @@ test("workspace view slider switches between console and loads chat history", as
   expect(within(container).queryByRole("link", { name: "Signing" })).not.toBeInTheDocument();
 });
 
-test("chat session renders persisted history and contract sources", async () => {
+test("chat session renders persisted history without visible source citations", async () => {
   setTestUrl("/chats?chat=chat-1");
   const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
 
   expect(within(container).getByText("Loading conversation")).toBeInTheDocument();
   expect(await within(container).findByText("The agreement renews automatically for another 12 months.")).toBeInTheDocument();
-  const source = within(container).getByRole("link", { name: /Vendor agreement/i });
-  expect(source).toHaveAttribute("href", "/contracts/contract-1");
-  expect(within(container).getByText("Page 7")).toBeInTheDocument();
-  expect(within(container).getByText(/successive twelve-month periods/)).toBeInTheDocument();
+  expect(within(container).queryByRole("link", { name: /Vendor agreement/i })).not.toBeInTheDocument();
+  expect(within(container).queryByText("Page 7")).not.toBeInTheDocument();
 });
 
 test("assistant replies render Markdown headings and lists", async () => {
@@ -353,7 +351,7 @@ test("assistant replies render Markdown headings and lists", async () => {
   expect(within(container).getByRole("list")).not.toHaveTextContent("[S2]");
 });
 
-test("assistant citations open a keyboard-accessible contract evidence preview", async () => {
+test("assistant citations remain internal to the rendered response", async () => {
   vi.mocked(api.getChatSession).mockResolvedValueOnce({
     ...chatSession,
     messages: [{
@@ -373,11 +371,9 @@ test("assistant citations open a keyboard-accessible contract evidence preview",
   setTestUrl("/chats?chat=chat-citation");
   const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
 
-  const citation = await within(container).findByRole("button", { name: "View source S1: Services agreement" });
-  expect(citation).toHaveTextContent("Source");
-  fireEvent.focus(citation);
-  expect(await screen.findByRole("blockquote")).toHaveTextContent("Either party may terminate on thirty days' notice.");
-  expect(screen.getByRole("link", { name: /open contract/i })).toHaveAttribute("href", "/contracts/contract-1");
+  expect(await within(container).findByText("The notice period is thirty days.")).toBeInTheDocument();
+  expect(within(container).queryByRole("button", { name: /view source/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole("blockquote")).not.toBeInTheDocument();
 });
 
 test("chat session exposes a recoverable history error", async () => {
@@ -422,10 +418,7 @@ test("new chat streams an answer and exposes its sources", async () => {
     expect.any(AbortSignal)
   );
   expect(await within(container).findByText("The termination notice is 30 days.")).toBeInTheDocument();
-  expect(within(container).getByRole("link", { name: /Services agreement/i })).toHaveAttribute(
-    "href",
-    "/contracts/contract-2"
-  );
+  expect(within(container).queryByRole("link", { name: /Services agreement/i })).not.toBeInTheDocument();
 });
 
 test("new chats show the first message in the sidebar while the response is streaming", async () => {

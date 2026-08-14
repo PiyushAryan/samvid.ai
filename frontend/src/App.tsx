@@ -52,7 +52,6 @@ import { useAuth } from "./AuthProvider";
 import { setFaviconTheme } from "./favicon";
 import type {
   ChatMessage,
-  ChatSource,
   ChatSessionSummary,
   ContractDetail,
   ContractListItem,
@@ -71,8 +70,7 @@ import {
   InlineCitationCard,
   InlineCitationCardBody,
   InlineCitationCardTrigger,
-  InlineCitationQuote,
-  InlineCitationSource
+  InlineCitationQuote
 } from "@/components/ai-elements/inline-citation";
 import { Message, MessageContent } from "@/components/ai-elements/message";
 import {
@@ -82,7 +80,6 @@ import {
   PromptInputTextarea
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
-import { Sources, SourcesContent, SourcesTrigger } from "@/components/ai-elements/sources";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 
 const MotionPanelLeft = motion.create(PanelLeft);
@@ -107,69 +104,21 @@ function formatConfidence(confidence: number) {
   return `${Math.round(confidence * 100)}% confidence`;
 }
 
-function ContractCitation({ source }: { source: ChatSource }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const href = contractChatHref(source.contract_id);
-  const citationId = source.id || "source";
-  const sourceUrl = `https://samvid.online${href}`;
-
-  return (
-    <InlineCitation className="ai-chat-inline-citation">
-      <InlineCitationCard onOpenChange={setIsOpen} open={isOpen}>
-        <InlineCitationCardTrigger
-          aria-label={`View source ${citationId}: ${source.contract_title}`}
-          className="ai-chat-citation-trigger"
-          onClick={() => setIsOpen((open) => !open)}
-          onFocus={() => setIsOpen(true)}
-          sources={[sourceUrl]}
-        >
-          <FileText size={11} aria-hidden="true" />
-          Source
-        </InlineCitationCardTrigger>
-        <InlineCitationCardBody className="ai-chat-citation-card">
-          <div className="ai-chat-citation-meta">
-            <span>Contract evidence</span>
-            {source.page_number && <span>Page {source.page_number}</span>}
-          </div>
-          <InlineCitationSource
-            className="ai-chat-citation-source"
-            title={source.contract_title}
-          />
-          {source.excerpt && (
-            <InlineCitationQuote
-              aria-label="Evidence excerpt"
-              className="ai-chat-citation-excerpt"
-              tabIndex={0}
-            >
-              {source.excerpt}
-            </InlineCitationQuote>
-          )}
-          <Link className="ai-chat-citation-link" to={href}>
-            Open contract <ArrowUpRight size={13} aria-hidden="true" />
-          </Link>
-        </InlineCitationCardBody>
-      </InlineCitationCard>
-    </InlineCitation>
-  );
-}
-
-function renderInlineMarkdown(value: string, sources: ChatSource[]): ReactNode[] {
+function renderInlineMarkdown(value: string): ReactNode[] {
   const parts = value.split(/(\*\*[^*]+\*\*|`[^`]+`|\[S\d+\])/g).filter(Boolean);
   return parts.map((part, index) => {
     if (part.startsWith("**") && part.endsWith("**")) {
-      return <strong key={index}>{renderInlineMarkdown(part.slice(2, -2), sources)}</strong>;
+      return <strong key={index}>{renderInlineMarkdown(part.slice(2, -2))}</strong>;
     }
     if (part.startsWith("`") && part.endsWith("`")) {
       return <code key={index}>{part.slice(1, -1)}</code>;
     }
-    const citation = part.match(/^\[(S\d+)\]$/)?.[1];
-    const source = citation ? sources.find((item) => item.id === citation) : undefined;
-    if (citation) return source ? <ContractCitation key={index} source={source} /> : null;
+    if (/^\[S\d+\]$/.test(part)) return null;
     return part;
   });
 }
 
-function ChatResponseContent({ content, sources }: { content: string; sources: ChatSource[] }) {
+function ChatResponseContent({ content }: { content: string }) {
   const lines = content.split(/\r?\n/);
   const blocks: ReactNode[] = [];
   let index = 0;
@@ -184,7 +133,14 @@ function ChatResponseContent({ content, sources }: { content: string; sources: C
     const heading = line.match(/^(#{1,3})\s+(.+)$/);
     if (heading) {
       const Heading = heading[1].length === 1 ? "h2" : "h3";
-      blocks.push(<Heading key={`heading-${index}`}>{renderInlineMarkdown(heading[2], sources)}</Heading>);
+      blocks.push(<Heading key={`heading-${index}`}>{renderInlineMarkdown(heading[2])}</Heading>);
+      index += 1;
+      continue;
+    }
+
+    const plainSectionHeading = line.match(/^(facts|key finding|interpretation|suggested next steps|next steps)(?:\s*\([^)]*\))?$/i);
+    if (plainSectionHeading) {
+      blocks.push(<h2 key={`heading-${index}`}>{renderInlineMarkdown(line)}</h2>);
       index += 1;
       continue;
     }
@@ -203,7 +159,7 @@ function ChatResponseContent({ content, sources }: { content: string; sources: C
       const List = isOrdered ? "ol" : "ul";
       blocks.push(
         <List key={`list-${index}`}>
-          {items.map((item, itemIndex) => <li key={itemIndex}>{renderInlineMarkdown(item, sources)}</li>)}
+          {items.map((item, itemIndex) => <li key={itemIndex}>{renderInlineMarkdown(item)}</li>)}
         </List>
       );
       continue;
@@ -217,7 +173,7 @@ function ChatResponseContent({ content, sources }: { content: string; sources: C
       paragraph.push(next);
       index += 1;
     }
-    blocks.push(<p key={`paragraph-${index}`}>{renderInlineMarkdown(paragraph.join(" "), sources)}</p>);
+    blocks.push(<p key={`paragraph-${index}`}>{renderInlineMarkdown(paragraph.join(" "))}</p>);
   }
 
   return <div className="ai-chat-markdown">{blocks}</div>;
@@ -807,7 +763,7 @@ export function ChatsPage() {
                   </span>
                   {message.content ? (
                     message.role === "assistant"
-                      ? <ChatResponseContent content={message.content} sources={message.sources} />
+                      ? <ChatResponseContent content={message.content} />
                       : <p>{message.content}</p>
                   ) : message.id.startsWith("pending-assistant-") ? (
                     <p>
@@ -816,28 +772,6 @@ export function ChatsPage() {
                         : "No response was returned."}
                     </p>
                   ) : null}
-                  {message.sources.length > 0 && (
-                    <Sources className="ai-chat-sources" defaultOpen>
-                      <SourcesTrigger className="ai-chat-sources-trigger" count={message.sources.length} />
-                      <SourcesContent className="ai-chat-sources-content">
-                        {message.sources.map((source, index) => (
-                          <Link
-                            className="ai-chat-source"
-                            key={source.id || `${source.contract_id}-${source.page_number}-${index}`}
-                            to={contractChatHref(source.contract_id)}
-                          >
-                            <FileText size={14} aria-hidden="true" />
-                            <span>
-                              <strong>{source.contract_title}</strong>
-                              {source.page_number && <small>Page {source.page_number}</small>}
-                              {source.excerpt && <small className="ai-chat-source-excerpt">{source.excerpt}</small>}
-                            </span>
-                            <ArrowUpRight size={13} aria-hidden="true" />
-                          </Link>
-                        ))}
-                      </SourcesContent>
-                    </Sources>
-                  )}
                 </MessageContent>
               </Message>
             ))}
