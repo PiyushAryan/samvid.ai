@@ -226,11 +226,20 @@ class AgnoChatAgentService:
             event_name = _event_name(item)
             content = _response_content(item, allow_empty=True)
             normalized_name = event_name.casefold()
-            if "tool" in normalized_name:
+            # ``stream_events=True`` yields lifecycle events such as
+            # ``ModelRequestCompleted`` and ``RunContentCompleted``. They are
+            # not terminal responses, even though their names contain
+            # "completed". Match Agno event names exactly so only
+            # ``RunCompleted`` closes the stream.
+            if normalized_name in {"runerror", "runcancelled", "toolcallerror"}:
+                yield ChatStreamEvent(
+                    type="error",
+                    content=_event_error_content(item, content=content),
+                    event=event_name,
+                )
+            elif normalized_name in {"toolcallstarted", "toolcallcompleted"}:
                 yield ChatStreamEvent(type="tool", content=content, event=event_name)
-            elif "error" in normalized_name or "cancel" in normalized_name:
-                yield ChatStreamEvent(type="error", content=content, event=event_name)
-            elif "complete" in normalized_name:
+            elif normalized_name == "runcompleted":
                 final_content = content or "".join(content_parts)
                 if not final_content.strip():
                     raise RuntimeError("Agno completed the chat stream without text content.")
@@ -240,7 +249,7 @@ class AgnoChatAgentService:
                     event=event_name,
                     sources=evidence.resolve_citations(final_content),
                 )
-            elif content:
+            elif normalized_name == "runcontent" and content:
                 content_parts.append(content)
                 yield ChatStreamEvent(type="delta", content=content, event=event_name)
 
@@ -379,6 +388,17 @@ def _response_content(response: Any, *, allow_empty: bool = False) -> str:
     if allow_empty:
         return ""
     raise RuntimeError("Agno returned a response without text content.")
+
+
+def _event_error_content(response: Any, *, content: str) -> str:
+    """Extract an error message from Agno events without assuming one schema."""
+    if content.strip():
+        return content
+    for attribute in ("error", "message", "reason"):
+        value = getattr(response, attribute, None)
+        if isinstance(value, str) and value.strip():
+            return value
+    return "The chat model stopped before completing its answer."
 
 
 def _event_name(event: Any) -> str:

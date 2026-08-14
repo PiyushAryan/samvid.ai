@@ -1,0 +1,26 @@
+/* AI Elements needs Tailwind utilities but the established app owns its reset. */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@theme inline {
+  --color-background: var(--surface);
+  --color-foreground: var(--text);
+  --color-muted: var(--surface-muted);
+  --color-muted-foreground: var(--text-muted);
+  --color-secondary: var(--surface-muted);
+  --color-secondary-foreground: var(--text-secondary);
+  --color-accent: var(--accent-soft);
+  --color-accent-foreground: var(--text);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--surface);
+  --color-border: var(--border);
+  --color-input: var(--border-strong);
+  --color-ring: var(--focus-border);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--text);
+  --color-destructive: var(--danger);
+  --font-sans: "Instrument Sans", "Geist Sans", system-ui, sans-serif;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+}

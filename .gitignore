@@ -18,3 +18,4 @@ dummy_contracts/
 .env.local
 .DS_Store
 .next/
+CODEX_CHAT_SESSIONS.md
