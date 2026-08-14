@@ -738,12 +738,25 @@ p {
 
 .sidebar-chat-list {
   display: grid;
+  max-height: min(48vh, 360px);
   gap: 2px;
   margin: 0;
-  padding: 0;
+  padding: 0 4px 0 0;
+  overflow-y: auto;
   list-style: none;
   color: var(--text-muted);
   font-size: 10px;
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
+}
+
+.sidebar-chat-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-chat-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--border-strong);
 }
 
 .sidebar-chat-list button {

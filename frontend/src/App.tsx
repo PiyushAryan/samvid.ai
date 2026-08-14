@@ -179,6 +179,19 @@ function ChatResponseContent({ content }: { content: string }) {
   return <div className="ai-chat-markdown">{blocks}</div>;
 }
 
+function getWelcomeGreeting(name: string, now = new Date()): string {
+  const hour = now.getHours();
+  const greetings = hour >= 5 && hour < 12
+    ? [`Good morning, ${name}`, `Ready when you are, ${name}`]
+    : hour >= 12 && hour < 17
+      ? [`Good afternoon, ${name}`, `Welcome back, ${name}`]
+      : hour >= 17 && hour < 22
+        ? [`Good evening, ${name}`, `Ask away, ${name}`]
+        : [`Welcome back, ${name}`, `Ready when you are, ${name}`];
+
+  return greetings[now.getDate() % greetings.length];
+}
+
 const mono = "mono";
 const mutedText = "muted";
 const primaryButton = "primary";
@@ -613,6 +626,7 @@ export function ChatsPage() {
   const queryClient = useQueryClient();
   const activeChatId = searchParams.get("chat");
   const accountName = user?.name?.trim().split(/\s+/)[0] || "there";
+  const welcomeGreeting = getWelcomeGreeting(accountName);
   const [draft, setDraft] = useState("");
   const [liveConversation, setLiveConversation] = useState<{ sessionId: string; messages: ChatMessage[] } | null>(null);
   const [pendingMessages, setPendingMessages] = useState<ChatMessage[]>([]);
@@ -748,7 +762,7 @@ export function ChatsPage() {
       <div className={cx("ai-chat-content", isConversationView && "ai-chat-content--conversation")}>
         {!isConversationView && (
           <header className="ai-chat-header">
-            <h1>Hello, {accountName}</h1>
+            <h1>{welcomeGreeting}</h1>
             <p>find anything about your contracts</p>
           </header>
         )}

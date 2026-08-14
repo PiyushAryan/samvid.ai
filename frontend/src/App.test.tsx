@@ -306,7 +306,7 @@ test("workspace view slider switches between console and loads chat history", as
 
   expect(chatsOption).toHaveAttribute("aria-pressed", "true");
   expect(consoleOption).toHaveAttribute("aria-pressed", "false");
-  expect(within(container).getByRole("heading", { name: "Hello, Piyush" })).toBeInTheDocument();
+  expect(within(container).getByRole("heading", { name: /Piyush/ })).toBeInTheDocument();
   expect(within(container).getByText("find anything about your contracts")).toBeInTheDocument();
   fireEvent.click(within(container).getByRole("button", { name: "What changed in my latest contract?" }));
   expect(within(container).getByRole("textbox", { name: "Ask about a contract" })).toHaveValue(
@@ -408,7 +408,7 @@ test("new chat streams an answer and exposes its sources", async () => {
   fireEvent.change(textbox, { target: { value: "What is the termination notice?" } });
   fireEvent.click(within(container).getByRole("button", { name: "Send message" }));
 
-  expect(within(container).queryByRole("heading", { name: "Hello, Piyush" })).not.toBeInTheDocument();
+  expect(within(container).queryByRole("heading", { name: /Piyush/ })).not.toBeInTheDocument();
   expect(container.querySelector(".ai-chat-page")).toHaveAttribute("data-conversation", "true");
   await waitFor(() => expect(api.createChatSession).toHaveBeenCalledWith("What is the termination notice?"));
   expect(api.streamChatMessage).toHaveBeenCalledWith(
@@ -457,14 +457,14 @@ test("new chats show the first message in the sidebar while the response is stre
     expect.any(AbortSignal)
   );
   expect(streamSignal?.aborted).toBe(false);
-  expect(within(container).queryByRole("heading", { name: "Hello, Piyush" })).not.toBeInTheDocument();
+  expect(within(container).queryByRole("heading", { name: /Piyush/ })).not.toBeInTheDocument();
   expect(within(container).getByText("Reading relevant contract evidence...")).toBeInTheDocument();
   expect(container.querySelector(".ai-chat-page")).toHaveAttribute("data-conversation", "true");
 
   fireEvent.click(within(container).getByRole("button", { name: "New chat" }));
 
   expect(streamSignal?.aborted).toBe(true);
-  expect(await within(container).findByRole("heading", { name: "Hello, Piyush" })).toBeInTheDocument();
+  expect(await within(container).findByRole("heading", { name: /Piyush/ })).toBeInTheDocument();
   expect(within(container).getByRole("textbox", { name: "Ask about a contract" })).toHaveValue("");
   expect(window.location.pathname).toBe("/chats");
   expect(window.location.search).toBe("");
@@ -491,9 +491,9 @@ test("a failed new chat returns to the welcome state and restores the draft", as
   fireEvent.change(textbox, { target: { value: "Find my renewal date" } });
   fireEvent.click(within(container).getByRole("button", { name: "Send message" }));
 
-  expect(within(container).queryByRole("heading", { name: "Hello, Piyush" })).not.toBeInTheDocument();
+  expect(within(container).queryByRole("heading", { name: /Piyush/ })).not.toBeInTheDocument();
   expect(await within(container).findByRole("alert")).toHaveTextContent("Chat service unavailable");
-  expect(within(container).getByRole("heading", { name: "Hello, Piyush" })).toBeInTheDocument();
+  expect(within(container).getByRole("heading", { name: /Piyush/ })).toBeInTheDocument();
   expect(textbox).toHaveValue("Find my renewal date");
   expect(container.querySelector(".ai-chat-page")).toHaveAttribute("data-conversation", "false");
 });
