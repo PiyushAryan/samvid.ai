@@ -229,7 +229,7 @@ p {
   position: absolute;
   z-index: 0;
   inset: 0;
-  background-image: linear-gradient(var(--workspace-wash), var(--workspace-wash)), url("/blr.webp");
+  background-image: linear-gradient(var(--workspace-wash), var(--workspace-wash)), url("/blr.avif");
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
@@ -243,7 +243,7 @@ p {
 }
 
 .app-shell[data-theme="dark"] .contracts-page::before {
-  background-image: linear-gradient(var(--workspace-wash), var(--workspace-wash)), url("/blr-dark.webp");
+  background-image: linear-gradient(var(--workspace-wash), var(--workspace-wash)), url("/blr-dark.avif");
 }
 
 .contract-detail-page,
@@ -2665,7 +2665,7 @@ textarea.field-control {
   position: absolute;
   z-index: -1;
   inset: 0;
-  background-image: linear-gradient(var(--workspace-wash), var(--workspace-wash)), url("/blr.webp");
+  background-image: linear-gradient(var(--workspace-wash), var(--workspace-wash)), url("/blr.avif");
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
@@ -3314,7 +3314,7 @@ textarea.field-control {
 }
 
 .app-shell[data-theme="dark"] .ai-chat-page::before {
-  background-image: linear-gradient(var(--workspace-wash), var(--workspace-wash)), url("/blr-dark.webp");
+  background-image: linear-gradient(var(--workspace-wash), var(--workspace-wash)), url("/blr-dark.avif");
 }
 
 .app-shell[data-theme="dark"] .ai-chat-composer {
