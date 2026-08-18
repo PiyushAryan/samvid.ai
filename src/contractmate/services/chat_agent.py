@@ -51,7 +51,7 @@ AgentBuilder = Callable[[Sequence[Callable[..., Any]]], AgentLike]
 @dataclass(frozen=True)
 class OpenAIChatConfig:
     api_key: str
-    model_id: str = "gpt-5-mini"
+    model_id: str = "gpt-5.6-luna"
     reasoning_effort: Literal["low", "medium", "high"] = "low"
     timeout_seconds: float = 60.0
     max_tool_calls: int = 8
@@ -68,7 +68,7 @@ class OpenAIChatConfig:
     def from_env(cls) -> "OpenAIChatConfig":
         return cls(
             api_key=os.getenv("OPENAI_API_KEY", ""),
-            model_id=os.getenv("CHAT_MODEL_ID") or "gpt-5-mini",
+            model_id=os.getenv("CHAT_MODEL_ID") or "gpt-5.6-luna",
             reasoning_effort=cast(
                 Literal["low", "medium", "high"],
                 os.getenv("CHAT_REASONING_EFFORT", "low").casefold(),

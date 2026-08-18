@@ -117,13 +117,13 @@ class LifecycleEventAgent(FakeAgent):
 
 def test_openai_chat_config_reads_existing_environment_contract(monkeypatch: Any) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
-    monkeypatch.setenv("CHAT_MODEL_ID", "gpt-5-mini")
+    monkeypatch.setenv("CHAT_MODEL_ID", "gpt-5.6-luna")
     monkeypatch.setenv("CHAT_REASONING_EFFORT", "medium")
 
     config = OpenAIChatConfig.from_env()
 
     assert config.api_key == "openai-key"
-    assert config.model_id == "gpt-5-mini"
+    assert config.model_id == "gpt-5.6-luna"
     assert config.reasoning_effort == "medium"
 
 
@@ -138,7 +138,7 @@ def test_chat_agent_exposes_only_scoped_read_tools_and_resolves_run_evidence() -
         return agent
 
     service = AgnoChatAgentService(
-        config=OpenAIChatConfig(api_key="openai-key", model_id="gpt-5-mini"),
+        config=OpenAIChatConfig(api_key="openai-key", model_id="gpt-5.6-luna"),
         retriever=retriever,  # type: ignore[arg-type]
         reader=reader,
         agent_builder=builder,
@@ -179,7 +179,7 @@ def test_chat_agent_rejects_unknown_run_citation() -> None:
         return FakeAgent(tools, content="The notice period is thirty days [S99].")
 
     service = AgnoChatAgentService(
-        config=OpenAIChatConfig(api_key="openai-key", model_id="gpt-5-mini"),
+        config=OpenAIChatConfig(api_key="openai-key", model_id="gpt-5.6-luna"),
         retriever=FakeRetriever(),  # type: ignore[arg-type]
         reader=FakeReader(),
         agent_builder=builder,
@@ -199,7 +199,7 @@ def test_chat_agent_rejects_legacy_unregistered_citation() -> None:
         return FakeAgent(tools, content="The notice period is thirty days [contract-7 p.4].")
 
     service = AgnoChatAgentService(
-        config=OpenAIChatConfig(api_key="openai-key", model_id="gpt-5-mini"),
+        config=OpenAIChatConfig(api_key="openai-key", model_id="gpt-5.6-luna"),
         retriever=FakeRetriever(),  # type: ignore[arg-type]
         reader=FakeReader(),
         agent_builder=builder,
@@ -219,7 +219,7 @@ def test_chat_agent_returns_only_sources_cited_by_the_answer() -> None:
         return FakeAgent(tools, content="The agreement renews for twelve months [S2].")
 
     service = AgnoChatAgentService(
-        config=OpenAIChatConfig(api_key="openai-key", model_id="gpt-5-mini"),
+        config=OpenAIChatConfig(api_key="openai-key", model_id="gpt-5.6-luna"),
         retriever=FakeRetriever(result_count=2),  # type: ignore[arg-type]
         reader=FakeReader(),
         agent_builder=builder,
@@ -245,7 +245,7 @@ def test_chat_agent_normalizes_stream_events() -> None:
         return agent
 
     service = AgnoChatAgentService(
-        config=OpenAIChatConfig(api_key="openai-key", model_id="gpt-5-mini"),
+        config=OpenAIChatConfig(api_key="openai-key", model_id="gpt-5.6-luna"),
         retriever=FakeRetriever(),  # type: ignore[arg-type]
         reader=FakeReader(),
         agent_builder=builder,
@@ -269,7 +269,7 @@ def test_chat_agent_normalizes_stream_events() -> None:
 
 def test_chat_agent_surfaces_tool_errors_before_tool_events() -> None:
     service = AgnoChatAgentService(
-        config=OpenAIChatConfig(api_key="openai-key", model_id="gpt-5-mini"),
+        config=OpenAIChatConfig(api_key="openai-key", model_id="gpt-5.6-luna"),
         retriever=FakeRetriever(),  # type: ignore[arg-type]
         reader=FakeReader(),
         agent_builder=lambda tools: ToolErrorAgent(tools),
@@ -291,7 +291,7 @@ def test_chat_agent_surfaces_tool_errors_before_tool_events() -> None:
 
 def test_chat_agent_ignores_nonterminal_completed_lifecycle_events() -> None:
     service = AgnoChatAgentService(
-        config=OpenAIChatConfig(api_key="openai-key", model_id="gpt-5-mini"),
+        config=OpenAIChatConfig(api_key="openai-key", model_id="gpt-5.6-luna"),
         retriever=FakeRetriever(),  # type: ignore[arg-type]
         reader=FakeReader(),
         agent_builder=lambda tools: LifecycleEventAgent(tools),

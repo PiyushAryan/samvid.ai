@@ -7,11 +7,11 @@ from contractmate.settings import Settings
 
 def test_review_service_selects_agno_openai_provider() -> None:
     service = ReviewService.from_settings(
-        Settings(model_provider="openai", model_id="gpt-5-mini", model_api_key="test-key")
+        Settings(model_provider="openai", model_id="gpt-5.6-luna", model_api_key="test-key")
     )
 
     assert isinstance(service.agent, AgnoContractReviewAgent)
-    assert service.agent.model_id == "gpt-5-mini"
+    assert service.agent.model_id == "gpt-5.6-luna"
     assert service.agent.api_key == "test-key"
 
 
