@@ -10,7 +10,7 @@ def test_settings_default_database_is_postgres() -> None:
     assert settings.database_url.startswith("postgresql://")
     assert settings.auto_initialize_database is True
     assert settings.model_provider == "openai"
-    assert settings.model_id == "gpt-5-mini"
+    assert settings.model_id == "gpt-5.6-luna"
 
 
 def test_postgres_url_helpers_support_psycopg_style_url() -> None:
