@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol, Sequence
 
 from contractmate.ai.chunking import DocumentChunk
-from contractmate.ai.gateway import EmbeddingVector, RerankResult
+from contractmate.ai.openrouter import EmbeddingVector, RerankResult
 
 
 @dataclass(frozen=True)

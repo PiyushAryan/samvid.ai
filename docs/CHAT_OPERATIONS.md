@@ -1,7 +1,7 @@
 # Chat Operations
 
 Samvid's contract chat uses PostgreSQL with `pgvector`, embedding and reranking
-through Vercel AI Gateway, and a dedicated RabbitMQ knowledge-index worker. The normal
+through OpenRouter, and a dedicated RabbitMQ knowledge-index worker. The normal
 `contract-worker` continues to review contracts. Do not replace it with the
 knowledge-index worker: both services must run.
 
@@ -18,8 +18,8 @@ RABBITMQ_URL=amqps://...
 AGENTIC_CHAT_ENABLED=false
 CHAT_MODEL_ID=gpt-5-mini
 
-AI_GATEWAY_API_KEY=...
-AI_GATEWAY_BASE_URL=https://ai-gateway.vercel.sh/v1
+OPENROUTER_API_KEY=...
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 EMBEDDING_MODEL_ID=openai/text-embedding-3-small
 EMBEDDING_DIMENSIONS=1024
 RERANK_MODEL_ID=cohere/rerank-v3.5
@@ -39,7 +39,7 @@ production chat index. Run the deployed schema migration before deployment, and
 verify the database contains the `vector` extension and the chat/knowledge-index
 tables.
 
-The API also needs `AI_GATEWAY_API_KEY` and the same model settings. The API
+The API also needs `OPENROUTER_API_KEY` and the same model settings. The API
 performs retrieval and response generation; the
 `knowledge-index-worker` performs chunk embedding and index maintenance.
 
@@ -92,7 +92,7 @@ If index jobs accumulate, inspect the RabbitMQ queues in CloudAMQP:
 - `contract.knowledge-index.dlq`: failures that exhausted the configured retry
   limit and require investigation or replay.
 
-Typical causes are an expired AI Gateway key, an embedding-dimension mismatch
+Typical causes are an expired OpenRouter key, an embedding-dimension mismatch
 between the configured value and the pgvector column, a missing `vector`
 extension, PostgreSQL connectivity failures, or upstream provider rate limiting.
 
@@ -129,6 +129,34 @@ the index to become `ready`, then verify `chunk_count > 0` and that matching
 rows exist in `knowledge_chunks`. Only after that verification should an
 operator remove stale messages for the same contract/version from
 `contract.knowledge-index.dlq`; leave unrelated DLQ messages intact.
+
+To queue a reviewed contract that has no index yet (without scanning every
+contract), use the targeted backfill command:
+
+```bash
+contractmate knowledge-backfill --contract-id <contract-id>
+```
+
+## Historical provenance correction
+
+Before enabling the new worker, correct the known historical Vercel Gateway
+rows that were recorded as Fireworks. This is a data correction, not a schema
+migration; it deliberately excludes genuine Qwen/Fireworks indexes.
+
+```sql
+UPDATE knowledge_indexes
+SET embedding_provider = 'vercel_ai_gateway',
+    reranker_provider = 'vercel_ai_gateway',
+    updated_at = CURRENT_TIMESTAMP
+WHERE embedding_provider = 'fireworks'
+  AND reranker_provider = 'fireworks'
+  AND embedding_model = 'openai/text-embedding-3-small'
+  AND reranker_model = 'cohere/rerank-v3.5';
+```
+
+Confirm the expected count (96 in the current production inventory) before
+committing the transaction. Do not relabel these historical vectors as
+OpenRouter: they were generated before this migration.
 
 Deploy the API, contract worker, knowledge-index worker, and delivery worker
 from images bearing the same immutable source revision so the outbox envelope

@@ -5,7 +5,7 @@ from typing import Any, Mapping, Sequence
 import pytest
 
 from contractmate.ai.chunking import DocumentChunk, PageAwareChunker, PageContent
-from contractmate.ai.gateway import EmbeddingVector, RerankResult
+from contractmate.ai.openrouter import EmbeddingVector, RerankResult
 from contractmate.ai.retrieval import HybridRetrievalService, RetrievalQuery, ScoredChunk
 
 
