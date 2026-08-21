@@ -42,10 +42,43 @@ vi.mock("./AuthProvider", () => ({
   })
 }));
 
+vi.mock("./components/contract-mention-composer", async () => {
+  const React = await import("react");
+  return {
+    ContractMentionComposer: (props: any) => {
+      const [value, setValue] = React.useState("");
+      React.useEffect(() => {
+        const insertSuggestion = (event: Event) => setValue((event as CustomEvent<string>).detail);
+        window.addEventListener("samvid:chat-suggestion", insertSuggestion);
+        const reset = () => setValue("");
+        window.addEventListener("samvid:new-chat", reset);
+        return () => {
+          window.removeEventListener("samvid:chat-suggestion", insertSuggestion);
+          window.removeEventListener("samvid:new-chat", reset);
+        };
+      }, []);
+      return React.createElement(
+        "form",
+        { onSubmit: (event: any) => { event.preventDefault(); void props.onSubmit({ content: value, contractId: null }); } },
+        React.createElement("textarea", {
+          "aria-label": "Ask about a contract",
+          disabled: props.disabled || props.isSending,
+          onChange: (event: any) => setValue(event.currentTarget.value),
+          value
+        }),
+        React.createElement("button", { disabled: !value || props.disabled || props.isSending, type: "submit" }, "Send message"),
+        props.error ? React.createElement("p", { role: "alert" }, props.error) : null
+      );
+    }
+  };
+});
+
 const chatSessions: ChatSessionSummary[] = [
   {
     id: "chat-1",
     title: "Vendor renewal terms",
+    contract_id: "contract-1",
+    contract_title: "Vendor agreement",
     message_count: 2,
     created_at: "2026-07-20T09:00:00Z",
     updated_at: "2026-07-20T09:05:00Z"
@@ -53,6 +86,8 @@ const chatSessions: ChatSessionSummary[] = [
   {
     id: "chat-2",
     title: "Indemnity exposure",
+    contract_id: null,
+    contract_title: null,
     message_count: 4,
     created_at: "2026-07-19T09:00:00Z",
     updated_at: "2026-07-19T09:05:00Z"
@@ -116,6 +151,8 @@ beforeEach(() => {
   vi.mocked(api.createChatSession).mockResolvedValue({
     id: "chat-new",
     title: "Termination notice",
+    contract_id: null,
+    contract_title: null,
     message_count: 0,
     created_at: "2026-07-20T10:00:00Z",
     updated_at: "2026-07-20T10:00:00Z",
@@ -137,6 +174,15 @@ function QueryProvider({ children }: { children: ReactNode }) {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
   });
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
+
+function enterChatText(textbox: HTMLElement, value: string) {
+  if (textbox instanceof HTMLTextAreaElement) {
+    fireEvent.change(textbox, { target: { value } });
+    return;
+  }
+  textbox.textContent = value;
+  fireEvent.input(textbox, { inputType: "insertText", data: value });
 }
 
 test("landing simulator switches between customer workflow previews", async () => {
@@ -309,7 +355,7 @@ test("workspace view slider switches between console and loads chat history", as
   expect(within(container).getByRole("heading", { name: /Piyush/ })).toBeInTheDocument();
   expect(within(container).getByText("find anything about your contracts")).toBeInTheDocument();
   fireEvent.click(within(container).getByRole("button", { name: "What changed in my latest contract?" }));
-  expect(within(container).getByRole("textbox", { name: "Ask about a contract" })).toHaveValue(
+  expect(within(container).getByRole("textbox", { name: "Ask about a contract" })).toHaveTextContent(
     "What changed in my latest contract?"
   );
   const chatHistory = await within(container).findByRole("region", { name: "Chat history" });
@@ -405,7 +451,7 @@ test("new chat streams an answer and exposes its sources", async () => {
   const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
 
   const textbox = within(container).getByRole("textbox");
-  fireEvent.change(textbox, { target: { value: "What is the termination notice?" } });
+  enterChatText(textbox, "What is the termination notice?");
   fireEvent.click(within(container).getByRole("button", { name: "Send message" }));
 
   expect(within(container).queryByRole("heading", { name: /Piyush/ })).not.toBeInTheDocument();
@@ -427,6 +473,8 @@ test("new chats show the first message in the sidebar while the response is stre
   vi.mocked(api.createChatSession).mockResolvedValueOnce({
     id: "chat-new",
     title: prompt,
+    contract_id: null,
+    contract_title: null,
     message_count: 0,
     created_at: "2026-07-20T10:00:00Z",
     updated_at: "2026-07-20T10:00:00Z",
@@ -446,7 +494,7 @@ test("new chats show the first message in the sidebar while the response is stre
   );
   await within(container).findByRole("button", { name: "Vendor renewal terms" });
 
-  fireEvent.change(within(container).getByRole("textbox"), { target: { value: prompt } });
+  enterChatText(within(container).getByRole("textbox"), prompt);
   fireEvent.click(within(container).getByRole("button", { name: "Send message" }));
 
   expect(await within(container).findByRole("button", { name: prompt })).toBeInTheDocument();
@@ -476,7 +524,7 @@ test("new chat titles preserve normalized input up to the backend limit", async 
 
   setTestUrl("/chats");
   const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
-  fireEvent.change(within(container).getByRole("textbox"), { target: { value: prompt } });
+  enterChatText(within(container).getByRole("textbox"), prompt);
   fireEvent.click(within(container).getByRole("button", { name: "Send message" }));
 
   await waitFor(() => expect(api.createChatSession).toHaveBeenCalledWith(expectedTitle));
@@ -488,7 +536,7 @@ test("a failed new chat returns to the welcome state and restores the draft", as
   setTestUrl("/chats");
   const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
   const textbox = within(container).getByRole("textbox");
-  fireEvent.change(textbox, { target: { value: "Find my renewal date" } });
+  enterChatText(textbox, "Find my renewal date");
   fireEvent.click(within(container).getByRole("button", { name: "Send message" }));
 
   expect(within(container).queryByRole("heading", { name: /Piyush/ })).not.toBeInTheDocument();

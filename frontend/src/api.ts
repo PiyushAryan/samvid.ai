@@ -92,15 +92,22 @@ export async function listChatSessions(): Promise<ChatSessionSummary[]> {
   return collectionItems(response);
 }
 
-export function createChatSession(title?: string) {
+export function createChatSession(title?: string, contractId?: string | null) {
   return request<ChatSession>("/api/chats", {
     method: "POST",
-    body: JSON.stringify({ title: title?.trim() || null })
+    body: JSON.stringify({ title: title?.trim() || null, contract_id: contractId || null })
   });
 }
 
 export function getChatSession(sessionId: string) {
   return request<ChatSession>(`/api/chats/${encodeURIComponent(sessionId)}`);
+}
+
+export function updateChatContractScope(sessionId: string, contractId: string | null) {
+  return request<ChatSession>(`/api/chats/${encodeURIComponent(sessionId)}/contract-scope`, {
+    method: "PATCH",
+    body: JSON.stringify({ contract_id: contractId })
+  });
 }
 
 export interface ChatStreamHandlers {

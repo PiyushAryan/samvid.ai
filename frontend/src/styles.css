@@ -2891,27 +2891,78 @@ textarea.field-control {
   width: 100%;
 }
 
-.ai-chat-composer {
+.contract-mention-composer-anchor {
+  position: relative;
   display: grid;
   width: min(720px, 100%);
-  gap: 6px;
   order: 2;
   margin: auto auto 0;
+  isolation: isolate;
+}
+
+.contract-mention-composer-anchor--picker-open {
+  z-index: 20;
+}
+
+.ai-chat-composer {
+  position: relative;
+  display: grid;
+  width: 100%;
+  gap: 6px;
   padding: 9px 10px;
   border: 0.5px solid var(--border-strong);
   border-radius: 14px;
   background: color-mix(in srgb, var(--surface) 96%, transparent);
-  box-shadow: 0 18px 48px rgba(23, 27, 26, 0.09), 0 2px 8px rgba(23, 27, 26, 0.05);
   backdrop-filter: blur(16px);
-  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+  transition: border-color 150ms ease, background-color 150ms ease;
 }
 
-.ai-chat-content:not(.ai-chat-content--conversation) .ai-chat-composer {
+.contract-mention-composer--new-chat-idle {
+  opacity: 0.65;
+  transition: opacity 180ms ease, border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.contract-mention-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.contract-mention-add {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.contract-mention-add:hover:not(:disabled),
+.contract-mention-add:focus-visible {
+  border-color: var(--focus-border);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+  outline: 0;
+}
+
+.contract-mention-add:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ai-chat-content:not(.ai-chat-content--conversation) .contract-mention-composer-anchor {
   order: 0;
   margin: 36px auto 0;
 }
 
-.ai-chat-content--conversation .ai-chat-composer {
+.ai-chat-content--conversation .contract-mention-composer-anchor {
   position: fixed;
   z-index: 10;
   right: 9px;
@@ -2924,7 +2975,7 @@ textarea.field-control {
 .ai-chat-composer [data-slot="input-group"] {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
+  align-items: center;
   gap: 6px;
   min-height: 0;
   border: 0;
@@ -2935,7 +2986,218 @@ textarea.field-control {
 
 .ai-chat-composer:focus-within {
   border-color: var(--focus-border);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent), 0 18px 48px rgba(23, 27, 26, 0.1);
+  outline: 2px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  outline-offset: 2px;
+}
+
+.contract-mention-editor-shell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 34px;
+}
+
+.contract-mention-editor {
+  flex: 1;
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px 4px;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.contract-mention-editor-paragraph {
+  margin: 0;
+}
+
+.contract-mention-placeholder {
+  position: absolute;
+  top: 10px;
+  left: 4px;
+  color: var(--text-muted);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.contract-mention-editor-shell--scoped .contract-mention-placeholder {
+  display: none;
+}
+
+.contract-mention-placeholder kbd {
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font: inherit;
+}
+
+.contract-mention-scope {
+  display: inline-flex;
+  max-width: min(48%, 330px);
+  align-items: center;
+  gap: 5px;
+  margin: 2px 0 0;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.contract-mention-scope span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contract-mention-scope button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.contract-mention-scope button {
+  padding: 0;
+}
+
+.contract-mention-footer {
+  align-self: center;
+  justify-content: flex-end;
+}
+
+.contract-picker-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  border-radius: 14px;
+  background: transparent;
+  pointer-events: none;
+}
+
+.contract-picker-drawer {
+  position: absolute;
+  z-index: 61;
+  inset-inline: -1px;
+  bottom: calc(100% + 10px);
+  max-height: min(58vh, 520px);
+  overflow: hidden;
+  border: 0.5px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--surface);
+  outline: none;
+}
+
+.contract-mention-composer-anchor--new-chat .contract-picker-drawer {
+  top: calc(100% + 10px);
+  bottom: auto;
+}
+
+.contract-picker-drawer[data-vaul-drawer],
+.contract-picker-overlay[data-vaul-overlay] {
+  animation: none !important;
+  transition: none !important;
+}
+
+.contract-picker-drawer[data-vaul-drawer] {
+  touch-action: auto;
+  transform: none !important;
+  will-change: auto;
+}
+
+.contract-picker-content {
+  display: grid;
+  width: 100%;
+  gap: 12px;
+  padding: 14px;
+}
+
+.contract-picker-intro {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.contract-picker-intro-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+
+.contract-picker-intro h2 {
+  margin: 0 0 2px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.contract-picker-intro p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+
+.contract-picker-search input {
+  width: 100%;
+  min-height: 38px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.contract-picker-list {
+  display: grid;
+  max-height: min(32vh, 270px);
+  overflow-y: auto;
+  scroll-behavior: auto;
+  overscroll-behavior: contain;
+}
+
+.contract-picker-list button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 1px 0;
+  padding: 6px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.contract-picker-list button:hover,
+.contract-picker-list button:focus-visible,
+.contract-picker-list button.contract-picker-option--highlighted {
+  background: var(--accent-soft);
+  outline: 0;
+}
+
+.contract-picker-list p {
+  margin: 8px 4px;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .ai-chat-composer.is-dragging,
@@ -2944,7 +3206,6 @@ textarea.field-control {
 .ai-chat-composer-dragging {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent-soft) 62%, var(--surface));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .ai-chat-textarea,
@@ -3317,15 +3578,6 @@ textarea.field-control {
   background-image: linear-gradient(var(--workspace-wash), var(--workspace-wash)), url("/blr-dark.avif");
 }
 
-.app-shell[data-theme="dark"] .ai-chat-composer {
-  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.34), 0 2px 8px rgba(0, 0, 0, 0.24);
-}
-
-.ai-chat-page[data-conversation="true"] .ai-chat-composer,
-.app-shell[data-theme="dark"] .ai-chat-page[data-conversation="true"] .ai-chat-composer {
-  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.34), 0 2px 8px rgba(0, 0, 0, 0.24);
-}
-
 .spin {
   animation: spin 800ms linear infinite;
 }
@@ -3501,7 +3753,7 @@ textarea.field-control {
     min-height: calc(100vh - 89px);
   }
 
-  .ai-chat-content--conversation .ai-chat-composer {
+  .ai-chat-content--conversation .contract-mention-composer-anchor {
     right: 8px;
     bottom: 24px;
     left: 8px;
@@ -3629,13 +3881,16 @@ textarea.field-control {
     padding: 36px 18px 108px;
   }
 
-  .ai-chat-composer {
+  .contract-mention-composer-anchor {
     bottom: 14px;
+  }
+
+  .ai-chat-composer {
     padding: 9px 10px;
     border-radius: 12px;
   }
 
-  .ai-chat-content--conversation .ai-chat-composer {
+  .ai-chat-content--conversation .contract-mention-composer-anchor {
     right: 8px;
     bottom: 22px;
     left: 8px;
