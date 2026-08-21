@@ -354,6 +354,28 @@ def create_api_router(settings: Settings):
         contract_id = session.contract_id
         if contract_id and _get_contract_row(connection, workspace_id=workspace, contract_id=contract_id) is None:
             raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Contract not found."})
+        knowledge = KnowledgeRepository(connection)
+        if contract_id:
+            index_state = knowledge.get_current_index_state(
+                workspace_id=workspace,
+                contract_id=contract_id,
+            )
+            if index_state is not None and index_state.status == "failed":
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "code": "contract_index_failed",
+                        "message": "This contract's search index failed. An administrator must retry indexing before chat can use it.",
+                    },
+                )
+            if index_state is None or index_state.status != "ready" or index_state.chunk_count < 1:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "contract_index_not_ready",
+                        "message": "This contract is still being prepared for chat. Try again after indexing completes.",
+                    },
+                )
 
         # Persist the user message before invoking external models so retries never
         # lose user input. The assistant reply is committed only after completion.
@@ -367,7 +389,7 @@ def create_api_router(settings: Settings):
         try:
             retriever = chat_retriever_from_settings(
                 settings=settings,
-                repository=KnowledgeRepository(connection),
+                repository=knowledge,
             )
             agent = AgnoChatAgentService(
                 config=OpenAIChatConfig(

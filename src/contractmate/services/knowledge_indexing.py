@@ -11,6 +11,11 @@ from contractmate.schemas.contracts import ContractReview
 from contractmate.schemas.documents import ParsedDocument
 
 
+DEFAULT_EMBEDDING_PROVIDER = "vercel_ai_gateway"
+DEFAULT_RERANKER_PROVIDER = "vercel_ai_gateway"
+DEFAULT_CHUNKING_VERSION = "page-aware-char-v1"
+
+
 @dataclass(frozen=True)
 class KnowledgeIndexSpec:
     workspace_id: str
@@ -68,9 +73,9 @@ class KnowledgeIndexingService:
     reranker_model: str
     chunker: PageAwareChunker = field(default_factory=PageAwareChunker)
     embedding_dimensions: int = 1_024
-    embedding_provider: str = "fireworks"
-    reranker_provider: str = "fireworks"
-    chunking_version: str = "page-aware-char-v1"
+    embedding_provider: str = DEFAULT_EMBEDDING_PROVIDER
+    reranker_provider: str = DEFAULT_RERANKER_PROVIDER
+    chunking_version: str = DEFAULT_CHUNKING_VERSION
     embedding_batch_size: int = 32
 
     def __post_init__(self) -> None:

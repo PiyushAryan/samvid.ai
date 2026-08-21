@@ -47,7 +47,6 @@ def _agent_instructions(*, contract_id: str | None) -> str:
 
 _BRACKET_PATTERN = re.compile(r"\[([^\[\]\n]{1,120})\]")
 _SOURCE_ID_PATTERN = re.compile(r"S[1-9]\d*")
-_LEGACY_CITATION_PATTERN = re.compile(r".+(?:\s+p\.\d+|\s+review)", re.IGNORECASE)
 
 
 class CitationIntegrityError(RuntimeError):
@@ -164,8 +163,7 @@ class _RunEvidenceRegistry:
                     cited.append(source)
                     seen.add(token)
                 continue
-            if token.startswith("S") or _LEGACY_CITATION_PATTERN.fullmatch(token):
-                raise CitationIntegrityError(f"The answer emitted an invalid evidence citation [{token}].")
+            raise CitationIntegrityError(f"The answer emitted an invalid evidence citation [{token}].")
         return tuple(cited)
 
 

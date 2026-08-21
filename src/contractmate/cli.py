@@ -51,9 +51,13 @@ def main() -> None:
         "knowledge-backfill",
         help="Queue current reviewed contract versions that do not have a ready knowledge index",
     )
-    subcommands.add_parser(
+    knowledge_retry_failed = subcommands.add_parser(
         "knowledge-retry-failed",
         help="Reset failed knowledge indexes and delivery intents for another attempt",
+    )
+    knowledge_retry_failed.add_argument(
+        "--contract-id",
+        help="Retry only failed indexing state for this contract; omit to retry all failed indexes",
     )
     subcommands.add_parser(
         "knowledge-status",
@@ -186,7 +190,7 @@ def main() -> None:
             if args.command == "knowledge-backfill":
                 print(json.dumps({"queued": outbox.backfill()}, indent=2))
             elif args.command == "knowledge-retry-failed":
-                print(json.dumps(outbox.retry_failed(), indent=2))
+                print(json.dumps(outbox.retry_failed(contract_id=args.contract_id), indent=2))
             else:
                 print(json.dumps(outbox.status(), indent=2))
         finally:

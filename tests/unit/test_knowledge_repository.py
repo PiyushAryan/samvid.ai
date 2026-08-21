@@ -78,6 +78,31 @@ def test_index_creation_is_idempotent_and_workspace_scoped(repository: Knowledge
         _create_index(repository, workspace_id="workspace-a", contract_id="contract-b", version_id="version-b")
 
 
+def test_current_index_state_requires_real_chunks_for_current_contract_version(
+    repository: KnowledgeRepository,
+) -> None:
+    index = _create_index(
+        repository,
+        workspace_id="workspace-a",
+        contract_id="contract-a",
+        version_id="version-a",
+    )
+    repository.mark_indexing(workspace_id="workspace-a", index_id=index.id)
+    state = repository.get_current_index_state(workspace_id="workspace-a", contract_id="contract-a")
+    assert state is not None
+    assert (state.status, state.chunk_count) == ("indexing", 0)
+
+    repository.replace_chunks(
+        workspace_id="workspace-a",
+        index_id=index.id,
+        chunks=[KnowledgeChunkInput(ordinal=0, content="Web Designer Trainee", embedding=_embedding(1.0))],
+    )
+    repository.mark_ready(workspace_id="workspace-a", index_id=index.id)
+    state = repository.get_current_index_state(workspace_id="workspace-a", contract_id="contract-a")
+    assert state is not None
+    assert (state.status, state.chunk_count) == ("ready", 1)
+
+
 def test_chunk_replacement_and_hybrid_search_preserve_workspace_isolation(
     repository: KnowledgeRepository,
 ) -> None:

@@ -160,6 +160,33 @@ class KnowledgeOutboxRepository:
                 (outbox_id,),
             )
 
+    def record_consumer_failure(self, *, outbox_id: str, error: str, terminal: bool) -> None:
+        with self._transaction():
+            self.connection.execute(
+                self._sql(
+                    """
+                    UPDATE knowledge_index_outbox
+                    SET status = CASE WHEN ? THEN 'failed' ELSE status END,
+                        last_error = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND status IN ('published', 'failed')
+                    """
+                ),
+                (terminal, error[:4000], outbox_id),
+            )
+
+    def clear_consumer_error(self, *, outbox_id: str) -> None:
+        with self._transaction():
+            self.connection.execute(
+                self._sql(
+                    """
+                    UPDATE knowledge_index_outbox
+                    SET last_error = NULL, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND status = 'published'
+                    """
+                ),
+                (outbox_id,),
+            )
+
     def reschedule(
         self,
         *,
@@ -220,29 +247,34 @@ class KnowledgeOutboxRepository:
             )
         return len(rows)
 
-    def retry_failed(self) -> dict[str, int]:
+    def retry_failed(self, *, contract_id: str | None = None) -> dict[str, int]:
+        index_filter = " AND contract_id = ?" if contract_id is not None else ""
+        parameters: tuple[str, ...] = (contract_id,) if contract_id is not None else ()
         failed_indexes = self.connection.execute(
             self._sql(
-                """
+                f"""
                 SELECT workspace_id, contract_id, contract_version_id
-                FROM knowledge_indexes WHERE status = 'failed'
+                FROM knowledge_indexes WHERE status = 'failed'{index_filter}
                 """
-            )
+            ),
+            parameters,
         ).fetchall()
         failed_outbox = self.connection.execute(
-            """
+            self._sql(f"""
             SELECT workspace_id, contract_id, contract_version_id
-            FROM knowledge_index_outbox WHERE status = 'failed'
-            """
+            FROM knowledge_index_outbox WHERE status = 'failed'{index_filter}
+            """),
+            parameters,
         ).fetchall()
         with self._transaction():
             self.connection.execute(
-                """
+                self._sql(f"""
                 UPDATE knowledge_indexes
                 SET status = 'pending', error_message = NULL, indexed_at = NULL,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE status = 'failed'
-                """
+                WHERE status = 'failed'{index_filter}
+                """),
+                parameters,
             )
         intents = {
             (str(row["workspace_id"]), str(row["contract_id"]), str(row["contract_version_id"]))

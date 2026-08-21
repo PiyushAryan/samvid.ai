@@ -112,7 +112,7 @@ def test_outbox_recovers_expired_lease_and_publishes_at_least_once(
     connection.commit()
 
     assert dispatcher.drain_once() == 1
-    assert publisher.calls == [("workspace-1", "contract-1", "version-1")]
+    assert publisher.calls == [("workspace-1", "contract-1", "version-1", outbox_id)]
     row = connection.execute(
         "SELECT status, attempts, published_at, last_error FROM knowledge_index_outbox WHERE id = ?",
         (outbox_id,),
@@ -174,37 +174,102 @@ def test_backfill_retry_and_status_operations(connection: sqlite3.Connection) ->
     assert repository.status()["outbox"] == {"pending": 1}
 
 
+def test_consumer_failure_is_terminal_only_on_final_attempt(connection: sqlite3.Connection) -> None:
+    _seed_contract(connection)
+    repository = KnowledgeOutboxRepository(connection)
+    outbox_id = repository.enqueue_intent(
+        workspace_id="workspace-1",
+        contract_id="contract-1",
+        contract_version_id="version-1",
+    )
+    connection.execute(
+        "UPDATE knowledge_index_outbox SET status = 'published' WHERE id = ?",
+        (outbox_id,),
+    )
+    connection.commit()
+
+    repository.record_consumer_failure(outbox_id=outbox_id, error="temporary", terminal=False)
+    row = connection.execute(
+        "SELECT status, last_error FROM knowledge_index_outbox WHERE id = ?", (outbox_id,)
+    ).fetchone()
+    assert dict(row) == {"status": "published", "last_error": "temporary"}
+
+    repository.record_consumer_failure(outbox_id=outbox_id, error="exhausted", terminal=True)
+    row = connection.execute(
+        "SELECT status, last_error FROM knowledge_index_outbox WHERE id = ?", (outbox_id,)
+    ).fetchone()
+    assert dict(row) == {"status": "failed", "last_error": "exhausted"}
+
+
+def test_targeted_retry_does_not_change_other_failed_contracts(connection: sqlite3.Connection) -> None:
+    _seed_contract(connection)
+    _seed_contract(connection, contract_id="contract-2", version_id="version-2")
+    repository = KnowledgeOutboxRepository(connection)
+    for contract_id, version_id in (("contract-1", "version-1"), ("contract-2", "version-2")):
+        outbox_id = repository.enqueue_intent(
+            workspace_id="workspace-1",
+            contract_id=contract_id,
+            contract_version_id=version_id,
+        )
+        connection.execute(
+            "UPDATE knowledge_index_outbox SET status = 'failed' WHERE id = ?",
+            (outbox_id,),
+        )
+    connection.commit()
+
+    assert repository.retry_failed(contract_id="contract-1") == {
+        "knowledge_indexes": 0,
+        "outbox_intents": 1,
+    }
+    states = {
+        row["contract_id"]: row["status"]
+        for row in connection.execute("SELECT contract_id, status FROM knowledge_index_outbox")
+    }
+    assert states == {"contract-1": "pending", "contract-2": "failed"}
+
+
 class _Publisher:
     def __init__(self, *, error: Exception | None = None) -> None:
         self.error = error
-        self.calls: list[tuple[str, str, str]] = []
+        self.calls: list[tuple[str, str, str, str | None]] = []
 
-    def enqueue(self, *, contract_id: str, contract_version_id: str, workspace_id: str):
-        self.calls.append((workspace_id, contract_id, contract_version_id))
+    def enqueue(
+        self,
+        *,
+        contract_id: str,
+        contract_version_id: str,
+        workspace_id: str,
+        outbox_id: str | None = None,
+    ):
+        self.calls.append((workspace_id, contract_id, contract_version_id, outbox_id))
         if self.error is not None:
             raise self.error
         return SimpleNamespace(job_id="knowledge-job-1")
 
 
-def _seed_contract(connection: sqlite3.Connection, *, status: str = "analysing") -> None:
+def _seed_contract(
+    connection: sqlite3.Connection,
+    *,
+    status: str = "analysing",
+    contract_id: str = "contract-1",
+    version_id: str = "version-1",
+) -> None:
     connection.execute(
         """
         INSERT INTO contracts(
             id, workspace_id, email_thread_id, title, status, current_version_id, created_by
-        ) VALUES ('contract-1', 'workspace-1', 'thread-1', 'Contract', ?, 'version-1', 'user@example.com')
+        ) VALUES (?, 'workspace-1', ?, 'Contract', ?, ?, 'user@example.com')
         """,
-        (status,),
+        (contract_id, f"thread-{contract_id}", status, version_id),
     )
     connection.execute(
         """
         INSERT INTO contract_versions(
             id, contract_id, version_number, original_filename, mime_type,
             size_bytes, sha256, s3_object_key, uploaded_by
-        ) VALUES (
-            'version-1', 'contract-1', 1, 'contract.pdf', 'application/pdf',
-            100, 'sha-1', 'object-1', 'user@example.com'
-        )
-        """
+        ) VALUES (?, ?, 1, 'contract.pdf', 'application/pdf', 100, ?, ?, 'user@example.com')
+        """,
+        (version_id, contract_id, f"sha-{version_id}", f"object-{version_id}"),
     )
     connection.commit()
 

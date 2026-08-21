@@ -71,6 +71,13 @@ class KnowledgeSearchHit:
     fused_score: float
 
 
+@dataclass(frozen=True, slots=True)
+class CurrentKnowledgeIndexState:
+    status: str
+    chunk_count: int
+    error_message: str | None
+
+
 class KnowledgeRepository:
     def __init__(self, connection: Any) -> None:
         self.connection = connection
@@ -151,26 +158,22 @@ class KnowledgeRepository:
             chunking_version=spec.chunking_version,
         )
         self.mark_indexing(workspace_id=spec.workspace_id, index_id=index.id)
-        try:
-            self.replace_chunks(
-                workspace_id=spec.workspace_id,
-                index_id=index.id,
-                chunks=[
-                    KnowledgeChunkInput(
-                        ordinal=chunk.ordinal,
-                        content=chunk.content,
-                        embedding=chunk.embedding,
-                        page_start=chunk.page_start,
-                        page_end=chunk.page_end,
-                        token_count=chunk.token_count,
-                        metadata=chunk.metadata,
-                    )
-                    for chunk in chunks
-                ],
-            )
-        except Exception as exc:
-            self.mark_failed(workspace_id=spec.workspace_id, index_id=index.id, error_message=str(exc))
-            raise
+        self.replace_chunks(
+            workspace_id=spec.workspace_id,
+            index_id=index.id,
+            chunks=[
+                KnowledgeChunkInput(
+                    ordinal=chunk.ordinal,
+                    content=chunk.content,
+                    embedding=chunk.embedding,
+                    page_start=chunk.page_start,
+                    page_end=chunk.page_end,
+                    token_count=chunk.token_count,
+                    metadata=chunk.metadata,
+                )
+                for chunk in chunks
+            ],
+        )
         self.mark_ready(workspace_id=spec.workspace_id, index_id=index.id)
 
     def get_index(self, *, workspace_id: str, index_id: str) -> KnowledgeIndex | None:
@@ -200,6 +203,44 @@ class KnowledgeRepository:
             (workspace_id, contract_version_id, embedding_model, chunking_version),
         ).fetchone()
         return self._index_from_row(row) if row else None
+
+    def get_current_index_state(
+        self,
+        *,
+        workspace_id: str,
+        contract_id: str,
+    ) -> CurrentKnowledgeIndexState | None:
+        row = self.connection.execute(
+            self._sql(
+                """
+                SELECT ki.status, ki.error_message,
+                       (SELECT COUNT(*) FROM knowledge_chunks kc
+                        WHERE kc.workspace_id = ki.workspace_id
+                          AND kc.knowledge_index_id = ki.id) AS actual_chunk_count
+                FROM contracts c
+                JOIN knowledge_indexes ki
+                  ON ki.workspace_id = c.workspace_id
+                 AND ki.contract_id = c.id
+                 AND ki.contract_version_id = c.current_version_id
+                WHERE c.workspace_id = ? AND c.id = ?
+                ORDER BY CASE
+                    WHEN ki.status = 'ready' THEN 0
+                    WHEN ki.status IN ('pending', 'indexing') THEN 1
+                    WHEN ki.status = 'failed' THEN 2
+                    ELSE 3
+                END, ki.updated_at DESC
+                LIMIT 1
+                """
+            ),
+            (workspace_id, contract_id),
+        ).fetchone()
+        if row is None:
+            return None
+        return CurrentKnowledgeIndexState(
+            status=str(row["status"]),
+            chunk_count=int(row["actual_chunk_count"]),
+            error_message=str(row["error_message"]) if row["error_message"] is not None else None,
+        )
 
     def mark_indexing(self, *, workspace_id: str, index_id: str) -> bool:
         return self._set_status(workspace_id=workspace_id, index_id=index_id, status="indexing")

@@ -140,6 +140,7 @@ class KnowledgeIndexJob:
     contract_version_id: str
     workspace_id: str
     attempt: int = 1
+    outbox_id: str | None = None
 
     def to_message(self) -> dict[str, object]:
         return {
@@ -148,6 +149,7 @@ class KnowledgeIndexJob:
             "contract_version_id": self.contract_version_id,
             "workspace_id": self.workspace_id,
             "attempt": self.attempt,
+            "outbox_id": self.outbox_id,
         }
 
     @classmethod
@@ -158,6 +160,7 @@ class KnowledgeIndexJob:
             contract_version_id=str(message["contract_version_id"]),
             workspace_id=str(message["workspace_id"]),
             attempt=int(message.get("attempt", 1)),
+            outbox_id=str(message["outbox_id"]) if message.get("outbox_id") is not None else None,
         )
 
 
@@ -634,12 +637,20 @@ class RabbitMQKnowledgeQueue:
     def check_ready(self) -> None:
         self.declare_topology()
 
-    def enqueue(self, *, contract_id: str, contract_version_id: str, workspace_id: str) -> KnowledgeIndexJob:
+    def enqueue(
+        self,
+        *,
+        contract_id: str,
+        contract_version_id: str,
+        workspace_id: str,
+        outbox_id: str | None = None,
+    ) -> KnowledgeIndexJob:
         job = KnowledgeIndexJob(
             job_id=str(uuid4()),
             contract_id=contract_id,
             contract_version_id=contract_version_id,
             workspace_id=workspace_id,
+            outbox_id=outbox_id,
         )
         self.publish(job, routing_key=self.topology.routing_key)
         return job

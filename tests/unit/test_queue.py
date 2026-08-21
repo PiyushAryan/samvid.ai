@@ -299,6 +299,21 @@ def test_knowledge_queue_consumes_with_manual_ack_and_prefetch_one(monkeypatch) 
     assert connection.closed
 
 
+def test_knowledge_index_job_round_trips_optional_outbox_id_and_accepts_legacy_messages() -> None:
+    job = KnowledgeIndexJob(
+        job_id="knowledge-1",
+        contract_id="contract-1",
+        contract_version_id="version-1",
+        workspace_id="workspace-1",
+        outbox_id="outbox-1",
+    )
+
+    assert KnowledgeIndexJob.from_message(job.to_message()) == job
+    legacy = job.to_message()
+    legacy.pop("outbox_id")
+    assert KnowledgeIndexJob.from_message(legacy).outbox_id is None
+
+
 class _FakeQueue:
     def __init__(self, topology: QueueTopology, *, publish_error: Exception | None = None) -> None:
         self.topology = topology

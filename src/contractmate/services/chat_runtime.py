@@ -39,39 +39,43 @@ class DatabaseHybridRetriever:
             documents=[hit.chunk.content for hit in hits],
             top_n=min(query.limit, len(hits)),
         )
+        if not reranked:
+            return tuple(_retrieved_chunk(hit) for hit in hits[: query.limit])
         results: list[RetrievedChunk] = []
         for rerank in reranked:
             hit = hits[rerank.index]
-            chunk = hit.chunk
-            page_number = chunk.page_start if chunk.page_start is not None else chunk.page_end
-            metadata = {
-                **dict(chunk.metadata),
-                "contract_version_id": chunk.contract_version_id,
-                "source_type": str(chunk.metadata.get("source") or "knowledge_chunk"),
-            }
-            results.append(
-                RetrievedChunk(
-                    chunk=DocumentChunk(
-                        id=chunk.id,
-                        document_id=str(chunk.metadata.get("document_id", chunk.contract_version_id)),
-                        contract_id=chunk.contract_id,
-                        page_number=page_number,
-                        text=chunk.content,
-                        start_char=0,
-                        end_char=len(chunk.content),
-                        metadata=metadata,
-                    ),
-                    rrf_score=hit.fused_score,
-                    rerank_score=rerank.relevance_score,
-                    sources=tuple(
-                        source
-                        for source, score in (("lexical", hit.lexical_score), ("vector", hit.semantic_score))
-                        if score > 0
-                    )
-                    or ("vector",),
-                )
-            )
+            results.append(_retrieved_chunk(hit, rerank_score=rerank.relevance_score))
         return tuple(results)
+
+
+def _retrieved_chunk(hit: Any, *, rerank_score: float | None = None) -> RetrievedChunk:
+    chunk = hit.chunk
+    page_number = chunk.page_start if chunk.page_start is not None else chunk.page_end
+    metadata = {
+        **dict(chunk.metadata),
+        "contract_version_id": chunk.contract_version_id,
+        "source_type": str(chunk.metadata.get("source") or "knowledge_chunk"),
+    }
+    return RetrievedChunk(
+        chunk=DocumentChunk(
+            id=chunk.id,
+            document_id=str(chunk.metadata.get("document_id", chunk.contract_version_id)),
+            contract_id=chunk.contract_id,
+            page_number=page_number,
+            text=chunk.content,
+            start_char=0,
+            end_char=len(chunk.content),
+            metadata=metadata,
+        ),
+        rrf_score=hit.fused_score,
+        rerank_score=rerank_score,
+        sources=tuple(
+            source
+            for source, score in (("lexical", hit.lexical_score), ("vector", hit.semantic_score))
+            if score > 0
+        )
+        or ("vector",),
+    )
 
 
 @dataclass

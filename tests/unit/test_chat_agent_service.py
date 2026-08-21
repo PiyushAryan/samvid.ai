@@ -262,6 +262,23 @@ def test_chat_agent_rejects_legacy_unregistered_citation() -> None:
         )
 
 
+def test_chat_agent_rejects_fake_no_source_citation() -> None:
+    service = AgnoChatAgentService(
+        config=OpenAIChatConfig(api_key="openai-key", model_id="gpt-5.6-luna"),
+        retriever=FakeRetriever(),  # type: ignore[arg-type]
+        reader=FakeReader(),
+        agent_builder=lambda tools: FakeAgent(tools, content="No evidence was found [no source returned]."),
+    )
+
+    with pytest.raises(CitationIntegrityError, match="invalid evidence citation"):
+        service.answer(
+            workspace_id="workspace-a",
+            user_id="user-a",
+            session_id="chat-a",
+            message="Is there evidence?",
+        )
+
+
 def test_chat_agent_returns_only_sources_cited_by_the_answer() -> None:
     def builder(tools: Sequence[Callable[..., Any]]) -> FakeAgent:
         return FakeAgent(tools, content="The agreement renews for twelve months [S2].")

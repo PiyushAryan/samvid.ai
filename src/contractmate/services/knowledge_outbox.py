@@ -12,7 +12,14 @@ logger = logging.getLogger(__name__)
 
 
 class KnowledgeJobPublisher(Protocol):
-    def enqueue(self, *, contract_id: str, contract_version_id: str, workspace_id: str): ...
+    def enqueue(
+        self,
+        *,
+        contract_id: str,
+        contract_version_id: str,
+        workspace_id: str,
+        outbox_id: str | None = None,
+    ): ...
 
 
 class KnowledgeOutboxDispatcher:
@@ -52,6 +59,7 @@ class KnowledgeOutboxDispatcher:
                     contract_id=item.contract_id,
                     contract_version_id=item.contract_version_id,
                     workspace_id=item.workspace_id,
+                    outbox_id=item.id,
                 )
             except Exception as exc:
                 logger.exception(
