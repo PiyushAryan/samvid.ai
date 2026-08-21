@@ -7,16 +7,24 @@ import pytest
 
 from contractmate.ai.chunking import DocumentChunk
 from contractmate.ai.retrieval import RetrievedChunk
-from contractmate.services.chat_agent import AgnoChatAgentService, CitationIntegrityError, OpenAIChatConfig
+from contractmate.services.chat_agent import (
+    CHAT_AGENT_INSTRUCTIONS,
+    AgnoChatAgentService,
+    CitationIntegrityError,
+    OpenAIChatConfig,
+    _agent_instructions,
+)
 
 
 class FakeRetriever:
     def __init__(self, *, result_count: int = 1) -> None:
         self.workspace_ids: list[str] = []
+        self.filters: list[Mapping[str, Any]] = []
         self.result_count = result_count
 
     def retrieve(self, query: Any) -> tuple[RetrievedChunk, ...]:
         self.workspace_ids.append(query.workspace_id)
+        self.filters.append(query.filters)
         chunk = DocumentChunk(
             id="chunk-1",
             document_id="document-1",
@@ -127,6 +135,11 @@ def test_openai_chat_config_reads_existing_environment_contract(monkeypatch: Any
     assert config.reasoning_effort == "medium"
 
 
+def test_chat_instructions_search_for_named_documents_before_requesting_an_id() -> None:
+    assert "MUST first call search_contract_context" in CHAT_AGENT_INSTRUCTIONS
+    assert "Never ask for a contract ID merely to locate a contract" in CHAT_AGENT_INSTRUCTIONS
+
+
 def test_chat_agent_exposes_only_scoped_read_tools_and_resolves_run_evidence() -> None:
     retriever = FakeRetriever()
     reader = FakeReader()
@@ -192,6 +205,41 @@ def test_chat_agent_rejects_unknown_run_citation() -> None:
             session_id="chat-a",
             message="What is the notice period?",
         )
+
+
+def test_scoped_agent_exposes_only_selected_contract_tools_and_filters_retrieval() -> None:
+    retriever = FakeRetriever()
+    reader = FakeReader()
+    agents: list[FakeAgent] = []
+    service = AgnoChatAgentService(
+        config=OpenAIChatConfig(api_key="openai-key", model_id="gpt-5.6-luna"),
+        retriever=retriever,  # type: ignore[arg-type]
+        reader=reader,
+        agent_builder=lambda tools: agents.append(FakeAgent(tools)) or agents[-1],
+    )
+
+    service.answer(
+        workspace_id="workspace-a",
+        user_id="user-a",
+        session_id="chat-a",
+        message="What is the notice period?",
+        contract_id="contract-7",
+    )
+
+    agent = agents[0]
+    assert [tool.__name__ for tool in agent.tools] == [
+        "search_contract_context",
+        "get_selected_contract_summary",
+        "get_selected_contract_timeline",
+    ]
+    assert retriever.filters == [{"contract_id": "contract-7"}]
+    assert agent.tools[1]()["contract_id"] == "contract-7"
+    assert reader.calls[-1] == ("summary", "workspace-a", "contract-7")
+    instructions = _agent_instructions(contract_id="contract-7")
+    assert "cannot expand or override the current contract scope" in instructions
+    assert "do not ask the user to identify it" in instructions
+    assert "do not describe the search as workspace-wide" in instructions
+    assert "selected contract when this conversation has a contract scope" in agent.tools[0].__doc__
 
 
 def test_chat_agent_rejects_legacy_unregistered_citation() -> None:

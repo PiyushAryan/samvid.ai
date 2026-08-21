@@ -130,6 +130,8 @@ export interface ChatMessage {
 export interface ChatSessionSummary {
   id: string;
   title: string;
+  contract_id: string | null;
+  contract_title: string | null;
   message_count: number;
   created_at: string;
   updated_at: string;

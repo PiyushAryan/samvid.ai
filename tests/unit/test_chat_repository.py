@@ -90,3 +90,30 @@ def test_session_requires_account_and_contract_in_same_workspace(repository: Cha
             account_id="account-a",
             contract_id="contract-b",
         )
+
+
+def test_session_contract_scope_can_change_or_clear(repository: ChatRepository) -> None:
+    session = repository.create_session(workspace_id="workspace-a", account_id="account-a")
+
+    scoped = repository.update_contract_scope(
+        workspace_id="workspace-a",
+        session_id=session.id,
+        contract_id="contract-a",
+    )
+    assert scoped is not None
+    assert scoped.contract_id == "contract-a"
+
+    cleared = repository.update_contract_scope(
+        workspace_id="workspace-a",
+        session_id=session.id,
+        contract_id=None,
+    )
+    assert cleared is not None
+    assert cleared.contract_id is None
+
+    with pytest.raises(KeyError):
+        repository.update_contract_scope(
+            workspace_id="workspace-a",
+            session_id=session.id,
+            contract_id="contract-b",
+        )

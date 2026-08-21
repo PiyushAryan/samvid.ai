@@ -206,6 +206,42 @@ def test_hybrid_search_excludes_ready_chunks_from_historical_contract_versions(
     assert all("Historical" not in hit.chunk.content for hit in hits)
 
 
+def test_postgres_hybrid_search_broadens_natural_language_keyword_queries() -> None:
+    executed: list[tuple[str, tuple[object, ...]]] = []
+
+    class FakeResult:
+        def fetchall(self) -> list[object]:
+            return []
+
+    class FakePostgresConnection:
+        def execute(self, statement: str, params: tuple[object, ...]) -> FakeResult:
+            executed.append((statement, params))
+            return FakeResult()
+
+    FakePostgresConnection.__module__ = "psycopg.fake"
+    repository = KnowledgeRepository(FakePostgresConnection())
+
+    hits = repository.hybrid_search(
+        workspace_id="workspace-a",
+        query_text="Web Designer Trainee in the Web Development Department",
+        query_embedding=_embedding(1.0),
+    )
+
+    assert hits == []
+    statement, params = executed[0]
+    assert "websearch_to_tsquery('english', %s) AS strict_text_query" in statement
+    assert "tsvector_to_array(to_tsvector('english', %s))" in statement
+    assert "tsvector_to_array(to_tsvector('simple', %s))" in statement
+    assert "kc.search_vector @@ q.broad_text_query" in statement
+    assert "kc.search_vector @@ q.strict_text_query THEN 1.0" in statement
+    assert "ts_rank_cd(to_tsvector('simple', kc.content), q.exact_text_query)" in statement
+    assert params[1:4] == (
+        "Web Designer Trainee in the Web Development Department",
+        "Web Designer Trainee in the Web Development Department",
+        "Web Designer Trainee in the Web Development Department",
+    )
+
+
 def test_invalid_replacement_does_not_delete_existing_chunks(repository: KnowledgeRepository) -> None:
     index = _create_index(
         repository,

@@ -354,7 +354,16 @@ class KnowledgeRepository:
         contract_params: tuple[Any, ...] = (contract_id,) if contract_id else ()
         sql = f"""
             WITH query_values AS MATERIALIZED (
-                SELECT CAST(? AS vector) AS embedding, websearch_to_tsquery('english', ?) AS text_query
+                SELECT CAST(? AS vector) AS embedding,
+                       websearch_to_tsquery('english', ?) AS strict_text_query,
+                       array_to_string(
+                           tsvector_to_array(to_tsvector('english', ?)),
+                           ' | '
+                       )::tsquery AS broad_text_query,
+                       array_to_string(
+                           tsvector_to_array(to_tsvector('simple', ?)),
+                           ' | '
+                       )::tsquery AS exact_text_query
             ),
             semantic AS MATERIALIZED (
                 SELECT kc.id,
@@ -374,8 +383,18 @@ class KnowledgeRepository:
             ),
             lexical AS MATERIALIZED (
                 SELECT kc.id,
-                       ROW_NUMBER() OVER (ORDER BY ts_rank_cd(kc.search_vector, q.text_query) DESC) AS lexical_rank,
-                       ts_rank_cd(kc.search_vector, q.text_query) AS lexical_score
+                       ROW_NUMBER() OVER (
+                           ORDER BY (
+                               ts_rank_cd(kc.search_vector, q.broad_text_query)
+                               + CASE WHEN kc.search_vector @@ q.strict_text_query THEN 1.0 ELSE 0.0 END
+                               + ts_rank_cd(to_tsvector('simple', kc.content), q.exact_text_query)
+                           ) DESC
+                       ) AS lexical_rank,
+                       (
+                           ts_rank_cd(kc.search_vector, q.broad_text_query)
+                           + CASE WHEN kc.search_vector @@ q.strict_text_query THEN 1.0 ELSE 0.0 END
+                           + ts_rank_cd(to_tsvector('simple', kc.content), q.exact_text_query)
+                       ) AS lexical_score
                 FROM knowledge_chunks kc
                 JOIN knowledge_indexes ki
                   ON ki.id = kc.knowledge_index_id AND ki.workspace_id = kc.workspace_id
@@ -385,7 +404,7 @@ class KnowledgeRepository:
                  AND current_contract.current_version_id = kc.contract_version_id
                 CROSS JOIN query_values q
                 WHERE kc.workspace_id = ? AND ki.status = 'ready'
-                  AND kc.search_vector @@ q.text_query {contract_filter}
+                  AND kc.search_vector @@ q.broad_text_query {contract_filter}
                 ORDER BY lexical_score DESC
                 LIMIT ?
             ),
@@ -410,6 +429,8 @@ class KnowledgeRepository:
         """
         params = (
             self._serialize_embedding(query_embedding),
+            query_text,
+            query_text,
             query_text,
             workspace_id,
             *contract_params,

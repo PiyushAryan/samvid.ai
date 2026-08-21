@@ -219,6 +219,30 @@ class ChatRepository:
             )
         return result.rowcount == 1
 
+    def update_contract_scope(
+        self,
+        *,
+        workspace_id: str,
+        session_id: str,
+        contract_id: str | None,
+    ) -> ChatSession | None:
+        if contract_id is not None:
+            self._require_contract(workspace_id=workspace_id, contract_id=contract_id)
+        with self._transaction():
+            result = self.connection.execute(
+                self._sql(
+                    """
+                    UPDATE chat_sessions
+                    SET contract_id = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE workspace_id = ? AND id = ?
+                    """
+                ),
+                (contract_id, workspace_id, session_id),
+            )
+        if result.rowcount != 1:
+            return None
+        return self.get_session(workspace_id=workspace_id, session_id=session_id)
+
     def _require_account_workspace(self, *, workspace_id: str, account_id: str) -> None:
         row = self.connection.execute(
             self._sql(

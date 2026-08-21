@@ -20,7 +20,7 @@ from contractmate.db.repositories.signing import SigningConflict, SigningError, 
 from contractmate.db.repositories.user_accounts import UserAccountRepository
 from contractmate.db.session import connect
 from contractmate.schemas.contracts import BlobUploadAuthorization, ContractBlobUpload, ContractReview
-from contractmate.schemas.chat import ChatMessageCreate, ChatSessionCreate
+from contractmate.schemas.chat import ChatContractScopeUpdate, ChatMessageCreate, ChatSessionCreate
 from contractmate.schemas.signing import SignerCreate, SignerStatusEventCreate, SigningRequestCreate, SigningRequestStatus
 from contractmate.services.audit_service import AuditService
 from contractmate.services.contract_processing import ContractProcessingService
@@ -166,9 +166,16 @@ def create_api_router(settings: Settings):
         include_messages: bool = False,
     ) -> dict[str, Any]:
         messages = repository.list_messages(workspace_id=session.workspace_id, session_id=session.id)
+        contract = (
+            _get_contract_row(connection=repository.connection, workspace_id=session.workspace_id, contract_id=session.contract_id)
+            if session.contract_id
+            else None
+        )
         response: dict[str, Any] = {
             "id": session.id,
             "title": session.title or "New conversation",
+            "contract_id": session.contract_id,
+            "contract_title": str(contract["title"] or contract["original_filename"] or "Untitled contract") if contract else None,
             "message_count": len(messages),
             "created_at": str(session.created_at),
             "updated_at": str(session.updated_at),
@@ -299,6 +306,32 @@ def create_api_router(settings: Settings):
             raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Conversation not found."})
         return chat_session_response(session, repository=repository, include_messages=True)
 
+    @router.patch("/chats/{session_id}/contract-scope")
+    def update_chat_contract_scope(
+        session_id: str,
+        payload: ChatContractScopeUpdate,
+        response: Response,
+        access: VerifiedAccountResolution = Depends(account_access),
+        workspace: str = Depends(personal_workspace),
+        connection: Any = Depends(db_connection),
+    ) -> dict[str, Any]:
+        require_admission(operation="mutation", account_id=access.account_id, response=response)
+        repository = ChatRepository(connection)
+        session = repository.get_session(workspace_id=workspace, session_id=session_id)
+        if session is None or session.account_id != access.account_id:
+            raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Conversation not found."})
+        try:
+            updated = repository.update_contract_scope(
+                workspace_id=workspace,
+                session_id=session_id,
+                contract_id=payload.contract_id,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Contract not found."}) from exc
+        if updated is None:
+            raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Conversation not found."})
+        return chat_session_response(updated, repository=repository)
+
     @router.post("/chats/{session_id}/messages")
     def send_chat_message(
         session_id: str,
@@ -318,10 +351,19 @@ def create_api_router(settings: Settings):
         session = chats.get_session(workspace_id=workspace, session_id=session_id)
         if session is None or session.account_id != access.account_id:
             raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Conversation not found."})
+        contract_id = session.contract_id
+        if contract_id and _get_contract_row(connection, workspace_id=workspace, contract_id=contract_id) is None:
+            raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Contract not found."})
 
         # Persist the user message before invoking external models so retries never
         # lose user input. The assistant reply is committed only after completion.
-        chats.append_message(workspace_id=workspace, session_id=session_id, role="user", content=content)
+        chats.append_message(
+            workspace_id=workspace,
+            session_id=session_id,
+            role="user",
+            content=content,
+            metadata={"contract_id": contract_id},
+        )
         try:
             retriever = chat_retriever_from_settings(
                 settings=settings,
@@ -360,6 +402,7 @@ def create_api_router(settings: Settings):
                     session_id=session_id,
                     message=content,
                     history=history,
+                    contract_id=contract_id,
                 ):
                     if event.type == "tool":
                         yield _sse_event(
@@ -385,6 +428,7 @@ def create_api_router(settings: Settings):
                             model_provider="openai",
                             model_name=settings.chat_model_id,
                             metadata={
+                                "contract_id": contract_id,
                                 "citation_labels": [source.source_id for source in event.sources],
                                 "retrieval_count": len(sources),
                             },

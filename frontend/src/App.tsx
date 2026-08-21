@@ -35,6 +35,7 @@ import { motion, useReducedMotion } from "motion/react";
 import {
   addSigner,
   ApiError,
+  ChatStreamHandlers,
   appendSignerEvent,
   createChatSession,
   createSigningRequest,
@@ -46,6 +47,7 @@ import {
   listContracts,
   listSigningRequests,
   streamChatMessage,
+  updateChatContractScope,
   uploadContract
 } from "./api";
 import { useAuth } from "./AuthProvider";
@@ -74,11 +76,8 @@ import {
 } from "@/components/ai-elements/inline-citation";
 import { Message, MessageContent } from "@/components/ai-elements/message";
 import {
-  PromptInput,
-  PromptInputFooter,
-  PromptInputSubmit,
-  PromptInputTextarea
-} from "@/components/ai-elements/prompt-input";
+  ContractMentionComposer
+} from "@/components/contract-mention-composer";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 
@@ -627,12 +626,12 @@ export function ChatsPage() {
   const activeChatId = searchParams.get("chat");
   const accountName = user?.name?.trim().split(/\s+/)[0] || "there";
   const welcomeGreeting = getWelcomeGreeting(accountName);
-  const [draft, setDraft] = useState("");
   const [liveConversation, setLiveConversation] = useState<{ sessionId: string; messages: ChatMessage[] } | null>(null);
   const [pendingMessages, setPendingMessages] = useState<ChatMessage[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [streamError, setStreamError] = useState("");
   const [announcement, setAnnouncement] = useState("");
+  const [draftScope, setDraftScope] = useState<ContractListItem | null>(null);
   const streamControllerRef = useRef<AbortController | null>(null);
   const sessionQuery = useQuery({
     queryKey: ["chat-session", activeChatId],
@@ -645,16 +644,23 @@ export function ChatsPage() {
       ? liveConversation.messages
       : sessionQuery.data?.messages || [];
   const isConversationView = Boolean(activeChatId || liveConversation || pendingMessages.length || isSending);
+  const activeScope = activeChatId
+    ? sessionQuery.data?.contract_id
+      ? { id: sessionQuery.data.contract_id, title: sessionQuery.data.contract_title || "Untitled contract" }
+      : null
+    : draftScope
+      ? { id: draftScope.id, title: draftScope.title }
+      : null;
 
   const resetForNewChat = useCallback(() => {
     streamControllerRef.current?.abort();
     streamControllerRef.current = null;
-    setDraft("");
     setLiveConversation(null);
     setPendingMessages([]);
     setStreamError("");
     setAnnouncement("");
     setIsSending(false);
+    setDraftScope(null);
   }, []);
 
   useEffect(() => {
@@ -678,14 +684,32 @@ export function ChatsPage() {
 
   useEffect(() => () => streamControllerRef.current?.abort(), []);
 
-  const submitMessage = async (submittedContent?: string) => {
-    const content = (submittedContent ?? draft).trim();
-    if (!content || isSending) return;
+  const changeContractScope = async (contract: ContractListItem | null): Promise<boolean> => {
+    if (!activeChatId) {
+      setDraftScope(contract);
+      return true;
+    }
+    try {
+      const session = await updateChatContractScope(activeChatId, contract?.id ?? null);
+      queryClient.setQueryData(["chat-session", activeChatId], (current: typeof session | undefined) => ({
+        ...(current || session),
+        ...session
+      }));
+      queryClient.setQueryData<ChatSessionSummary[]>(["chat-sessions"], (current = []) => current.map((item) => (
+        item.id === session.id ? { ...item, ...session } : item
+      )));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const submitMessage = async (content: string): Promise<boolean> => {
+    if (!content || isSending) return false;
 
     setIsSending(true);
     setStreamError("");
     setAnnouncement("Searching your contracts");
-    setDraft("");
     let sessionId = activeChatId;
     const now = new Date().toISOString();
     const userMessage: ChatMessage = {
@@ -709,8 +733,11 @@ export function ChatsPage() {
 
     try {
       if (!sessionId) {
-        const session = await createChatSession(chatTitle(content));
+        const session = draftScope
+          ? await createChatSession(chatTitle(content), draftScope.id)
+          : await createChatSession(chatTitle(content));
         sessionId = session.id;
+        setDraftScope(null);
         queryClient.setQueryData(["chat-session", session.id], session);
         queryClient.setQueryData<ChatSessionSummary[]>(["chat-sessions"], (current = []) => [session, ...current]);
         navigate(`/chats?chat=${encodeURIComponent(session.id)}`, { replace: true });
@@ -721,7 +748,7 @@ export function ChatsPage() {
 
       const controller = new AbortController();
       streamControllerRef.current = controller;
-      await streamChatMessage(sessionId, content, {
+      const streamHandlers: ChatStreamHandlers = {
         onStatus: (status) => {
           setAnnouncement(status);
         },
@@ -736,21 +763,23 @@ export function ChatsPage() {
         onMessage: (message) => {
           setLiveConversation((current) => updateChatMessage(current, sessionId!, assistantId, () => message));
         }
-      }, controller.signal);
+      };
+      await streamChatMessage(sessionId, content, streamHandlers, controller.signal);
       setAnnouncement("Answer ready");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["chat-sessions"] }),
         queryClient.invalidateQueries({ queryKey: ["chat-session", sessionId] })
       ]);
+      return true;
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
+      if (error instanceof DOMException && error.name === "AbortError") return false;
       setStreamError(chatErrorMessage(error));
-      setDraft(content);
       setPendingMessages([]);
       setLiveConversation((current) => current?.sessionId === sessionId
         ? { ...current, messages: current.messages.filter((message) => !message.id.startsWith("pending-assistant-")) }
         : current);
       setAnnouncement("Message was not completed");
+      return false;
     } finally {
       streamControllerRef.current = null;
       setIsSending(false);
@@ -816,35 +845,16 @@ export function ChatsPage() {
           </div>
         ) : null}
 
-        <PromptInput
-          className="ai-chat-composer"
-          onSubmit={({ text }) => submitMessage(text)}
-        >
-          <label className="ai-chat-label" htmlFor="ai-chat-prompt">
-            Ask about a contract
-          </label>
-          <PromptInputTextarea
-            id="ai-chat-prompt"
-            className="ai-chat-textarea"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder="Ask a question about your contracts..."
-            rows={1}
-            disabled={isSending || Boolean(activeChatId && sessionQuery.isPending)}
-          />
-
-          <PromptInputFooter className="ai-chat-composer-actions">
-            <PromptInputSubmit
-              aria-label="Send message"
-              className="ai-chat-send-button"
-              disabled={!draft.trim() || isSending || Boolean(activeChatId && sessionQuery.isPending)}
-              onClick={() => void submitMessage()}
-              status={isSending ? "streaming" : "ready"}
-              type="button"
-            />
-          </PromptInputFooter>
-          {streamError && <p className="ai-chat-stream-error" role="alert">{streamError}</p>}
-        </PromptInput>
+        <ContractMentionComposer
+          chatId={activeChatId}
+          disabled={Boolean(activeChatId && sessionQuery.isPending)}
+          error={streamError}
+          isNewChat={!isConversationView}
+          isSending={isSending}
+          onScopeChange={changeContractScope}
+          scope={activeScope}
+          onSubmit={({ content }) => submitMessage(content)}
+        />
 
         {!isConversationView && (
           <div className="ai-chat-suggestions" aria-label="Suggested questions">
@@ -854,7 +864,7 @@ export function ChatsPage() {
                 "What changed in my latest contract?",
                 "Which contracts renew in the next 90 days?",
                 "Summarize the risks in this agreement."
-              ].map((suggestion) => <Suggestion key={suggestion} onClick={setDraft} suggestion={suggestion} />)}
+              ].map((suggestion) => <Suggestion key={suggestion} onClick={() => window.dispatchEvent(new CustomEvent("samvid:chat-suggestion", { detail: suggestion }))} suggestion={suggestion} />)}
             </Suggestions>
           </div>
         )}
@@ -1531,6 +1541,7 @@ function SigningTab({ contract }: { contract: ContractDetail }) {
         <section className={panelClass}>
           <PanelTitle>Create signing request</PanelTitle>
           <SignerEditor signers={draftSigners} onChange={setDraftSigners} />
+          
           <button className={primaryButton} onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
             {createMutation.isPending ? <Loader2 className="spin" size={16} /> : <Send size={16} />} Create request
           </button>
