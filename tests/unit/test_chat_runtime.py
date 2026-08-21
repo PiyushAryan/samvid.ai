@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from contractmate.ai.gateway import EmbeddingVector
+from contractmate.ai.openrouter import EmbeddingVector
 from contractmate.ai.retrieval import RetrievalQuery
 from contractmate.services.chat_runtime import DatabaseHybridRetriever
 

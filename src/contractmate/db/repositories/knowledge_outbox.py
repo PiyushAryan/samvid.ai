@@ -217,10 +217,11 @@ class KnowledgeOutboxRepository:
                 ),
             )
 
-    def backfill(self) -> int:
+    def backfill(self, *, contract_id: str | None = None) -> int:
+        contract_filter = " AND c.id = ?" if contract_id is not None else ""
         rows = self.connection.execute(
             self._sql(
-                """
+                f"""
                 SELECT c.workspace_id, c.id AS contract_id, c.current_version_id AS contract_version_id
                 FROM contracts c
                 JOIN contract_versions cv
@@ -234,9 +235,11 @@ class KnowledgeOutboxRepository:
                         AND ki.contract_version_id = cv.id
                         AND ki.status = 'ready'
                   )
+                {contract_filter}
                 ORDER BY c.updated_at, c.id
                 """
-            )
+            ),
+            (contract_id,) if contract_id is not None else (),
         ).fetchall()
         for row in rows:
             self.enqueue_intent(

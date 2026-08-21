@@ -132,7 +132,7 @@ def test_worker_acknowledges_index_job_for_deleted_contract(monkeypatch) -> None
         settings=Settings(
             database_url="sqlite:///:memory:",
             contract_processing_mode="rabbitmq",
-            ai_gateway_api_key="test-key",
+            openrouter_api_key="openrouter-key",
         ),
         queue=None,  # type: ignore[arg-type]
     )
@@ -176,7 +176,7 @@ def test_worker_persists_sanitized_index_and_outbox_failure(
         settings=Settings(
             database_url="sqlite:///:memory:",
             contract_processing_mode="rabbitmq",
-            ai_gateway_api_key="top-secret",
+            openrouter_api_key="top-secret",
             rabbitmq_max_attempts=3,
         ),
         queue=None,  # type: ignore[arg-type]
@@ -184,8 +184,12 @@ def test_worker_persists_sanitized_index_and_outbox_failure(
 
     worker._process_delivery(delivery)
 
-    index = connection.execute("SELECT status, error_message FROM knowledge_indexes").fetchone()
+    index = connection.execute(
+        "SELECT status, error_message, embedding_provider, reranker_provider FROM knowledge_indexes"
+    ).fetchone()
     assert index["status"] == "failed"
+    assert index["embedding_provider"] == "openrouter"
+    assert index["reranker_provider"] == "openrouter"
     assert "top-secret" not in index["error_message"]
     assert "[redacted]" in index["error_message"]
     outbox = connection.execute(

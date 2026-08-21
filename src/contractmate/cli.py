@@ -47,9 +47,13 @@ def main() -> None:
     slack_worker = subcommands.add_parser("slack-worker", help="Process queued Slack contract intake events")
     slack_worker.add_argument("--poll-interval", type=float, default=1.0, help="Seconds to wait when Slack intake is empty")
 
-    subcommands.add_parser(
+    knowledge_backfill = subcommands.add_parser(
         "knowledge-backfill",
         help="Queue current reviewed contract versions that do not have a ready knowledge index",
+    )
+    knowledge_backfill.add_argument(
+        "--contract-id",
+        help="Force-requeue the current reviewed version for this contract when it has no ready index",
     )
     knowledge_retry_failed = subcommands.add_parser(
         "knowledge-retry-failed",
@@ -188,7 +192,7 @@ def main() -> None:
         try:
             outbox = KnowledgeOutboxRepository(connection)
             if args.command == "knowledge-backfill":
-                print(json.dumps({"queued": outbox.backfill()}, indent=2))
+                print(json.dumps({"queued": outbox.backfill(contract_id=args.contract_id)}, indent=2))
             elif args.command == "knowledge-retry-failed":
                 print(json.dumps(outbox.retry_failed(contract_id=args.contract_id), indent=2))
             else:

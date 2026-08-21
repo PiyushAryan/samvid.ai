@@ -6,13 +6,13 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol, Sequence
 
 from contractmate.ai.chunking import DocumentChunk, PageAwareChunker, PageContent
-from contractmate.ai.gateway import EmbeddingVector
+from contractmate.ai.openrouter import EmbeddingVector
 from contractmate.schemas.contracts import ContractReview
 from contractmate.schemas.documents import ParsedDocument
 
 
-DEFAULT_EMBEDDING_PROVIDER = "vercel_ai_gateway"
-DEFAULT_RERANKER_PROVIDER = "vercel_ai_gateway"
+DEFAULT_EMBEDDING_PROVIDER = "openrouter"
+DEFAULT_RERANKER_PROVIDER = "openrouter"
 DEFAULT_CHUNKING_VERSION = "page-aware-char-v1"
 
 

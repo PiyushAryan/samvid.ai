@@ -143,6 +143,29 @@ class KnowledgeRepository:
         )
         if index is None:
             raise RuntimeError("Knowledge index could not be created")
+        if index.status == "failed":
+            # A retry replaces the old chunks, so its provenance must describe
+            # the provider doing that replacement. Ready historical rows stay untouched.
+            with self._transaction():
+                self.connection.execute(
+                    self._sql(
+                        """
+                        UPDATE knowledge_indexes
+                        SET embedding_provider = ?, reranker_provider = ?, reranker_model = ?,
+                            error_message = NULL, updated_at = CURRENT_TIMESTAMP
+                        WHERE workspace_id = ? AND id = ? AND status = 'failed'
+                        """
+                    ),
+                    (embedding_provider, reranker_provider, reranker_model, workspace_id, index.id),
+                )
+            index = self.get_index_for_version(
+                workspace_id=workspace_id,
+                contract_version_id=contract_version_id,
+                embedding_model=embedding_model,
+                chunking_version=chunking_version,
+            )
+            if index is None:
+                raise RuntimeError("Knowledge index disappeared while updating provider provenance")
         return index
 
     def replace_index(self, *, spec: Any, chunks: Sequence[Any]) -> None:

@@ -5,7 +5,7 @@ from typing import Any, Sequence
 import pytest
 
 from contractmate.ai.chunking import PageAwareChunker
-from contractmate.ai.gateway import EmbeddingVector
+from contractmate.ai.openrouter import EmbeddingVector
 from contractmate.schemas.documents import DocumentPage, ParsedDocument
 from contractmate.services.knowledge_indexing import (
     KnowledgeChunkPayload,
@@ -110,7 +110,7 @@ def test_indexing_combines_parsed_pages_and_structured_review_chunks_atomically(
     assert len(backend.calls) == 1
     spec, chunks = backend.calls[0]
     assert spec.workspace_id == "workspace-1"
-    assert spec.embedding_provider == "vercel_ai_gateway"
+    assert spec.embedding_provider == "openrouter"
     assert spec.embedding_dimensions == 4
     assert result.chunk_count == len(chunks) == 6
     assert sum(len(batch) for batch in embeddings.batches) == len(chunks)

@@ -8,7 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from contractmate.ai.gateway import GatewayEmbeddingsClient
+from contractmate.ai.openrouter import OpenRouterEmbeddingsClient
 from contractmate.db.repositories.knowledge import KnowledgeRepository
 from contractmate.db.repositories.knowledge_outbox import KnowledgeOutboxRepository
 from contractmate.db.session import connect, initialize_database
@@ -108,11 +108,13 @@ class KnowledgeIndexWorker:
             index_id = index.id
             repository.mark_indexing(workspace_id=delivery.job.workspace_id, index_id=index_id)
             service = KnowledgeIndexingService(
-                embeddings=GatewayEmbeddingsClient(
-                    api_key=self.settings.ai_gateway_api_key or "",
+                embeddings=OpenRouterEmbeddingsClient(
+                    api_key=self.settings.openrouter_api_key or "",
                     model_id=self.settings.embedding_model_id,
                     dimensions=self.settings.embedding_dimensions,
-                    base_url=self.settings.ai_gateway_base_url,
+                    base_url=self.settings.openrouter_base_url,
+                    http_referer=self.settings.openrouter_http_referer,
+                    app_title=self.settings.openrouter_app_title,
                 ),
                 backend=repository,
                 embedding_model=self.settings.embedding_model_id,
@@ -134,7 +136,7 @@ class KnowledgeIndexWorker:
             )
             delivery.ack()
         except Exception as exc:
-            error = _sanitize_index_error(exc, secrets=(self.settings.ai_gateway_api_key,))
+            error = _sanitize_index_error(exc, secrets=(self.settings.openrouter_api_key,))
             if repository is not None and index_id is not None:
                 repository.mark_failed(
                     workspace_id=delivery.job.workspace_id,
