@@ -587,7 +587,7 @@ test("integrations page lists and disconnects a Slack workspace", async () => {
   expect(vi.mocked(api.disconnectSlackInstallation).mock.calls[0][0]).toBe("install-1");
 });
 
-test("Slack OAuth return opens Integrations and confirms the saved workspace", async () => {
+test("Slack OAuth return opens Integrations without a redundant success banner", async () => {
   vi.mocked(api.getSlackIntegration).mockClear();
   vi.mocked(api.getSlackIntegration).mockResolvedValue({
     enabled: true,
@@ -598,8 +598,9 @@ test("Slack OAuth return opens Integrations and confirms the saved workspace", a
   render(<QueryProvider><SettingsPage /></QueryProvider>);
 
   expect(screen.getByRole("heading", { name: "Integrations" })).toBeInTheDocument();
-  await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Slack workspace connected"));
-  expect(screen.getByText("Legal Ops")).toBeInTheDocument();
+  expect(await screen.findByText("Legal Ops")).toBeInTheDocument();
+  expect(screen.queryByText("Slack workspace connected.")).not.toBeInTheDocument();
+  expect(screen.queryByText("Samvid is ready to receive contracts from Slack.")).not.toBeInTheDocument();
   expect(api.getSlackIntegration).toHaveBeenCalled();
 });
 

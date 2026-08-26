@@ -1913,12 +1913,6 @@ p {
   font-weight: 600;
 }
 
-.integration-notice.is-success {
-  border-color: var(--success-border);
-  background: var(--success-bg);
-  color: var(--success);
-}
-
 .integration-notice.is-warning {
   border-color: var(--warning-border);
   background: var(--warning-bg);

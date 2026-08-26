@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, Loader2, Unplug } from "lucide-react";
+import { AlertTriangle, Loader2, Unplug } from "lucide-react";
 import { useEffect } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 
@@ -54,12 +54,7 @@ export function IntegrationsPanel() {
       <Loader2 className="spin" size={16} aria-hidden="true" />
       <span><strong>Confirming Slack connection…</strong> Checking the workspace installation.</span>
     </div>
-  ) : slackOauthResult === "connected" && connected ? (
-    <div className="integration-notice is-success" role="status">
-      <CheckCircle2 size={16} aria-hidden="true" />
-      <span><strong>Slack workspace connected.</strong> Samvid is ready to receive contracts from Slack.</span>
-    </div>
-  ) : slackOauthResult === "connected" ? (
+  ) : slackOauthResult === "connected" && !connected ? (
     <div className="integration-notice is-error" role="alert">
       <AlertTriangle size={16} aria-hidden="true" />
       <span><strong>Slack authorization finished, but the workspace was not saved.</strong> Try connecting again.</span>
