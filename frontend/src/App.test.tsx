@@ -586,6 +586,8 @@ test("integrations page lists and disconnects a Slack workspace", async () => {
   fireEvent.click(screen.getByRole("button", { name: /disconnect/i }));
   await waitFor(() => expect(api.disconnectSlackInstallation).toHaveBeenCalled());
   expect(vi.mocked(api.disconnectSlackInstallation).mock.calls[0][0]).toBe("install-1");
+  await waitFor(() => expect(screen.queryByText("Legal Ops")).not.toBeInTheDocument());
+  expect(screen.getByRole("button", { name: "Connect" })).toBeInTheDocument();
 });
 
 test("Slack OAuth return opens Integrations without a redundant success banner", async () => {

@@ -11,8 +11,9 @@ import {
   disconnectSlackInstallation,
   getSlackIntegration
 } from "./api";
-import { PlusSignIcon } from "@hugeicons/core-free-icons";
+import { Cancel01Icon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { useSearchParams } from "./next-router-compat";
+import type { SlackIntegrationStatus } from "./types";
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
@@ -32,7 +33,20 @@ export function IntegrationsPanel() {
   });
   const disconnect = useMutation({
     mutationFn: disconnectSlackInstallation,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["slack-integration"] })
+    onSuccess: (_, installationId) => {
+      queryClient.setQueryData<SlackIntegrationStatus>(["slack-integration"], (current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          installations: current.installations.map((installation) => (
+            installation.id === installationId
+              ? { ...installation, status: "disconnected" }
+              : installation
+          ))
+        };
+      });
+      return queryClient.invalidateQueries({ queryKey: ["slack-integration"], refetchType: "none" });
+    }
   });
   const active = integration.data?.installations.filter((item) => item.status === "active") || [];
   const connected = active.length > 0;
@@ -115,11 +129,12 @@ export function IntegrationsPanel() {
                     className="secondary compact"
                     type="button"
                     disabled={disconnect.isPending}
+                    aria-busy={disconnect.isPending && disconnect.variables === item.id}
                     onClick={() => disconnect.mutate(item.id)}
                   >
                     {disconnect.isPending && disconnect.variables === item.id
                       ? <Loader2 className="spin" size={14} aria-hidden="true" />
-                      : <Unplug size={14} aria-hidden="true" />}
+                      : <HugeiconsIcon icon={Cancel01Icon} />}
                     Disconnect
                   </button>
                 </li>
