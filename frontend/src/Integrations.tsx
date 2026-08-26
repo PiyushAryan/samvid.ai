@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Unplug } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
 
 import {
   ApiError,
@@ -9,6 +10,7 @@ import {
   disconnectSlackInstallation,
   getSlackIntegration
 } from "./api";
+import { PlusSignIcon } from "@hugeicons/core-free-icons";
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
@@ -31,6 +33,13 @@ export function IntegrationsPanel() {
   const active = integration.data?.installations.filter((item) => item.status === "active") || [];
   const connected = active.length > 0;
   const mutationError = install.error || disconnect.error;
+  const connectButton = (
+    <button className="secondary compact integration-connect" type="button" disabled={install.isPending} onClick={() => install.mutate()}>
+      {install.isPending && <Loader2 className="spin" size={14} aria-hidden="true" />}
+      <HugeiconsIcon icon={PlusSignIcon} size={14} strokeWidth={1.8} aria-hidden="true" />
+      Connect
+    </button>
+  );
 
   return (
     <section className="integration-card" aria-labelledby="slack-integration-title">
@@ -79,12 +88,14 @@ export function IntegrationsPanel() {
                   </li>
                 ))}
               </ul>
-            ) : <p className="integration-state">No Slack workspace is connected yet.</p>}
+            ) : (
+              <div className="integration-empty-state">
+                <p className="integration-state">No Slack workspace is connected yet.</p>
+                {connectButton}
+              </div>
+            )}
 
-            <button className="primary integration-connect" type="button" disabled={install.isPending} onClick={() => install.mutate()}>
-              {install.isPending && <Loader2 className="spin" size={14} aria-hidden="true" />}
-              Connect
-            </button>
+            {active.length > 0 && connectButton}
           </>
         )}
 
