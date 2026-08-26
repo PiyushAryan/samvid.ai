@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { AppShell, ChatsPage, ContractDetailPage, ContractsPage, ContractsTableSkeleton, ContractTable, ReviewTab, RisksTab, Timeline } from "./App";
 import { LandingPage } from "./Home";
 import { IntegrationsPage } from "./Integrations";
+import { SettingsPage } from "./Settings";
 import * as api from "./api";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { setTestUrl } from "./test-navigation";
@@ -584,6 +585,33 @@ test("integrations page lists and disconnects a Slack workspace", async () => {
   fireEvent.click(screen.getByRole("button", { name: /disconnect/i }));
   await waitFor(() => expect(api.disconnectSlackInstallation).toHaveBeenCalled());
   expect(vi.mocked(api.disconnectSlackInstallation).mock.calls[0][0]).toBe("install-1");
+});
+
+test("Slack OAuth return opens Integrations and confirms the saved workspace", async () => {
+  vi.mocked(api.getSlackIntegration).mockClear();
+  vi.mocked(api.getSlackIntegration).mockResolvedValue({
+    enabled: true,
+    installations: [{ id: "install-1", team_id: "T123", team_name: "Legal Ops", status: "active" }]
+  });
+  setTestUrl("/settings?slack=connected");
+
+  render(<QueryProvider><SettingsPage /></QueryProvider>);
+
+  expect(screen.getByRole("heading", { name: "Integrations" })).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Slack workspace connected"));
+  expect(screen.getByText("Legal Ops")).toBeInTheDocument();
+  expect(api.getSlackIntegration).toHaveBeenCalled();
+});
+
+test("Slack OAuth return explains when the workspace was not saved", async () => {
+  vi.mocked(api.getSlackIntegration).mockClear();
+  vi.mocked(api.getSlackIntegration).mockResolvedValue({ enabled: true, installations: [] });
+  setTestUrl("/settings?slack=connected");
+
+  render(<QueryProvider><SettingsPage /></QueryProvider>);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("workspace was not saved");
+  expect(screen.getByRole("button", { name: "Connect" })).toBeEnabled();
 });
 
 test("contract loading state exposes one accessible status and hides its placeholders", () => {

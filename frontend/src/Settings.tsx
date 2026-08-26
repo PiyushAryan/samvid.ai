@@ -2,9 +2,10 @@
 
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ConnectIcon, Plug01Icon, User03Icon } from "@hugeicons/core-free-icons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { IntegrationsPanel } from "./Integrations";
+import { useSearchParams } from "./next-router-compat";
 
 type SettingsTab = "profile" | "integrations" | "plugins";
 
@@ -58,45 +59,54 @@ function PluginsPanel() {
 }
 
 export function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
+  const [searchParams] = useSearchParams();
+  const slackOauthResult = searchParams.get("slack");
+  const isSlackOauthReturn = slackOauthResult === "connected" || slackOauthResult === "denied";
+  const [activeTab, setActiveTab] = useState<SettingsTab>(() => isSlackOauthReturn ? "integrations" : "profile");
+
+  useEffect(() => {
+    if (isSlackOauthReturn) {
+      setActiveTab("integrations");
+    }
+  }, [isSlackOauthReturn, slackOauthResult]);
 
   return (
     <main className="settings-page">
       <div className="settings-page-content page">
         <aside className="settings-nav" aria-label="Settings navigation">
-        <h1>Settings</h1>
-        <nav>
-          <button
-            className="settings-nav-item"
-            data-active={activeTab === "profile"}
-            type="button"
-            aria-current={activeTab === "profile" ? "page" : undefined}
-            onClick={() => setActiveTab("profile")}
-          >
-            <HugeiconsIcon icon={User03Icon} size={18} strokeWidth={1.8} aria-hidden="true" />
-            <span>Profile</span>
-          </button>
-          <button
-            className="settings-nav-item"
-            data-active={activeTab === "integrations"}
-            type="button"
-            aria-current={activeTab === "integrations" ? "page" : undefined}
-            onClick={() => setActiveTab("integrations")}
-          >
-            <HugeiconsIcon icon={ConnectIcon} size={18} strokeWidth={1.8} aria-hidden="true" />
-            <span>Integrations</span>
-          </button>
-          <button
-            className="settings-nav-item"
-            data-active={activeTab === "plugins"}
-            type="button"
-            aria-current={activeTab === "plugins" ? "page" : undefined}
-            onClick={() => setActiveTab("plugins")}
-          >
-            <HugeiconsIcon icon={Plug01Icon} size={18} strokeWidth={1.8} aria-hidden="true" />
-            <span>Plugins</span>
-          </button>
-        </nav>
+          <h1>Settings</h1>
+          <nav>
+            <button
+              className="settings-nav-item"
+              data-active={activeTab === "profile"}
+              type="button"
+              aria-current={activeTab === "profile" ? "page" : undefined}
+              onClick={() => setActiveTab("profile")}
+            >
+              <HugeiconsIcon icon={User03Icon} size={18} strokeWidth={1.8} aria-hidden="true" />
+              <span>Profile</span>
+            </button>
+            <button
+              className="settings-nav-item"
+              data-active={activeTab === "integrations"}
+              type="button"
+              aria-current={activeTab === "integrations" ? "page" : undefined}
+              onClick={() => setActiveTab("integrations")}
+            >
+              <HugeiconsIcon icon={ConnectIcon} size={18} strokeWidth={1.8} aria-hidden="true" />
+              <span>Integrations</span>
+            </button>
+            <button
+              className="settings-nav-item"
+              data-active={activeTab === "plugins"}
+              type="button"
+              aria-current={activeTab === "plugins" ? "page" : undefined}
+              onClick={() => setActiveTab("plugins")}
+            >
+              <HugeiconsIcon icon={Plug01Icon} size={18} strokeWidth={1.8} aria-hidden="true" />
+              <span>Plugins</span>
+            </button>
+          </nav>
         </aside>
 
         {activeTab === "profile" ? <ProfilePanel /> : activeTab === "integrations" ? (

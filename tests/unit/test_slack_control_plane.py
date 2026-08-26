@@ -177,6 +177,52 @@ def test_oauth_denial_requires_and_consumes_one_time_state(tmp_path) -> None:
     connection.close()
 
 
+def test_oauth_success_writes_before_reading_installation(monkeypatch, tmp_path) -> None:
+    from fastapi.testclient import TestClient
+
+    settings = _settings(tmp_path)
+    connection = connect(settings.database_url)
+    SlackRepository(connection).create_oauth_state(account_id="account-a", raw_state="success-state")
+    connection.close()
+    monkeypatch.setattr(
+        "contractmate.api.slack_routes._exchange_oauth_code",
+        lambda *_args: {
+            "ok": True,
+            "access_token": "xoxb-new",
+            "scope": ",".join(settings.slack_install_scopes),
+            "team": {"id": "T-SUCCESS", "name": "Success Team"},
+            "bot_user_id": "B-new",
+        },
+    )
+    calls: list[str] = []
+    original_upsert = SlackRepository.upsert_installation
+    original_get = SlackRepository.get_installation_by_team
+
+    def tracked_upsert(self, **kwargs):
+        calls.append("upsert")
+        return original_upsert(self, **kwargs)
+
+    def tracked_get(self, **kwargs):
+        calls.append("get")
+        return original_get(self, **kwargs)
+
+    monkeypatch.setattr(SlackRepository, "upsert_installation", tracked_upsert)
+    monkeypatch.setattr(SlackRepository, "get_installation_by_team", tracked_get)
+
+    response = TestClient(create_app(settings)).get(
+        "/slack/oauth/callback?code=code&state=success-state",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"].endswith("/settings?slack=connected")
+    assert calls[0] == "upsert"
+    connection = connect(settings.database_url)
+    installations = SlackRepository(connection).list_installations(account_id="account-a")
+    assert [(item.team_id, item.status) for item in installations] == [("T-SUCCESS", "active")]
+    connection.close()
+
+
 @pytest.mark.parametrize(
     ("settings_update", "oauth_update", "expected_status"),
     [

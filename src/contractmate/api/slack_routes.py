@@ -95,21 +95,13 @@ def create_slack_router(settings: Settings):
             token = str(oauth.get("access_token") or "")
             team = oauth.get("team") if isinstance(oauth.get("team"), dict) else {}
             team_id = str(team.get("id") or "")
-            existing_installation = (
-                repository.get_installation_by_team(team_id=team_id, active_only=False) if team_id else None
-            )
+            # Keep the PostgreSQL connection out of an implicit read transaction
+            # before the repository opens its atomic conflict-check/write block.
             try:
                 if not token or not team_id:
                     raise HTTPException(
                         status_code=502,
                         detail="Slack OAuth response did not include a workspace and bot token",
-                    )
-                if (
-                    existing_installation is not None
-                    and existing_installation.installed_by_account_id != actor_account_id
-                ):
-                    raise SlackInstallationConflictError(
-                        "Slack workspace is already connected to another Samvid account"
                     )
                 if settings.slack_pilot_team_ids and team_id not in settings.slack_pilot_team_ids:
                     raise HTTPException(status_code=403, detail="Slack workspace is not included in the pilot")
@@ -126,7 +118,7 @@ def create_slack_router(settings: Settings):
                     installed_by_account_id=actor_account_id,
                 )
             except Exception as exc:
-                current_installation = existing_installation
+                current_installation = None
                 if team_id:
                     try:
                         current_installation = repository.get_installation_by_team(
