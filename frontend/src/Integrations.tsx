@@ -131,8 +131,6 @@ export function IntegrationsPanel() {
               {connectButton}
             </div>
           )}
-
-          {active.length > 0 && connectButton}
         </>
       )}
 

@@ -582,6 +582,7 @@ test("integrations page lists and disconnects a Slack workspace", async () => {
   render(<QueryProvider><IntegrationsPage /></QueryProvider>);
 
   expect(await screen.findByText("Legal Ops")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Connect" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /disconnect/i }));
   await waitFor(() => expect(api.disconnectSlackInstallation).toHaveBeenCalled());
   expect(vi.mocked(api.disconnectSlackInstallation).mock.calls[0][0]).toBe("install-1");
