@@ -1849,6 +1849,40 @@ p {
   width: fit-content;
 }
 
+.integration-connect-icon {
+  display: inline-grid;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  place-items: center;
+}
+
+.integration-connect-icon > svg {
+  grid-area: 1 / 1;
+  transition: opacity 180ms ease, transform 220ms ease;
+}
+
+.integration-connect-plus {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+
+.integration-connect-spinner {
+  opacity: 0;
+  transform: rotate(-90deg) scale(0.55);
+}
+
+.integration-connect-icon.is-loading .integration-connect-plus {
+  opacity: 0;
+  transform: rotate(90deg) scale(0.55);
+}
+
+.integration-connect-icon.is-loading .integration-connect-spinner {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+  animation: spin 800ms linear infinite;
+}
+
 .integration-empty-state {
   display: flex;
   align-items: center;
@@ -3601,8 +3635,13 @@ textarea.field-control {
   .sidebar-view-indicator,
   .auth-route-loading-logo,
   .skeleton,
-  .spin {
+  .spin,
+  .integration-connect-spinner {
     animation: none;
+  }
+
+  .integration-connect-icon > svg {
+    transition: none;
   }
 }
 

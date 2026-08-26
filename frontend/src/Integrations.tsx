@@ -34,9 +34,17 @@ export function IntegrationsPanel() {
   const connected = active.length > 0;
   const mutationError = install.error || disconnect.error;
   const connectButton = (
-    <button className="secondary compact integration-connect" type="button" disabled={install.isPending} onClick={() => install.mutate()}>
-      {install.isPending && <Loader2 className="spin" size={14} aria-hidden="true" />}
-      <HugeiconsIcon icon={PlusSignIcon} size={14} strokeWidth={1.8} aria-hidden="true" />
+    <button
+      className="secondary compact integration-connect"
+      type="button"
+      disabled={install.isPending}
+      aria-busy={install.isPending}
+      onClick={() => install.mutate()}
+    >
+      <span className={`integration-connect-icon${install.isPending ? " is-loading" : ""}`} aria-hidden="true">
+        <HugeiconsIcon className="integration-connect-plus" icon={PlusSignIcon} size={14} strokeWidth={1.8} />
+        <Loader2 className="integration-connect-spinner" size={14} />
+      </span>
       Connect
     </button>
   );
