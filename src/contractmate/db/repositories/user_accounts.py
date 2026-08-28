@@ -343,11 +343,8 @@ class UserAccountRepository:
         return [self._event_from_row(row) for row in rows]
 
     def _get(self, condition: str, params: tuple[Any, ...]) -> UserAccount | None:
-        row = self.connection.execute(
-            self._sql(f"SELECT ua.*, 0 AS contract_count FROM user_accounts ua WHERE {condition} LIMIT 1"),
-            params,
-        ).fetchone()
-        return self._account_from_row(row) if row else None
+        with self._transaction():
+            return self._get_in_transaction(condition, params)
 
     def _get_in_transaction(self, condition: str, params: tuple[Any, ...]) -> UserAccount | None:
         row = self.connection.execute(
