@@ -163,13 +163,15 @@ class SlackRepository:
         params: tuple[Any, ...] = (team_id,)
         if active_only:
             query += " AND status = 'active'"
-        row = self.connection.execute(self._sql(query), params).fetchone()
+        with self._transaction():
+            row = self.connection.execute(self._sql(query), params).fetchone()
         return self._installation(row) if row else None
 
     def get_installation(self, *, installation_id: str) -> SlackInstallation | None:
-        row = self.connection.execute(
-            self._sql("SELECT * FROM slack_installations WHERE id = ? AND status = 'active'"), (installation_id,)
-        ).fetchone()
+        with self._transaction():
+            row = self.connection.execute(
+                self._sql("SELECT * FROM slack_installations WHERE id = ? AND status = 'active'"), (installation_id,)
+            ).fetchone()
         return self._installation(row) if row else None
 
     def get_installation_for_account(
@@ -182,13 +184,16 @@ class SlackRepository:
         query = "SELECT * FROM slack_installations WHERE id = ? AND installed_by_account_id = ?"
         if active_only:
             query += " AND status = 'active'"
-        row = self.connection.execute(self._sql(query), (installation_id, account_id)).fetchone()
+        with self._transaction():
+            row = self.connection.execute(self._sql(query), (installation_id, account_id)).fetchone()
         return self._installation(row) if row else None
 
     def list_installations(self, *, account_id: str) -> list[SlackInstallation]:
-        rows = self.connection.execute(
-            self._sql("SELECT * FROM slack_installations WHERE installed_by_account_id = ? ORDER BY created_at DESC"), (account_id,)
-        ).fetchall()
+        with self._transaction():
+            rows = self.connection.execute(
+                self._sql("SELECT * FROM slack_installations WHERE installed_by_account_id = ? ORDER BY created_at DESC"),
+                (account_id,),
+            ).fetchall()
         return [self._installation(row) for row in rows]
 
     def disconnect_installation(self, *, installation_id: str, account_id: str) -> bool:
@@ -436,10 +441,11 @@ class SlackRepository:
             return SlackLeaseClaim("claimed", token) if updated.rowcount == 1 else SlackLeaseClaim("busy")
 
     def get_review_execution_status(self, *, submission_key: str) -> str | None:
-        row = self.connection.execute(
-            self._sql("SELECT status FROM slack_review_executions WHERE submission_key = ?"),
-            (submission_key,),
-        ).fetchone()
+        with self._transaction():
+            row = self.connection.execute(
+                self._sql("SELECT status FROM slack_review_executions WHERE submission_key = ?"),
+                (submission_key,),
+            ).fetchone()
         return str(row["status"]) if row is not None else None
 
     def complete_review_execution(self, *, submission_key: str, lease_token: str) -> bool:
