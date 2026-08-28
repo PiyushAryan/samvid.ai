@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import json
+from contextlib import contextmanager
 from dataclasses import dataclass
 from numbers import Real
-from typing import Any, Mapping, Protocol, Sequence
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from typing import Any, Iterator, Mapping, Sequence
 
-from openrouter import OpenRouter
+from openai import OpenAI
 
 
 class OpenRouterAPIError(RuntimeError):
@@ -16,34 +14,6 @@ class OpenRouterAPIError(RuntimeError):
     def __init__(self, message: str, *, status_code: int | None = None) -> None:
         super().__init__(message)
         self.status_code = status_code
-
-
-class JSONTransport(Protocol):
-    def post_json(
-        self, *, url: str, headers: Mapping[str, str], payload: Mapping[str, Any], timeout_seconds: float
-    ) -> Mapping[str, Any]: ...
-
-
-@dataclass(frozen=True)
-class UrllibJSONTransport:
-    """Minimal transport for OpenRouter's documented REST endpoints."""
-
-    def post_json(self, *, url: str, headers: Mapping[str, str], payload: Mapping[str, Any], timeout_seconds: float) -> Mapping[str, Any]:
-        request = Request(url, data=json.dumps(payload, separators=(",", ":")).encode("utf-8"), headers=dict(headers), method="POST")
-        try:
-            with urlopen(request, timeout=timeout_seconds) as response:  # noqa: S310 - configured trusted API base URL.
-                body = response.read()
-        except HTTPError as exc:
-            raise OpenRouterAPIError(_error_message(exc.read().decode("utf-8", errors="replace"), fallback=f"OpenRouter request failed with HTTP {exc.code}."), status_code=exc.code) from exc
-        except (URLError, TimeoutError) as exc:
-            raise OpenRouterAPIError("OpenRouter request failed.") from exc
-        try:
-            decoded = json.loads(body)
-        except (TypeError, json.JSONDecodeError) as exc:
-            raise OpenRouterAPIError("OpenRouter returned an invalid JSON response.") from exc
-        if not isinstance(decoded, dict):
-            raise OpenRouterAPIError("OpenRouter returned an unexpected response shape.")
-        return decoded
 
 
 @dataclass(frozen=True)
@@ -67,8 +37,7 @@ class OpenRouterEmbeddingsClient:
     http_referer: str | None = None
     app_title: str | None = None
     timeout_seconds: float = 30.0
-    # Tests inject a transport; production uses OpenRouter's official SDK.
-    transport: JSONTransport | None = None
+    http_client: Any | None = None
 
     def __post_init__(self) -> None:
         if not self.api_key.strip() or not self.model_id.strip():
@@ -105,27 +74,24 @@ class OpenRouterEmbeddingsClient:
         return tuple(vectors)
 
     def _request_embeddings(self, request_payload: Mapping[str, Any]) -> Mapping[str, Any]:
-        if self.transport is not None:
-            return self.transport.post_json(
-                url=f"{self.base_url.rstrip('/')}/embeddings",
-                headers=_headers(self.api_key, self.http_referer, self.app_title),
-                payload=request_payload,
-                timeout_seconds=self.timeout_seconds,
-            )
         try:
-            response = OpenRouter(
+            with _openai_client(
                 api_key=self.api_key,
+                base_url=self.base_url,
+                timeout_seconds=self.timeout_seconds,
                 http_referer=self.http_referer,
-                x_open_router_title=self.app_title,
-                server_url=self.base_url.rstrip("/"),
-                timeout_ms=int(self.timeout_seconds * 1_000),
-            ).embeddings.generate(**request_payload)
-            payload = response.to_dict()
+                app_title=self.app_title,
+                http_client=self.http_client,
+            ) as client:
+                response = client.embeddings.create(**request_payload)
         except Exception as exc:
             raise OpenRouterAPIError("OpenRouter embeddings request failed.", status_code=getattr(exc, "status_code", None)) from exc
-        if not isinstance(payload, Mapping):
-            raise OpenRouterAPIError("OpenRouter returned an unexpected embeddings response.")
-        return payload
+        return {
+            "data": [
+                {"index": item.index, "embedding": item.embedding}
+                for item in response.data
+            ]
+        }
 
 
 @dataclass(frozen=True)
@@ -136,7 +102,7 @@ class OpenRouterRerankClient:
     http_referer: str | None = None
     app_title: str | None = None
     timeout_seconds: float = 30.0
-    transport: JSONTransport | None = None
+    http_client: Any | None = None
 
     def __post_init__(self) -> None:
         if not self.api_key.strip() or not self.model_id.strip():
@@ -173,22 +139,20 @@ class OpenRouterRerankClient:
         return tuple(results)
 
     def _request_rerank(self, request_payload: Mapping[str, Any]) -> Mapping[str, Any]:
-        if self.transport is not None:
-            return self.transport.post_json(
-                url=f"{self.base_url.rstrip('/')}/rerank",
-                headers=_headers(self.api_key, self.http_referer, self.app_title),
-                payload=request_payload,
-                timeout_seconds=self.timeout_seconds,
-            )
         try:
-            response = OpenRouter(
+            with _openai_client(
                 api_key=self.api_key,
+                base_url=self.base_url,
+                timeout_seconds=self.timeout_seconds,
                 http_referer=self.http_referer,
-                x_open_router_title=self.app_title,
-                server_url=self.base_url.rstrip("/"),
-                timeout_ms=int(self.timeout_seconds * 1_000),
-            ).rerank.rerank(**request_payload)
-            payload = response.to_dict()
+                app_title=self.app_title,
+                http_client=self.http_client,
+            ) as client:
+                payload = client.post(
+                    "/rerank",
+                    cast_to=dict[str, Any],
+                    body=dict(request_payload),
+                )
         except Exception as exc:
             raise OpenRouterAPIError("OpenRouter rerank request failed.", status_code=getattr(exc, "status_code", None)) from exc
         if not isinstance(payload, Mapping):
@@ -196,25 +160,31 @@ class OpenRouterRerankClient:
         return payload
 
 
-def _headers(api_key: str, http_referer: str | None, app_title: str | None) -> dict[str, str]:
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+@contextmanager
+def _openai_client(
+    *,
+    api_key: str,
+    base_url: str,
+    timeout_seconds: float,
+    http_referer: str | None,
+    app_title: str | None,
+    http_client: Any | None,
+) -> Iterator[Any]:
+    headers: dict[str, str] = {}
     if http_referer and http_referer.strip():
         headers["HTTP-Referer"] = http_referer.strip()
     if app_title and app_title.strip():
         headers["X-Title"] = app_title.strip()
-    return headers
-
-
-def _error_message(detail: str, *, fallback: str) -> str:
+    created = OpenAI(
+        api_key=api_key,
+        base_url=base_url.rstrip("/"),
+        timeout=timeout_seconds,
+        max_retries=2,
+        default_headers=headers or None,
+        http_client=http_client,
+    )
     try:
-        payload = json.loads(detail)
-    except json.JSONDecodeError:
-        return fallback
-    if not isinstance(payload, Mapping):
-        return fallback
-    error = payload.get("error")
-    if isinstance(error, Mapping) and isinstance(error.get("message"), str):
-        return error["message"]
-    if isinstance(error, str):
-        return error
-    return payload["message"] if isinstance(payload.get("message"), str) else fallback
+        yield created
+    finally:
+        if http_client is None:
+            created.close()
