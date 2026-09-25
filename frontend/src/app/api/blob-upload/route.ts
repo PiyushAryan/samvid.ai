@@ -5,6 +5,7 @@ const allowedContentTypes = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "text/plain"
 ];
+const uploadAuthorizationTimeoutMs = 20_000;
 
 class UploadAdmissionError extends Error {
   readonly status: number;
@@ -18,47 +19,45 @@ class UploadAdmissionError extends Error {
   }
 }
 
-async function personalWorkspaceForRequest(request: Request): Promise<string | null> {
-  const apiOrigin = process.env.API_ORIGIN;
-  const authorization = request.headers.get("authorization");
-  if (!apiOrigin || !authorization?.startsWith("Bearer ")) return null;
-  const response = await fetch(new URL("/api/auth/me", apiOrigin), {
-    headers: { Authorization: authorization },
-    signal: AbortSignal.timeout(5000)
-  });
-  if (!response.ok) return null;
-  const payload = await response.json() as {
-    account?: { role?: string; state?: string; workspace_id?: string | null };
-  };
-  const workspaceId = payload.account?.workspace_id;
-  if (payload.account?.role !== "user" || payload.account?.state !== "active" || !workspaceId) return null;
-  return workspaceId;
-}
-
 async function authorizeContractUpload(request: Request, pathname: string): Promise<void> {
   const apiOrigin = process.env.API_ORIGIN;
   const authorization = request.headers.get("authorization");
   if (!apiOrigin || !authorization?.startsWith("Bearer ")) {
     throw new UploadAdmissionError("Authentication required", 401);
   }
-  const response = await fetch(new URL("/api/uploads/authorize", apiOrigin), {
-    method: "POST",
-    headers: { Authorization: authorization, "Content-Type": "application/json" },
-    body: JSON.stringify({ pathname }),
-    signal: AbortSignal.timeout(5000)
-  });
+  let response: Response;
+  try {
+    response = await fetch(new URL("/api/uploads/authorize", apiOrigin), {
+      method: "POST",
+      headers: { Authorization: authorization, "Content-Type": "application/json" },
+      body: JSON.stringify({ pathname }),
+      signal: AbortSignal.timeout(uploadAuthorizationTimeoutMs)
+    });
+  } catch (error) {
+    const errorName = error && typeof error === "object" && "name" in error
+      ? String(error.name)
+      : "";
+    if (errorName === "TimeoutError" || errorName === "AbortError") {
+      throw new UploadAdmissionError("Upload authorization timed out. Please try again.", 504);
+    }
+    throw new UploadAdmissionError("Upload authorization service is unavailable. Please try again.", 502);
+  }
   if (response.ok) return;
   if (response.status === 401) throw new UploadAdmissionError("Authentication required", 401);
-  const payload = await response.json().catch(() => null) as { detail?: { message?: string } } | null;
+  const payload = await response.json().catch(() => null) as {
+    detail?: string | { message?: string };
+    message?: string;
+  } | null;
   const status = response.status === 429 || response.status === 503 ? response.status : 400;
+  const detail = typeof payload?.detail === "string" ? payload.detail : payload?.detail?.message;
   throw new UploadAdmissionError(
-    payload?.detail?.message || "Upload is not available right now",
+    detail || payload?.message || "Upload is not available right now",
     status,
     response.headers.get("Retry-After")
   );
 }
 
-export const maxDuration = 10;
+export const maxDuration = 30;
 export const preferredRegion = "sin1";
 
 export async function POST(request: Request): Promise<Response> {
@@ -68,9 +67,8 @@ export async function POST(request: Request): Promise<Response> {
       body,
       request,
       onBeforeGenerateToken: async (pathname) => {
-        const workspaceId = await personalWorkspaceForRequest(request);
-        if (!workspaceId) throw new Error("Authentication required");
-        if (!pathname.startsWith(`contracts/${workspaceId}/`)) throw new Error("Invalid upload path");
+        // The backend verifies both the account and the workspace prefix. Avoid a
+        // separate /auth/me request here so a cold API only has to start once.
         await authorizeContractUpload(request, pathname);
 
         return {
