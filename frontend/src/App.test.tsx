@@ -22,6 +22,7 @@ vi.mock("./api", async (importOriginal) => {
     getContract: vi.fn(),
     getContractDocument: vi.fn(),
     deleteContract: vi.fn(),
+    uploadContract: vi.fn(),
     getSlackIntegration: vi.fn(),
     beginSlackInstallation: vi.fn(),
     disconnectSlackInstallation: vi.fn(),
@@ -163,6 +164,12 @@ beforeEach(() => {
   vi.mocked(api.getContract).mockResolvedValue(contractDetail);
   vi.mocked(api.getContractDocument).mockResolvedValue(new Blob());
   vi.mocked(api.deleteContract).mockResolvedValue(undefined);
+  vi.mocked(api.uploadContract).mockResolvedValue({
+    contract_id: "contract-uploaded",
+    contract_version_id: "version-uploaded",
+    status: "queued",
+    message: "Contract accepted and queued for review."
+  });
   vi.mocked(api.streamChatMessage).mockResolvedValue(undefined);
 });
 
@@ -278,6 +285,87 @@ test("contract refresh rotates until updated API data arrives", async () => {
   expect(refreshButton).not.toBeDisabled();
   expect(refreshButton).toHaveAttribute("aria-busy", "false");
   expect(refreshButton.firstElementChild).not.toHaveClass("spin");
+});
+
+test("contract upload distinguishes transfer from review startup and confirms success", async () => {
+  let finishUpload!: (result: api.ContractUploadResult) => void;
+  vi.mocked(api.uploadContract).mockImplementationOnce((_file, onProgress) => {
+    onProgress({ percentage: 100, stage: "starting_review" });
+    return new Promise((resolve) => {
+      finishUpload = resolve;
+    });
+  });
+
+  setTestUrl("/contracts");
+  render(<QueryProvider><ContractsPage /></QueryProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+
+  const dialog = screen.getByRole("dialog", { name: "Upload contract" });
+  const file = new File(["contract"], "Dawnify agreement.pdf", { type: "application/pdf" });
+  fireEvent.change(within(dialog).getByLabelText("Choose contract file"), { target: { files: [file] } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Process" }));
+
+  expect(await within(dialog).findByText("Upload complete. Starting contract review…")).toBeInTheDocument();
+  expect(within(dialog).getByRole("progressbar")).not.toHaveAttribute("value");
+  expect(within(dialog).getByRole("button", { name: "Starting review" })).toBeDisabled();
+  expect(api.uploadContract).toHaveBeenCalledWith(file, expect.any(Function), expect.any(AbortSignal));
+
+  finishUpload({
+    contract_id: "contract-uploaded",
+    contract_version_id: "version-uploaded",
+    status: "queued",
+    message: "Contract accepted and queued for review."
+  });
+
+  expect(await within(dialog).findByText("Contract received")).toBeInTheDocument();
+  expect(within(dialog).getByText("Contract accepted and queued for review.")).toBeInTheDocument();
+  expect(within(dialog).getByText("Dawnify agreement.pdf")).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+  expect(screen.queryByRole("dialog", { name: "Upload contract" })).not.toBeInTheDocument();
+});
+
+test("contract upload exits loading state after a timeout and remains retryable", async () => {
+  vi.mocked(api.uploadContract).mockRejectedValueOnce(new api.ApiError(408, {
+    code: "upload_timeout",
+    message: "The file was uploaded, but starting its review took too long. Refresh Contracts before trying again."
+  }));
+
+  setTestUrl("/contracts");
+  render(<QueryProvider><ContractsPage /></QueryProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+
+  const dialog = screen.getByRole("dialog", { name: "Upload contract" });
+  const file = new File(["contract"], "agreement.pdf", { type: "application/pdf" });
+  fireEvent.change(within(dialog).getByLabelText("Choose contract file"), { target: { files: [file] } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Process" }));
+
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent("starting its review took too long");
+  expect(within(dialog).queryByRole("progressbar")).not.toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: "Try again" })).toBeEnabled();
+  expect(within(dialog).getByText("agreement.pdf")).toBeInTheDocument();
+});
+
+test("closing the upload dialog aborts the in-flight upload", async () => {
+  let uploadSignal: AbortSignal | undefined;
+  vi.mocked(api.uploadContract).mockImplementationOnce((_file, _onProgress, signal) => {
+    uploadSignal = signal;
+    return new Promise(() => undefined);
+  });
+
+  setTestUrl("/contracts");
+  render(<QueryProvider><ContractsPage /></QueryProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+
+  const dialog = screen.getByRole("dialog", { name: "Upload contract" });
+  const file = new File(["contract"], "agreement.pdf", { type: "application/pdf" });
+  fireEvent.change(within(dialog).getByLabelText("Choose contract file"), { target: { files: [file] } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Process" }));
+
+  await waitFor(() => expect(uploadSignal).toBeInstanceOf(AbortSignal));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+  expect(uploadSignal?.aborted).toBe(true);
+  expect(screen.queryByRole("dialog", { name: "Upload contract" })).not.toBeInTheDocument();
 });
 
 test("contract listing renders signing counters and risk counts", () => {
