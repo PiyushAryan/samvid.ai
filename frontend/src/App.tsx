@@ -47,6 +47,7 @@ import {
   listContracts,
   listSigningRequests,
   streamChatMessage,
+  type ContractUploadProgress,
   updateChatContractScope,
   uploadContract
 } from "./api";
@@ -966,8 +967,7 @@ export function ContractsPage() {
         <UploadDialog
           onClose={() => setUploadOpen(false)}
           onUploaded={() => {
-            setUploadOpen(false);
-            queryClient.invalidateQueries({ queryKey: ["contracts"] });
+            void queryClient.invalidateQueries({ queryKey: ["contracts"] });
           }}
         />
       )}
@@ -1758,38 +1758,95 @@ function SignerFields({ signer, onChange }: { signer: SignerDraft; onChange: (si
 
 function UploadDialog({ onClose, onUploaded }: { onClose: () => void; onUploaded: () => void }) {
   const [file, setFile] = useState<File | null>(null);
-  const [progress, setProgress] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState<ContractUploadProgress>({
+    percentage: 0,
+    stage: "uploading"
+  });
+  const abortControllerRef = useRef<AbortController | null>(null);
   const mutation = useMutation({
     mutationFn: () => {
       if (!file) throw new Error("Choose a PDF, DOCX, or TXT file.");
-      return uploadContract(file, setProgress);
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      setUploadProgress({ percentage: 0, stage: "uploading" });
+      return uploadContract(file, setUploadProgress, controller.signal);
     },
-    onSuccess: onUploaded
+    onSuccess: onUploaded,
+    onSettled: () => {
+      abortControllerRef.current = null;
+    }
   });
   const submit = (event: FormEvent) => {
     event.preventDefault();
     mutation.mutate();
   };
+  const close = () => {
+    abortControllerRef.current?.abort();
+    onClose();
+  };
+  const chooseFile = (nextFile: File | null) => {
+    mutation.reset();
+    setUploadProgress({ percentage: 0, stage: "uploading" });
+    setFile(nextFile);
+  };
+  const progressLabel = uploadProgress.stage === "uploading"
+    ? `Uploading ${uploadProgress.percentage}%`
+    : "Upload complete. Starting contract review…";
+
+  if (mutation.isSuccess) {
+    return (
+      <Dialog title="Upload contract" onClose={close}>
+        <div className="upload-success" role="status" aria-live="polite">
+          <span className="upload-success-icon" aria-hidden="true"><CheckCircle2 size={20} /></span>
+          <div>
+            <strong>Contract received</strong>
+            <p>{mutation.data.message || "The review has started and the contract list will update automatically."}</p>
+            {file && <small>{file.name}</small>}
+          </div>
+        </div>
+        <div className="dialog-actions">
+          <button type="button" className={primaryButton} onClick={close}>Done</button>
+        </div>
+      </Dialog>
+    );
+  }
+
   return (
-    <Dialog title="Upload contract" onClose={onClose}>
+    <Dialog title="Upload contract" onClose={close}>
       <form onSubmit={submit} className="upload-form">
-        <label className="drop-zone">
+        <label className={cx("drop-zone", mutation.isPending && "is-disabled")}>
           <Upload size={20} />
           <span>{file ? file.name : "Choose PDF, DOCX, or TXT"}</span>
           <input
             className="drop-input"
             type="file"
+            aria-label="Choose contract file"
             accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
-            onChange={(event) => setFile(event.target.files?.[0] || null)}
+            disabled={mutation.isPending}
+            onChange={(event) => chooseFile(event.target.files?.[0] || null)}
           />
         </label>
         {mutation.isPending && (
-          <progress className="progress" aria-label="Upload progress" max={100} value={progress} />
+          <div className="upload-progress" role="status" aria-live="polite">
+            <div className="upload-progress-label">
+              <span>{progressLabel}</span>
+              {uploadProgress.stage === "uploading" && <span>{uploadProgress.percentage}%</span>}
+            </div>
+            <progress
+              className="progress"
+              aria-label={progressLabel}
+              max={100}
+              value={uploadProgress.stage === "uploading" ? uploadProgress.percentage : undefined}
+            />
+          </div>
         )}
         <div className="dialog-actions">
-          <button type="button" className={secondaryButton} onClick={onClose}>Cancel</button>
+          <button type="button" className={secondaryButton} onClick={close}>Cancel</button>
           <button type="submit" className={primaryButton} disabled={!file || mutation.isPending}>
-            {mutation.isPending ? <Loader2 className="spin" size={16} /> : <Upload size={16} />} Process
+            {mutation.isPending ? <Loader2 className="spin" size={16} /> : <Upload size={16} />}
+            {mutation.isPending
+              ? uploadProgress.stage === "uploading" ? "Uploading" : "Starting review"
+              : mutation.isError ? "Try again" : "Process"}
           </button>
         </div>
         <MutationError mutation={mutation} />
@@ -1850,7 +1907,7 @@ function QueryState({
 
 function MutationError({ mutation }: { mutation: { isError: boolean; error: unknown } }) {
   if (!mutation.isError) return null;
-  return <p className="form-error">{mutation.error instanceof Error ? mutation.error.message : "Request failed."}</p>;
+  return <p className="form-error" role="alert">{mutation.error instanceof Error ? mutation.error.message : "Request failed."}</p>;
 }
 
 function EmptyState({ title }: { title: string }) {

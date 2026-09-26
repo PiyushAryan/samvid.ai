@@ -2598,11 +2598,48 @@ textarea.field-control {
   background: var(--accent-soft);
 }
 
+.drop-zone.is-disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.drop-zone > span {
+  max-width: 100%;
+  padding-inline: 16px;
+  overflow-wrap: anywhere;
+}
+
 .drop-input {
   position: absolute;
   inset: 0;
   cursor: pointer;
   opacity: 0;
+}
+
+.drop-input:disabled {
+  cursor: wait;
+}
+
+.upload-progress {
+  display: grid;
+  gap: 6px;
+}
+
+.upload-progress-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.upload-progress-label span:last-child {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 
 .progress {
@@ -2611,6 +2648,55 @@ textarea.field-control {
   overflow: hidden;
   border-radius: 4px;
   accent-color: var(--accent);
+}
+
+.upload-success {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--success-border);
+  border-radius: var(--radius);
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.upload-success-icon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.upload-success > div {
+  min-width: 0;
+}
+
+.upload-success strong {
+  display: block;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.upload-success p,
+.upload-success small {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.upload-success p {
+  color: var(--text-secondary);
+}
+
+.upload-success small {
+  color: var(--success);
 }
 
 .dialog-backdrop {
