@@ -140,6 +140,12 @@ def test_chat_instructions_search_for_named_documents_before_requesting_an_id() 
     assert "Never ask for a contract ID merely to locate a contract" in CHAT_AGENT_INSTRUCTIONS
 
 
+def test_chat_instructions_use_sections_only_for_complex_answers() -> None:
+    assert "do not create separate Key findings and Interpretation sections by default" in CHAT_AGENT_INSTRUCTIONS
+    assert "answer in one direct paragraph" in CHAT_AGENT_INSTRUCTIONS
+    assert "Use sections only" in CHAT_AGENT_INSTRUCTIONS
+
+
 def test_chat_agent_exposes_only_scoped_read_tools_and_resolves_run_evidence() -> None:
     retriever = FakeRetriever()
     reader = FakeReader()
