@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { LandingPage } from "../../Home";
+import { LandingPage } from "@/features/marketing/landing-page";
 
 export const metadata: Metadata = {
   title: "Contract intelligence from inbox to signature",

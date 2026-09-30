@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
-import { AuthRoute } from "../../../AuthRoute";
+import { AuthRoute } from "@/features/auth/auth-route";
 import { AppProviders } from "../../providers";
 
 export const metadata: Metadata = {

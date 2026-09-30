@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { ChangelogPage } from "../../../Changelog";
+import { ChangelogPage } from "@/features/marketing/changelog-page";
 
 export const metadata: Metadata = {
   title: "Changelog",
