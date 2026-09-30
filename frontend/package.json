@@ -8,6 +8,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "test": "vitest",
+    "lint": "eslint .",
     "check:boundaries": "node scripts/check-boundaries.js && node scripts/check-assets.js"
   },
   "dependencies": {
