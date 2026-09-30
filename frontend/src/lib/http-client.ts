@@ -1,4 +1,4 @@
-import { getAccessToken } from "@/features/auth/auth";
+import { getAccessToken } from "@/lib/auth-session";
 
 export interface ApiErrorPayload {
   code?: string;

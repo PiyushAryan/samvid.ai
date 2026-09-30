@@ -1,4 +1,4 @@
-import { getAccessToken } from "@/features/auth/auth";
+import { getAccessToken } from "@/lib/auth-session";
 import { ApiError, requestJson, responseApiError } from "@/lib/http-client";
 import type { ChatMessage, ChatSession, ChatSessionSummary, ChatSource } from "./types";
 

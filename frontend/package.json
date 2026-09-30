@@ -8,7 +8,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "test": "vitest",
-    "check:boundaries": "node scripts/check-boundaries.mjs"
+    "check:boundaries": "node scripts/check-boundaries.mjs && node scripts/check-assets.mjs"
   },
   "dependencies": {
     "@calcom/embed-react": "^1.5.3",

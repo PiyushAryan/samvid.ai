@@ -1,5 +1,5 @@
 import { upload } from "@vercel/blob/client";
-import { getAccessToken, getCurrentAccount } from "@/features/auth/auth";
+import { getAccessToken, getCurrentAccount } from "@/lib/auth-session";
 import { ApiError, requestBlob, requestJson } from "@/lib/http-client";
 import type { ContractDetail, ContractListItem } from "./types";
 
