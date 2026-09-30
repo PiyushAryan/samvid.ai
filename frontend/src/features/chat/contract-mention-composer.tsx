@@ -12,10 +12,10 @@ import { FileText, Plus, X } from "lucide-react";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Drawer } from "vaul";
 
-import { listContracts } from "@/lib/api-client";
+import { listContracts } from "@/features/contracts/api";
 import { PromptInput, PromptInputFooter, PromptInputSubmit } from "@/components/ai-elements/prompt-input";
 import { useQuery } from "@tanstack/react-query";
-import type { ContractListItem } from "@/lib/domain-types";
+import type { ContractListItem } from "@/features/contracts/types";
 
 export type ContractMentionSubmission = {
   content: string;
