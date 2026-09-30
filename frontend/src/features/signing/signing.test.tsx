@@ -11,7 +11,7 @@ import { Timeline } from "@/features/signing/timeline";
 import { LandingPage } from "@/features/marketing/landing-page";
 import { IntegrationsPage } from "@/features/settings/integrations";
 import { SettingsPage } from "@/features/settings/settings-page";
-import * as api from "@/lib/api-client";
+import * as settingsApi from "@/features/settings/api";
 import * as contractApi from "@/features/contracts/api";
 import * as chatApi from "@/features/chat/api";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -20,22 +20,13 @@ import type { ChatSession, ChatSessionSummary } from "@/features/chat/types";
 import type { ContractDetail, ContractListItem, ContractReview } from "@/features/contracts/types";
 import type { SigningRequest } from "@/features/signing/types";
 
-vi.mock("@/lib/api-client", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/api-client")>();
+vi.mock("@/features/settings/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/settings/api")>();
   return {
     ...actual,
-    listChatSessions: vi.fn(),
-    createChatSession: vi.fn(),
-    getChatSession: vi.fn(),
-    listContracts: vi.fn(),
-    getContract: vi.fn(),
-    getContractDocument: vi.fn(),
-    deleteContract: vi.fn(),
-    uploadContract: vi.fn(),
     getSlackIntegration: vi.fn(),
     beginSlackInstallation: vi.fn(),
-    disconnectSlackInstallation: vi.fn(),
-    streamChatMessage: vi.fn()
+    disconnectSlackInstallation: vi.fn()
   };
 });
 
@@ -277,3 +268,4 @@ test("timeline renders immutable events in chronological order", () => {
   const notes = within(timeline).getAllByText(/Sent|Viewed/, { selector: "p" }).map((node) => node.textContent);
   expect(notes).toEqual(["Sent", "Viewed"]);
 });
+

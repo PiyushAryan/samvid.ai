@@ -1,4 +1,4 @@
-import { AdminUserDetailPage } from "@/features/admin/admin";
+import { AdminUserDetailPage } from "@/features/admin/user-detail-page";
 
 export default function AdminUserDetailRoute() {
   return <AdminUserDetailPage />;

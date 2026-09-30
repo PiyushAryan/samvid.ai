@@ -11,7 +11,7 @@ import { Timeline } from "@/features/signing/timeline";
 import { LandingPage } from "@/features/marketing/landing-page";
 import { IntegrationsPage } from "@/features/settings/integrations";
 import { SettingsPage } from "@/features/settings/settings-page";
-import * as api from "@/lib/api-client";
+import * as settingsApi from "@/features/settings/api";
 import * as contractApi from "@/features/contracts/api";
 import * as chatApi from "@/features/chat/api";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -20,22 +20,13 @@ import type { ChatSession, ChatSessionSummary } from "@/features/chat/types";
 import type { ContractDetail, ContractListItem, ContractReview } from "@/features/contracts/types";
 import type { SigningRequest } from "@/features/signing/types";
 
-vi.mock("@/lib/api-client", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/api-client")>();
+vi.mock("@/features/settings/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/settings/api")>();
   return {
     ...actual,
-    listChatSessions: vi.fn(),
-    createChatSession: vi.fn(),
-    getChatSession: vi.fn(),
-    listContracts: vi.fn(),
-    getContract: vi.fn(),
-    getContractDocument: vi.fn(),
-    deleteContract: vi.fn(),
-    uploadContract: vi.fn(),
     getSlackIntegration: vi.fn(),
     beginSlackInstallation: vi.fn(),
-    disconnectSlackInstallation: vi.fn(),
-    streamChatMessage: vi.fn()
+    disconnectSlackInstallation: vi.fn()
   };
 });
 
@@ -227,26 +218,26 @@ function enterChatText(textbox: HTMLElement, value: string) {
 }
 
 test("integrations page lists and disconnects a Slack workspace", async () => {
-  vi.mocked(api.getSlackIntegration).mockResolvedValue({
+  vi.mocked(settingsApi.getSlackIntegration).mockResolvedValue({
     enabled: true,
     installations: [{ id: "install-1", team_id: "T123", team_name: "Legal Ops", status: "active" }]
   });
-  vi.mocked(api.disconnectSlackInstallation).mockResolvedValue(undefined);
+  vi.mocked(settingsApi.disconnectSlackInstallation).mockResolvedValue(undefined);
 
   render(<QueryProvider><IntegrationsPage /></QueryProvider>);
 
   expect(await screen.findByText("Legal Ops")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Connect" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /disconnect/i }));
-  await waitFor(() => expect(api.disconnectSlackInstallation).toHaveBeenCalled());
-  expect(vi.mocked(api.disconnectSlackInstallation).mock.calls[0][0]).toBe("install-1");
+  await waitFor(() => expect(settingsApi.disconnectSlackInstallation).toHaveBeenCalled());
+  expect(vi.mocked(settingsApi.disconnectSlackInstallation).mock.calls[0][0]).toBe("install-1");
   await waitFor(() => expect(screen.queryByText("Legal Ops")).not.toBeInTheDocument());
   expect(screen.getByRole("button", { name: "Connect" })).toBeInTheDocument();
 });
 
 test("Slack OAuth return opens Integrations without a redundant success banner", async () => {
-  vi.mocked(api.getSlackIntegration).mockClear();
-  vi.mocked(api.getSlackIntegration).mockResolvedValue({
+  vi.mocked(settingsApi.getSlackIntegration).mockClear();
+  vi.mocked(settingsApi.getSlackIntegration).mockResolvedValue({
     enabled: true,
     installations: [{ id: "install-1", team_id: "T123", team_name: "Legal Ops", status: "active" }]
   });
@@ -258,12 +249,12 @@ test("Slack OAuth return opens Integrations without a redundant success banner",
   expect(await screen.findByText("Legal Ops")).toBeInTheDocument();
   expect(screen.queryByText("Slack workspace connected.")).not.toBeInTheDocument();
   expect(screen.queryByText("Samvid is ready to receive contracts from Slack.")).not.toBeInTheDocument();
-  expect(api.getSlackIntegration).toHaveBeenCalled();
+  expect(settingsApi.getSlackIntegration).toHaveBeenCalled();
 });
 
 test("Slack OAuth return explains when the workspace was not saved", async () => {
-  vi.mocked(api.getSlackIntegration).mockClear();
-  vi.mocked(api.getSlackIntegration).mockResolvedValue({ enabled: true, installations: [] });
+  vi.mocked(settingsApi.getSlackIntegration).mockClear();
+  vi.mocked(settingsApi.getSlackIntegration).mockResolvedValue({ enabled: true, installations: [] });
   setTestUrl("/settings?slack=connected");
 
   render(<QueryProvider><SettingsPage /></QueryProvider>);
@@ -271,3 +262,4 @@ test("Slack OAuth return explains when the workspace was not saved", async () =>
   expect(await screen.findByRole("alert")).toHaveTextContent("workspace was not saved");
   expect(screen.getByRole("button", { name: "Connect" })).toBeEnabled();
 });
+

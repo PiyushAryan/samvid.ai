@@ -10,7 +10,7 @@ import {
   disconnectSlackInstallation,
   getSlackIntegration
 } from "@/features/settings/api";
-import { ApiError } from "@/lib/api-client";
+import { ApiError } from "@/lib/http-client";
 import {
   Cancel01Icon,
   OctagonXIcon,

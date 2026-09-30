@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense, type ReactNode } from "react";
 
-import { AdminShell } from "@/features/admin/admin";
+import { AdminShell } from "@/features/admin/admin-shell";
 import { RequireSuperAdmin } from "@/features/auth/auth-provider";
 import { AppProviders } from "../../providers";
 

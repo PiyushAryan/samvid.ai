@@ -11,8 +11,9 @@ import { Timeline } from "@/features/signing/timeline";
 import { LandingPage } from "@/features/marketing/landing-page";
 import { IntegrationsPage } from "@/features/settings/integrations";
 import { SettingsPage } from "@/features/settings/settings-page";
-import * as api from "@/lib/api-client";
+import * as settingsApi from "@/features/settings/api";
 import * as contractApi from "@/features/contracts/api";
+import { ApiError } from "@/lib/http-client";
 import * as chatApi from "@/features/chat/api";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { setTestUrl } from "@/test/mocks/next-navigation";
@@ -20,22 +21,13 @@ import type { ChatSession, ChatSessionSummary } from "@/features/chat/types";
 import type { ContractDetail, ContractListItem, ContractReview } from "@/features/contracts/types";
 import type { SigningRequest } from "@/features/signing/types";
 
-vi.mock("@/lib/api-client", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/api-client")>();
+vi.mock("@/features/settings/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/settings/api")>();
   return {
     ...actual,
-    listChatSessions: vi.fn(),
-    createChatSession: vi.fn(),
-    getChatSession: vi.fn(),
-    listContracts: vi.fn(),
-    getContract: vi.fn(),
-    getContractDocument: vi.fn(),
-    deleteContract: vi.fn(),
-    uploadContract: vi.fn(),
     getSlackIntegration: vi.fn(),
     beginSlackInstallation: vi.fn(),
-    disconnectSlackInstallation: vi.fn(),
-    streamChatMessage: vi.fn()
+    disconnectSlackInstallation: vi.fn()
   };
 });
 
@@ -276,7 +268,7 @@ test("contract refresh rotates until updated API data arrives", async () => {
 });
 
 test("contract upload distinguishes transfer from review startup and confirms success", async () => {
-  let finishUpload!: (result: api.ContractUploadResult) => void;
+  let finishUpload!: (result: contractApi.ContractUploadResult) => void;
   vi.mocked(contractApi.uploadContract).mockImplementationOnce((_file, onProgress) => {
     onProgress({ percentage: 100, stage: "starting_review" });
     return new Promise((resolve) => {
@@ -313,7 +305,7 @@ test("contract upload distinguishes transfer from review startup and confirms su
 });
 
 test("contract upload exits loading state after a timeout and remains retryable", async () => {
-  vi.mocked(contractApi.uploadContract).mockRejectedValueOnce(new api.ApiError(408, {
+  vi.mocked(contractApi.uploadContract).mockRejectedValueOnce(new ApiError(408, {
     code: "upload_timeout",
     message: "The file was uploaded, but starting its review took too long. Refresh Contracts before trying again."
   }));

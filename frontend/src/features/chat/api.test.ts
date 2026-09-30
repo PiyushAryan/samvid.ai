@@ -1,6 +1,6 @@
 import { beforeEach, expect, test, vi } from "vitest";
 
-import { streamChatMessage } from "./api-client";
+import { streamChatMessage } from "./api";
 
 vi.mock("@/features/auth/auth", () => ({
   getAccessToken: vi.fn().mockResolvedValue("chat-access-token"),
@@ -55,3 +55,4 @@ test("chat stream consumes authenticated SSE deltas, sources, and completion", a
   expect(sources).toEqual(["Services agreement"]);
   expect(finalContent).toBe("The notice period is 30 days.");
 });
+
