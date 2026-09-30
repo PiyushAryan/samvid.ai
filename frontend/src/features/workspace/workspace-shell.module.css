@@ -1,0 +1,1506 @@
+.scope :global(.mono),
+.scope :global(.muted),
+.scope :global(.tracking-note),
+.scope :global(.field),
+.scope :global(.state),
+.scope :global(.form-error),
+.scope :global(.empty),
+.scope :global(.page-header) small {
+  font-family: var(--mono);
+}
+
+.scope :global(.app-shell) {
+  --sidebar-width: 248px;
+  display: grid;
+  position: fixed;
+  inset: 9px;
+  width: auto;
+  height: calc(100vh - 18px);
+  margin: 0;
+  overflow: clip;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--app-bg);
+  color: var(--text);
+  font-family: var(--app-font);
+  box-shadow: 0 8px 24px rgba(23, 27, 26, 0.04);
+}
+
+.scope :global(.app-shell) > main {
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-color: #cfd5d3 transparent;
+  scrollbar-width: thin;
+}
+
+.scope :global(.app-shell) > main::-webkit-scrollbar {
+  width: 10px;
+}
+
+.scope :global(.app-shell) > main::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scope :global(.app-shell) > main::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: #cfd5d3;
+  background-clip: padding-box;
+}
+
+.scope :global(.app-shell) > main::-webkit-scrollbar-thumb:hover {
+  background-color: #b9c1be;
+}
+
+.scope :global(.workspace-main) {
+  position: relative;
+  isolation: isolate;
+  background: #fff;
+}
+
+.scope :global(.app-shell)[data-theme="dark"] :global(.workspace-main) {
+  background: var(--app-bg);
+}
+
+.scope :global(.workspace-main)::before {
+  display: none;
+}
+
+.scope :global(.sidebar) {
+  position: sticky;
+  top: 9px;
+  z-index: 10;
+  display: flex;
+  height: calc(100vh - 18px);
+  flex-direction: column;
+  gap: 28px;
+  padding: 20px 14px;
+  min-width: 0;
+  border-right: 0.5px solid var(--border);
+  background: rgba(251, 252, 249, 0.96);
+}
+
+.scope :global(.app-shell)[data-theme="dark"] :global(.sidebar) {
+  background: rgba(15, 16, 18, 0.97);
+}
+
+.scope :global(.sidebar-brand-row) {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.scope :global(.sidebar-header-actions),
+.scope :global(.sidebar-menu-controls) {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.scope :global(.sidebar-menu) {
+  position: relative;
+  display: inline-flex;
+}
+
+.scope :global(.icon-button):global(.sidebar-menu-trigger),
+.scope :global(.sidebar-menu-trigger) {
+  width: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+}
+
+.scope :global(.icon-button):global(.sidebar-menu-trigger):hover,
+.scope :global(.icon-button):global(.sidebar-menu-trigger):focus-visible,
+.scope :global(.sidebar-menu-trigger):hover,
+.scope :global(.sidebar-menu-trigger):focus-visible,
+.scope :global(.sidebar-menu-trigger)[aria-expanded="true"] {
+  border-color: transparent;
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.scope :global(.sidebar-menu-trigger):focus-visible,
+.scope :global(.sidebar-menu-item):focus-visible {
+  outline: 2px solid var(--focus-border);
+  outline-offset: 2px;
+}
+
+.scope :global(.sidebar-menu-trigger):active {
+  transform: none;
+}
+
+.scope :global(.sidebar-menu-dropdown),
+.scope :global(.sidebar-menu-popover) {
+  position: absolute;
+  z-index: 400;
+  top: calc(100% + 8px);
+  left: 0;
+  display: grid;
+  width: min(326px, calc(100vw - 32px));
+  gap: 14px;
+  padding: 18px;
+  border: 0.5px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  box-shadow: var(--menu-shadow);
+  color: var(--text);
+  transform-origin: top left;
+  animation: sidebar-menu-enter 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.scope :global(.sidebar-menu-eyebrow) {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.scope :global(.sidebar-account) {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+}
+
+.scope :global(.sidebar-account-avatar) {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.scope :global(.sidebar-account-copy) {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.scope :global(.sidebar-account-title) {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.scope :global(.sidebar-account-title) strong {
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.scope :global(.sidebar-account-title) small,
+.scope :global(.sidebar-account-email) {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope :global(.sidebar-account-title) small {
+  min-width: 0;
+}
+
+.scope :global(.sidebar-menu-actions) {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+}
+
+.scope :global(.sidebar-menu-action) {
+  display: inline-flex;
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.scope :global(.sidebar-menu-logout) {
+  margin-left: auto;
+}
+
+.scope :global(.sidebar-menu-action):hover,
+.scope :global(.sidebar-menu-action):focus-visible {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.scope :global(.sidebar-menu-action):hover svg,
+.scope :global(.sidebar-menu-action):focus-visible svg {
+  color: var(--accent);
+}
+
+.scope :global(.sidebar-menu-action)[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.scope :global(.sidebar-account)[aria-disabled="true"] {
+  cursor: default;
+}
+
+.scope :global(.sidebar-menu-logout) {
+  color: var(--danger);
+}
+
+.scope :global(.sidebar-menu-logout):hover,
+.scope :global(.sidebar-menu-logout):focus-visible {
+  background: var(--danger-bg);
+}
+
+@keyframes sidebar-menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.scope :global(.sidebar-toggle) {
+  display: none;
+  transition: opacity 180ms ease, color 150ms ease, background-color 150ms ease;
+}
+
+.scope :global(.brand) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  transition: gap 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.scope :global(.brand-mark) {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--text);
+  color: var(--app-bg);
+  font-size: 15px;
+  font-weight: 700;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.scope :global(.brand-mark-image) {
+  display: block;
+  background: transparent;
+  object-fit: contain;
+}
+
+.scope :global(.brand-copy),
+.scope :global(.nav-label) {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.scope :global(.brand) strong {
+  display: block;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.scope :global(.brand-caption) {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 9px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+@media (min-width: 961px) {
+  .scope :global(.sidebar-toggle) {
+    display: inline-flex;
+  }
+
+  .scope :global(.sidebar-collapsed) :global(.sidebar-brand-row) {
+    grid-template-columns: 64px;
+    justify-content: center;
+    min-height: 32px;
+    gap: 0;
+  }
+
+  .scope :global(.sidebar-collapsed) :global(.sidebar-menu-controls) {
+    grid-area: 1 / 1;
+    justify-content: center;
+    gap: 0;
+  }
+
+  .scope :global(.sidebar-collapsed) :global(.sidebar-view-switch) {
+    display: none;
+  }
+
+  .scope :global(.sidebar-collapsed) :global(.nav-link) {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    justify-content: center;
+    gap: 0;
+    padding-inline: 0;
+  }
+}
+
+.scope :global(.sidebar-nav) {
+  display: grid;
+  gap: 4px;
+}
+
+.scope :global(.sidebar-view-switch) {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 8px;
+  padding: 3px;
+  border: 0.5px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-muted);
+}
+
+.scope :global(.sidebar-view-indicator) {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / 2);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(23, 27, 26, 0.08);
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.scope :global(.sidebar-view-switch)[data-active="chats"] :global(.sidebar-view-indicator) {
+  transform: translateX(100%);
+}
+
+.scope :global(.sidebar-view-option) {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  min-width: 0;
+  min-height: 30px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  transition: color 150ms ease;
+}
+
+.scope :global(.sidebar-view-option):hover,
+.scope :global(.sidebar-view-option)[aria-pressed="true"] {
+  color: var(--text);
+}
+
+.scope :global(.sidebar-view-option):focus-visible {
+  outline: 2px solid var(--focus-border);
+  outline-offset: 1px;
+}
+
+.scope :global(.sidebar-new-chat) {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  cursor: pointer;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px;
+  border: 0.5px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+
+.scope :global(.sidebar-new-chat):hover,
+.scope :global(.sidebar-new-chat):focus-visible {
+  border-color: var(--control-border-hover);
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.scope :global(.nav-link) {
+  position: relative;
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 150ms ease, background-color 150ms ease, gap 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.scope :global(.theme-toggle) {
+  width: 100%;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+}
+
+.scope :global(.nav-link) svg,
+.scope :global(.sidebar-toggle) svg {
+  flex: none;
+}
+
+.scope :global(.nav-link):hover {
+  color: var(--text);
+  background: var(--surface-muted);
+}
+
+.scope :global(.nav-link)[aria-current="page"] {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+}
+
+.scope :global(.app-shell)[data-theme="dark"] :global(.nav-link)[aria-current="page"] :global(.nav-label) {
+  color: #fff;
+}
+
+.scope :global(.nav-link)[aria-current="page"]::before {
+  position: absolute;
+  left: 0;
+  width: 2px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--accent);
+  content: "";
+}
+
+.scope :global(.tracking-note) {
+  margin-top: auto;
+  overflow: hidden;
+  padding: 12px 8px 0;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.scope :global(.page) {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 40px 36px 56px;
+}
+
+.scope :global(.page-header) {
+  display: flex;
+  min-height: 58px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.scope :global(.page-header) > span {
+  min-width: 0;
+}
+
+.scope :global(.page-header) small {
+  color: var(--accent);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.scope :global(.page-header) h1 {
+  max-width: 760px;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: clamp(25px, 3vw, 34px);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.scope :global(.primary),
+.scope :global(.secondary),
+.scope :global(.destructive),
+.scope :global(.icon-button) {
+  display: inline-flex;
+  min-height: 38px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease;
+}
+
+.scope :global(.primary) {
+  background: var(--accent);
+  color: #fff;
+}
+
+.scope :global(.primary):hover {
+  background: var(--accent-dark);
+}
+
+.scope :global(.secondary),
+.scope :global(.icon-button) {
+  border-color: var(--border-strong);
+  background: var(--surface);
+  color: var(--text-secondary);
+}
+
+.scope :global(.secondary):hover,
+.scope :global(.icon-button):hover {
+  border-color: var(--control-border-hover);
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.scope :global(.destructive) {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.scope :global(.destructive):hover {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}
+
+.scope :global(.page-header-actions) {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.scope :global(.primary):active,
+.scope :global(.secondary):active,
+.scope :global(.destructive):active,
+.scope :global(.icon-button):active {
+  transform: translateY(1px);
+}
+
+.scope :global(.primary):disabled,
+.scope :global(.secondary):disabled,
+.scope :global(.destructive):disabled,
+.scope :global(.icon-button):disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
+}
+
+.scope :global(.secondary):global(.compact) {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.scope :global(.icon-button) {
+  width: 38px;
+  min-width: 38px;
+  padding: 0;
+}
+
+.scope :global(.icon-button):global(.sidebar-toggle) {
+  width: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.scope :global(.icon-button):global(.sidebar-toggle):hover,
+.scope :global(.icon-button):global(.sidebar-toggle):focus-visible {
+  border-color: transparent;
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.scope :global(.icon-button):global(.sidebar-toggle):active {
+  transform: none;
+}
+
+.scope :global(.app-tooltip) {
+  z-index: 300;
+  max-width: 220px;
+  padding: 6px 8px;
+  border: 1px solid var(--tooltip-border);
+  border-radius: 6px;
+  background: var(--tooltip-bg);
+  box-shadow: 0 8px 24px rgba(23, 27, 26, 0.16);
+  color: var(--tooltip-text);
+  font-family: var(--app-font);
+  font-size: 10px;
+  line-height: 1.3;
+  text-wrap: balance;
+  transform-origin: var(--trigger-anchor-point);
+}
+
+.scope :global(.app-tooltip)[data-state="delayed-open"],
+.scope :global(.app-tooltip)[data-state="instant-open"] {
+  animation: tooltip-enter 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.scope :global(.app-tooltip)[data-state="closed"] {
+  animation: tooltip-exit 100ms ease-in forwards;
+}
+
+.scope :global(.app-tooltip-arrow) {
+  display: block;
+  fill: var(--tooltip-bg);
+  stroke: var(--tooltip-border);
+  stroke-width: 1px;
+}
+
+@keyframes tooltip-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-4px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes tooltip-exit {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(-2px) scale(0.98);
+  }
+}
+
+.scope :global(.toolbar) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.scope :global(.toolbar-control),
+.scope :global(.search-field) {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text-muted);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.scope :global(.search-field) {
+  flex: 0 1 288px;
+}
+
+.scope :global(.toolbar-control):focus-within,
+.scope :global(.search-field):focus-within {
+  border-color: var(--focus-border);
+  box-shadow: 0 0 0 3px rgba(8, 119, 109, 0.08);
+}
+
+.scope :global(.toolbar-input) {
+  min-width: 150px;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.scope :global(.search-field) :global(.toolbar-input) {
+  min-width: 0;
+}
+
+.scope :global(.tabs) {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 24px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+}
+
+.scope :global(.tab) {
+  position: relative;
+  min-height: 40px;
+  padding: 0 1px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.scope :global(.tab):hover,
+.scope :global(.tab):global(.active) {
+  color: var(--text);
+}
+
+.scope :global(.tab):global(.active)::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+  content: "";
+}
+
+.scope :global(.table-wrap) {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--workspace-surface-shadow);
+}
+
+.scope :global(.data-table) {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+}
+
+.scope :global(.table-heading),
+.scope :global(.table-cell) {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.scope :global(.table-heading) {
+  background: var(--surface-subtle);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.scope :global(.table-cell) {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.scope :global(.data-table) tbody tr {
+  transition: background-color 150ms ease;
+}
+
+.scope :global(.data-table) tbody tr:hover {
+  background: var(--row-hover);
+}
+
+.scope :global(.data-table) tbody tr:last-child :global(.table-cell) {
+  border-bottom: 0;
+}
+
+.scope :global(.sr-only) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.scope :global(.skeleton) {
+  border-radius: 5px;
+  background: var(--skeleton);
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+.scope :global(.skeleton-stack) {
+  display: grid;
+  justify-items: start;
+  gap: 7px;
+}
+
+.scope :global(.skeleton-inline) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.scope :global(.skeleton-line) {
+  width: 100%;
+  height: 10px;
+}
+
+.scope :global(.skeleton-title) {
+  width: 210px;
+  max-width: 85%;
+  height: 12px;
+}
+
+.scope :global(.skeleton-filename) {
+  width: 132px;
+  max-width: 65%;
+  height: 8px;
+}
+
+.scope :global(.skeleton-badge) {
+  width: 72px;
+  height: 23px;
+  border-radius: 6px;
+}
+
+.scope :global(.skeleton-chip) {
+  width: 24px;
+  height: 22px;
+  border-radius: 6px;
+}
+
+.scope :global(.skeleton-counter) {
+  width: 72px;
+  height: 8px;
+}
+
+.scope :global(.skeleton-date) {
+  width: 118px;
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.scope :global(.row-title) {
+  display: block;
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.scope :global(.row-title):hover {
+  color: var(--accent-dark);
+}
+
+.scope :global(.row-title) + :global(.muted) {
+  display: block;
+  margin-top: 4px;
+}
+
+.scope :global(.muted) {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.scope :global(.date-cell) {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.scope :global(.table-action) {
+  text-align: right;
+}
+
+.scope :global(.badge) {
+  display: inline-flex;
+  min-height: 23px;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.scope :global(.badge)::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+.scope :global(.success) {
+  border-color: var(--success-border);
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.scope :global(.danger) {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.scope :global(.warning) {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.scope :global(.neutral) {
+  border-color: var(--neutral-border);
+  background: var(--neutral-bg);
+  color: var(--neutral);
+}
+
+.scope :global(.detail-grid) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.scope :global(.panel) {
+  min-width: 0;
+  padding: 20px 0;
+  border-top: 1px solid var(--border);
+}
+
+.scope :global(.panel):first-child {
+  border-top: 0;
+}
+
+.scope :global(.detail-grid) > :global(.panel):nth-child(-n + 3) {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--workspace-surface-shadow);
+}
+
+.scope :global(.panel-card) {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--workspace-surface-shadow);
+}
+
+.scope :global(.panel) h2,
+.scope :global(.dialog) h2 {
+  margin: 0 0 14px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.scope :global(.definition-list) {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+}
+
+.scope :global(.definition-list) > div {
+  display: grid;
+  gap: 4px;
+}
+
+.scope :global(.definition-list) dt {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.scope :global(.definition-list) dd {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.scope :global(.plain-list) {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.scope :global(.notice) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--warning-border);
+  border-radius: 7px;
+  background: var(--warning-bg);
+  color: var(--notice-text);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.scope :global(.notice) svg {
+  flex: 0 0 auto;
+}
+
+.scope :global(.panel-heading) {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.scope :global(.heading-actions) {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.scope :global(.compact-list) > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.scope :global(.field) {
+  display: grid;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.scope :global(.field-spaced) {
+  margin-top: 12px;
+}
+
+.scope :global(.field-control) {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  outline: 0;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.scope :global(.field-control):focus {
+  border-color: var(--focus-border);
+  box-shadow: 0 0 0 3px rgba(8, 119, 109, 0.08);
+}
+
+.scope textarea:global(.field-control) {
+  resize: vertical;
+}
+
+.scope :global(.check) {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.scope :global(.check) input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+}
+
+.scope :global(.drop-input) {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.scope :global(.drop-input):disabled {
+  cursor: wait;
+}
+
+.scope :global(.progress) {
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 4px;
+  accent-color: var(--accent);
+}
+
+.scope :global(.dialog-backdrop) {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(23, 27, 26, 0.35);
+  backdrop-filter: blur(4px);
+}
+
+.scope :global(.dialog) {
+  width: 100%;
+  max-width: 560px;
+  max-height: 92vh;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 24px 64px rgba(23, 27, 26, 0.16);
+}
+
+.scope :global(.dialog-header) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.scope :global(.dialog-header) h2 {
+  margin: 0;
+}
+
+.scope :global(.dialog-actions) {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.scope :global(.state),
+.scope :global(.empty) {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  gap: 8px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.scope :global(.state):global(.error),
+.scope :global(.form-error) {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.scope :global(.form-error) {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius);
+  font-size: 10px;
+}
+
+.scope :global(.empty) {
+  min-height: 96px;
+  justify-content: center;
+  text-align: center;
+}
+
+/* AI contract chat */
+
+.scope :global(.text-shimmer) {
+  --text-shimmer-base: #7b8582;
+  --text-shimmer-highlight: #17201e;
+  --text-shimmer-gradient: linear-gradient(
+    90deg,
+    transparent calc(50% - var(--text-shimmer-spread)),
+    var(--text-shimmer-highlight),
+    transparent calc(50% + var(--text-shimmer-spread))
+  );
+  position: relative;
+  display: inline-block;
+  color: transparent;
+  background-image:
+    var(--text-shimmer-gradient),
+    linear-gradient(var(--text-shimmer-base), var(--text-shimmer-base));
+  background-position: 100% center;
+  background-repeat: no-repeat, padding-box;
+  background-size: 250% 100%, auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+.scope :global(.app-shell)[data-theme="dark"] :global(.text-shimmer) {
+  --text-shimmer-base: #77817e;
+  --text-shimmer-highlight: #f3f7f5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scope :global(.text-shimmer) {
+    color: inherit;
+    background: none;
+  }
+}
+
+.scope :global(.spin) {
+  animation: spin 800ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 960px) {
+
+  .scope :global(.app-shell) {
+    inset: 8px;
+    width: auto;
+    height: calc(100vh - 16px);
+    margin: 0;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .scope :global(.sidebar) {
+    position: static;
+    display: grid;
+    height: auto;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-right: 0;
+    border-bottom: 0.5px solid var(--border);
+  }
+
+  .scope :global(.sidebar-view-switch) {
+    width: 92px;
+    flex: 0 0 92px;
+    margin: 0 4px 0 0;
+  }
+
+  .scope :global(.sidebar-menu-popover) {
+    top: calc(100% + 9px);
+  }
+
+  .scope :global(.nav-link)[aria-current="page"]::before,
+.scope :global(.tracking-note) {
+    display: none;
+  }
+
+  .scope :global(.detail-grid) > :global(.panel):nth-child(n + 2) {
+    border-top: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 720px) {
+
+  .scope :global(.page) {
+    padding: 32px 16px;
+  }
+
+  .scope :global(.page-header-actions) {
+    justify-content: stretch;
+  }
+
+  .scope :global(.toolbar-control),
+.scope :global(.search-field) {
+    flex: 1 1 100%;
+  }
+
+  .scope :global(.panel-heading) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 520px) {
+  .scope :global(.sidebar-menu-popover) {
+    position: fixed;
+    top: 68px;
+    right: 16px;
+    left: 16px;
+    width: auto;
+  }
+
+  .scope :global(.sidebar) {
+    padding-inline: 10px;
+  }
+
+  .scope :global(.nav-link) {
+    gap: 5px;
+    padding-inline: 7px;
+  }
+}
+/* Authentication route loading state */
+.scope :global(.auth-route-loading) {
+  display: grid;
+  min-height: 100svh;
+  place-content: center;
+  justify-items: center;
+  background: #f6f7f4;
+}
+
+.scope :global(.auth-route-loading-logo) {
+  display: block;
+  width: 52px;
+  height: 52px;
+  animation: auth-route-loading-pulse 1.4s ease-in-out infinite;
+}
+
+.scope :global(.auth-route-loading)[data-theme="dark"] {
+  background: #0b0c0e;
+}
+
+@keyframes auth-route-loading-pulse {
+  0%, 100% {
+    opacity: 0.62;
+    transform: scale(0.96);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.scope :global(.auth-route-state) {
+  display: grid;
+  min-height: 100svh;
+  place-items: center;
+  padding: 24px;
+  background: var(--app-bg);
+  color: var(--text);
+  font-family: var(--app-font);
+}
+
+.scope :global(.auth-route-state-panel) {
+  width: min(100%, 440px);
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--menu-shadow);
+}
+
+.scope :global(.auth-route-state-panel) > span {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.scope :global(.auth-route-state-panel) h1 {
+  margin: 12px 0 10px;
+  font-size: 24px;
+  letter-spacing: 0;
+}
+
+.scope :global(.auth-route-state-panel) p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.scope :global(.auth-route-state-panel) button {
+  min-height: 42px;
+  margin-top: 22px;
+  padding: 0 16px;
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.scope a[aria-disabled="true"] {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+/* Super-admin oversight views */

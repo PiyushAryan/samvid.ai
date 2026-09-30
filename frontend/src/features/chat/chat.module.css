@@ -1,0 +1,874 @@
+
+
+.scope :global(.sidebar--chats) :global(.sidebar-nav) {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.scope :global(.sidebar--chats) :global(.sidebar-chat-section) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.scope :global(.sidebar--chats) :global(.sidebar-chat-list) {
+  min-height: 0;
+  max-height: none;
+  flex: 1;
+}
+
+@keyframes sidebar-menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (min-width: 961px) {
+
+  .scope :global(.sidebar-collapsed) :global(.sidebar-chat-section) {
+    display: none;
+  }
+}
+
+.scope :global(.sidebar-chat-section) {
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.scope :global(.sidebar-new-chat):focus-visible,
+.scope :global(.sidebar-chat-list) button:focus-visible {
+  outline: 2px solid var(--focus-border);
+  outline-offset: 1px;
+}
+
+.scope :global(.sidebar-chat-section) h2 {
+  margin: 5px 10px 0;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.scope :global(.sidebar-chat-list) {
+  display: grid;
+  max-height: min(48vh, 360px);
+  gap: 2px;
+  margin: 0;
+  padding: 0 4px 0 0;
+  overflow-y: auto;
+  list-style: none;
+  color: var(--text-muted);
+  font-size: 10px;
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
+}
+
+.scope :global(.sidebar-chat-list)::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scope :global(.sidebar-chat-list)::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+
+.scope :global(.sidebar-chat-list) button {
+  width: 100%;
+  min-height: 30px;
+  cursor: pointer;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 11px;
+  text-align: left;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.scope :global(.sidebar-chat-list) button:hover,
+.scope :global(.sidebar-chat-list) button[aria-current="page"] {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.scope :global(.sidebar-chat-loading) {
+  display: grid;
+  gap: 6px;
+  padding: 0 8px;
+}
+
+.scope :global(.sidebar-chat-skeleton) {
+  height: 28px;
+  border-radius: 6px;
+}
+
+.scope :global(.sidebar-chat-state),
+.scope :global(.sidebar-chat-empty) {
+  margin: 0;
+  padding: 7px 10px;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.scope :global(.sidebar-chat-state) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.scope :global(.sidebar-chat-state) button {
+  cursor: pointer;
+  padding: 2px 5px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+}
+
+@keyframes tooltip-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-4px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes tooltip-exit {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(-2px) scale(0.98);
+  }
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+.scope :global(.ai-chat-page) {
+  font-family: "Instrument Sans", "Geist Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  width: 100%;
+  min-height: calc(100vh - 19px);
+  flex-direction: column;
+  overflow: visible;
+  background: transparent;
+}
+
+.scope :global(.ai-chat-page)::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background-image: linear-gradient(var(--workspace-wash), var(--workspace-wash)), url("/blr.avif");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  content: "";
+}
+
+.scope :global(.ai-chat-page)[data-conversation="true"] {
+  --surface: #fff;
+  --surface-muted: #f0f2ef;
+  --surface-subtle: #f5f6f3;
+  --border: #dfe3df;
+  --border-strong: #cfd6d3;
+  --text: #171b1a;
+  --text-secondary: #3f4846;
+  --text-muted: #737d7a;
+  --accent: #08776d;
+  --accent-dark: #055e57;
+  --accent-soft: #e7f3f1;
+  --focus-border: #8dbdb7;
+  background: #fff;
+}
+
+.scope :global(.ai-chat-page)[data-conversation="true"]::before {
+  display: none;
+}
+
+.scope :global(.app-shell)[data-theme="dark"] :global(.ai-chat-page)[data-conversation="true"] {
+  --surface: #15171a;
+  --surface-muted: #1d2024;
+  --surface-subtle: #111316;
+  --border: #2a2e33;
+  --border-strong: #3d4249;
+  --text: #f1f3f5;
+  --text-secondary: #c6cbd1;
+  --text-muted: #8f969f;
+  --accent: #49b9ac;
+  --accent-dark: #73d2c7;
+  --accent-soft: #1b2526;
+  --focus-border: #49b9ac;
+  background: var(--app-bg);
+}
+
+.scope :global(.ai-chat-main) {
+  display: flex;
+  width: min(640px, 100%);
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  margin: 0 auto;
+  padding: clamp(36px, 8vh, 88px) 28px 28px;
+
+}
+
+.scope :global(.ai-chat-content) {
+  display: flex;
+  width: min(820px, 100%);
+  min-height: calc(100vh - 19px);
+  flex-direction: column;
+  justify-content: center;
+  gap: 22px;
+  margin: 0 auto;
+  padding: clamp(40px, 8vh, 88px) 28px 124px;
+}
+
+.scope :global(.ai-chat-content--conversation) {
+  justify-content: flex-start;
+}
+
+.scope :global(.ai-chat-content):not(:global(.ai-chat-content--conversation)) {
+  justify-content: flex-start;
+  padding-top: clamp(84px, 14vh, 140px);
+}
+
+.scope :global(.ai-chat-header) {
+  font-family: "Geist Sans", Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.scope :global(.ai-chat-header) h1 {
+  color: var(--text);
+  font-size: clamp(32px, 4.2vw, 52px);
+  font-weight: 550;
+  letter-spacing: 0;
+  line-height: 1.1;
+}
+
+.scope :global(.ai-chat-header) > p:last-child {
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.scope :global(.ai-chat-eyebrow) {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.scope :global(.ai-chat-empty),
+.scope :global(.ai-chat-empty-state),
+.scope :global(.ai-chat-intro) {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin: auto 0 clamp(28px, 7vh, 64px);
+  text-align: center;
+}
+
+.scope :global(.ai-chat-empty-state) {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.scope :global(.ai-chat-empty-icon) {
+  color: var(--accent);
+}
+
+.scope :global(.ai-chat-suggestions) {
+  order: 1;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.scope :global(.ai-chat-content):not(:global(.ai-chat-content--conversation)) :global(.ai-chat-suggestions) {
+  order: 0;
+  margin: 46px auto 0;
+  padding-top: 0;
+}
+
+.scope :global(.ai-chat-suggestions) > div {
+  display: grid;
+  gap: 5px;
+}
+
+.scope :global(.ai-chat-suggestions) button {
+  cursor: pointer;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  transition: color 150ms ease, transform 150ms ease;
+}
+
+.scope :global(.ai-chat-suggestions) button:hover {
+  color: var(--accent-dark);
+  transform: translateX(2px);
+}
+
+.scope :global(.ai-chat-suggestions) button:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--focus-border);
+  outline-offset: 4px;
+}
+
+.scope :global(.ai-chat-conversation-state) {
+  display: grid;
+  min-height: 180px;
+  place-content: center;
+  justify-items: center;
+  gap: 9px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.scope :global(.ai-chat-conversation-state) strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.scope :global(.ai-chat-conversation-state):global(.ai-chat-error) {
+  color: var(--danger);
+}
+
+.scope :global(.ai-chat-mark) {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 8px;
+  place-items: center;
+  border: 0.5px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(23, 27, 26, 0.07);
+  color: var(--accent);
+}
+
+.scope :global(.ai-chat-title),
+.scope :global(.ai-chat-greeting) {
+  color: var(--text);
+  font-size: clamp(24px, 4vw, 34px);
+  font-weight: 550;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+}
+
+.scope :global(.ai-chat-greeting) {
+  font-family: "GeistPixelSans", "Geist Pixel Square", ui-monospace, monospace;
+}
+
+.scope :global(.ai-chat-subtitle) {
+  max-width: 460px;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.scope :global(.ai-chat-composer-wrap),
+.scope :global(.ai-chat-composer-container) {
+  width: 100%;
+}
+
+.scope :global(.ai-chat-composer) {
+  position: relative;
+  display: grid;
+  width: 100%;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 0.5px solid var(--border-strong);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  backdrop-filter: blur(16px);
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.scope :global(.ai-chat-content):not(:global(.ai-chat-content--conversation)) :global(.contract-mention-composer-anchor) {
+  order: 0;
+  margin: 36px auto 0;
+}
+
+.scope :global(.ai-chat-content--conversation) :global(.contract-mention-composer-anchor) {
+  position: fixed;
+  z-index: 10;
+  right: 9px;
+  bottom: 33px;
+  left: calc(9px + var(--sidebar-width));
+  width: min(720px, calc(100vw - var(--sidebar-width) - 56px));
+  margin-inline: auto;
+}
+
+.scope :global(.ai-chat-composer) [data-slot="input-group"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.scope :global(.ai-chat-composer):focus-within {
+  border-color: var(--focus-border);
+  outline: 2px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  outline-offset: 2px;
+}
+
+.scope :global(.ai-chat-composer):global(.is-dragging),
+.scope :global(.ai-chat-composer)[data-dragging="true"],
+.scope :global(.ai-chat-composer):global(.ai-chat-drop-active),
+.scope :global(.ai-chat-composer-dragging) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent-soft) 62%, var(--surface));
+}
+
+.scope :global(.ai-chat-textarea),
+.scope :global(.ai-chat-prompt) {
+  grid-column: 1;
+  grid-row: 1;
+  width: 100%;
+  min-height: 36px !important;
+  max-height: 144px;
+  resize: none;
+  padding: 7px 3px !important;
+  border: 0;
+  box-shadow: none;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.scope :global(.ai-chat-textarea)::placeholder,
+.scope :global(.ai-chat-prompt)::placeholder {
+  color: var(--text-muted);
+  opacity: 0.88;
+}
+
+.scope :global(.ai-chat-attachments),
+.scope :global(.ai-chat-file-list) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.scope :global(.ai-chat-attachment),
+.scope :global(.ai-chat-file-chip) {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 30px;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border: 0.5px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.scope :global(.ai-chat-attachment) > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope :global(.ai-chat-attachment) > button {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  cursor: pointer;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.scope :global(.ai-chat-attachment) > button:hover {
+  background: var(--surface);
+  color: var(--danger);
+}
+
+.scope :global(.ai-chat-attachment-name),
+.scope :global(.ai-chat-file-name) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope :global(.ai-chat-remove-attachment),
+.scope :global(.ai-chat-file-remove) {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  cursor: pointer;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.scope :global(.ai-chat-remove-attachment):hover,
+.scope :global(.ai-chat-file-remove):hover {
+  background: var(--surface);
+  color: var(--danger);
+}
+
+.scope :global(.ai-chat-composer-actions),
+.scope :global(.ai-chat-actions) {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+  display: flex;
+  min-width: 0;
+  min-height: 0 !important;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 0 !important;
+}
+
+.scope :global(.ai-chat-attach),
+.scope :global(.ai-chat-attach-button),
+.scope :global(.ai-chat-drop-label) {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 34px;
+  cursor: pointer;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.scope :global(.ai-chat-attach):hover,
+.scope :global(.ai-chat-attach-button):hover,
+.scope :global(.ai-chat-drop-label):hover {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.scope :global(.ai-chat-drop-hint) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope :global(.ai-chat-file-input) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.scope :global(.ai-chat-send),
+.scope :global(.ai-chat-send-button) {
+  display: inline-flex;
+  min-width: 34px;
+  height: 34px;
+  flex: none;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 5px 5px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--text);
+  transform: none;
+  color: var(--surface);
+  transition: opacity 150ms ease, transform 150ms ease, background-color 150ms ease;
+}
+
+.scope :global(.ai-chat-send):hover:not(:disabled),
+.scope :global(.ai-chat-send-button):hover:not(:disabled) {
+  background: var(--accent-dark);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.scope :global(.ai-chat-send):disabled,
+.scope :global(.ai-chat-send-button):disabled {
+  cursor: not-allowed;
+  opacity: 0.34;
+}
+
+.scope :global(.ai-chat-messages) {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  overflow: visible;
+  padding: 0;
+}
+
+.scope :global(.ai-chat-messages-content) {
+  gap: 14px;
+  padding: 4px 3px 20px;
+}
+
+.scope :global(.ai-chat-message) {
+  display: grid;
+  max-width: 100%;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.scope :global(.ai-chat-message-content) {
+  display: grid;
+  width: auto;
+  max-width: min(82%, 620px);
+  gap: 5px;
+  padding: 11px 13px;
+  border: 0.5px solid var(--border);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.scope :global(.ai-chat-message-user) :global(.ai-chat-message-content) {
+  margin-left: auto;
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
+  background: var(--accent-soft);
+}
+
+.scope :global(.ai-chat-message-assistant) :global(.ai-chat-message-content) {
+  border: 0;
+  background: transparent;
+}
+
+.scope :global(.ai-chat-message-user) {
+  align-self: flex-end;
+}
+
+.scope :global(.ai-chat-message-assistant) {
+  align-self: flex-start;
+  border: 0;
+}
+
+.scope :global(.ai-chat-message-role) {
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.scope :global(.ai-chat-markdown) {
+  display: grid;
+  gap: 8px;
+}
+
+.scope :global(.ai-chat-markdown) p,
+.scope :global(.ai-chat-markdown) ul,
+.scope :global(.ai-chat-markdown) ol,
+.scope :global(.ai-chat-markdown) h2,
+.scope :global(.ai-chat-markdown) h3 {
+  margin: 0;
+}
+
+.scope :global(.ai-chat-markdown) h2,
+.scope :global(.ai-chat-markdown) h3 {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.scope :global(.ai-chat-markdown) ul,
+.scope :global(.ai-chat-markdown) ol {
+  display: grid;
+  gap: 4px;
+  padding-left: 18px;
+}
+
+.scope :global(.ai-chat-markdown) code {
+  border-radius: 3px;
+  background: var(--surface-muted);
+  padding: 1px 4px;
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+
+.scope :global(.ai-chat-message-assistant) :global(.ai-chat-message-content) strong {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.scope :global(.ai-chat-context-note) {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope :global(.ai-chat-stream-error) {
+  margin: 0;
+  color: var(--danger);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.scope :global(.ai-chat-label) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.scope :global(.ai-chat-status) {
+  min-height: 13px;
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.scope :global(.app-shell)[data-theme="dark"] :global(.ai-chat-page) {
+  background: transparent;
+}
+
+.scope :global(.app-shell)[data-theme="dark"] :global(.ai-chat-page)[data-conversation="true"] {
+  background: var(--app-bg);
+}
+
+.scope :global(.app-shell)[data-theme="dark"] :global(.ai-chat-page)::before {
+  background-image: linear-gradient(var(--workspace-wash), var(--workspace-wash)), url("/blr-dark.avif");
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 960px) {
+
+  .scope :global(.sidebar-chat-section) {
+    display: none;
+  }
+
+  .scope :global(.ai-chat-content--conversation) :global(.contract-mention-composer-anchor) {
+    right: 8px;
+    bottom: 24px;
+    left: 8px;
+    width: min(720px, calc(100vw - 32px));
+  }
+}
+
+@media (max-width: 720px) {
+
+  .scope :global(.ai-chat-content) {
+    gap: 22px;
+    padding: 36px 18px 108px;
+  }
+
+  .scope :global(.ai-chat-content--conversation) :global(.contract-mention-composer-anchor) {
+    right: 8px;
+    bottom: 22px;
+    left: 8px;
+    width: calc(100vw - 32px);
+  }
+}
+
+@media (max-width: 520px) {
+
+  .scope :global(.ai-chat-content) {
+    justify-content: flex-start;
+    gap: 20px;
+    padding: 46px 12px 100px;
+  }
+
+  .scope :global(.ai-chat-textarea) {
+    min-height: 34px;
+    font-size: 14px;
+  }
+
+  .scope :global(.ai-chat-attach-button) span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@keyframes auth-route-loading-pulse {
+  0%, 100% {
+    opacity: 0.62;
+    transform: scale(0.96);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

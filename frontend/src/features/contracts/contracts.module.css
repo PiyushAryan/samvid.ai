@@ -1,0 +1,993 @@
+
+
+.scope :global(.contracts-page) {
+  position: relative;
+  isolation: isolate;
+  min-height: calc(100vh - 19px);
+}
+
+.scope :global(.contracts-page)::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background-image: linear-gradient(var(--workspace-wash), var(--workspace-wash)), url("/blr.avif");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  content: "";
+  pointer-events: none;
+}
+
+.scope :global(.contracts-page) > * {
+  position: relative;
+  z-index: 1;
+}
+
+.scope :global(.app-shell)[data-theme="dark"] :global(.contracts-page)::before {
+  background-image: linear-gradient(var(--workspace-wash), var(--workspace-wash)), url("/blr-dark.avif");
+}
+
+@keyframes sidebar-menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes tooltip-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-4px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes tooltip-exit {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(-2px) scale(0.98);
+  }
+}
+
+.scope :global(.contracts-loading) {
+  min-width: 0;
+}
+
+.scope :global(.contracts-skeleton) {
+  pointer-events: none;
+}
+
+.scope :global(.contracts-skeleton) :global(.table-cell) {
+  height: 70px;
+}
+
+.scope :global(.contracts-skeleton) tbody tr:hover {
+  background: transparent;
+}
+
+.scope :global(.contracts-skeleton) tbody tr:nth-child(2) :global(.skeleton) {
+  animation-delay: 100ms;
+}
+
+.scope :global(.contracts-skeleton) tbody tr:nth-child(3) :global(.skeleton) {
+  animation-delay: 200ms;
+}
+
+.scope :global(.contracts-skeleton) tbody tr:nth-child(4) :global(.skeleton) {
+  animation-delay: 300ms;
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.scope :global(.risk-counts) {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.scope :global(.risk-dot) {
+  display: inline-grid;
+  min-width: 22px;
+  min-height: 22px;
+  place-items: center;
+  border: 1px solid;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.scope :global(.term-list),
+.scope :global(.compact-list) {
+  display: grid;
+  gap: 10px;
+}
+
+.scope :global(.term-list) > div {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: start;
+  gap: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.scope :global(.term-list) > div > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.scope :global(.term-list) strong,
+.scope :global(.term-list) span {
+  display: block;
+}
+
+.scope :global(.term-list) > div:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.scope :global(.term-list) span {
+  color: var(--text-muted);
+}
+
+.scope :global(.risk-list) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.scope :global(.review-tab),
+.scope :global(.risks-tab) {
+  display: grid;
+  gap: 20px;
+  font-family: "Instrument Sans", "Geist Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.scope :global(.review-disclaimer) {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.scope :global(.review-overview),
+.scope :global(.risks-overview) {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.85fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.scope :global(.review-overview-copy),
+.scope :global(.risks-overview) > div > p {
+  max-width: 460px;
+  margin: -6px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.scope :global(.review-overview-meta) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.scope :global(.review-overview-meta) > div {
+  min-width: 0;
+  padding-left: 14px;
+  border-left: 1px solid var(--border);
+}
+
+.scope :global(.review-next-action) {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+  padding: 13px 15px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--surface-muted);
+}
+
+.scope :global(.review-next-action) span,
+.scope :global(.risk-recommendation) span,
+.scope :global(.risk-clause-type) {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.scope :global(.review-next-action) strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.scope :global(.review-next-action) > p {
+  max-width: 680px;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.scope :global(.review-guidance) {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.scope :global(.review-guidance-toggle) {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 11px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.scope :global(.review-guidance-toggle):focus-visible {
+  border-radius: 3px;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.scope :global(.review-guidance-chevron) {
+  flex: 0 0 auto;
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.scope :global(.review-guidance-chevron):global(.open) {
+  transform: rotate(90deg);
+}
+
+.scope :global(.review-guidance-content) {
+  overflow: hidden;
+}
+
+.scope :global(.review-guidance-content) > ul {
+  max-width: 780px;
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.scope :global(.review-guidance) li::marker {
+  color: var(--text-muted);
+}
+
+.scope :global(.review-detail-grid) {
+  grid-template-columns: minmax(260px, 0.82fr) minmax(0, 1.18fr);
+  align-items: start;
+}
+
+.scope :global(.review-detail-grid) > :global(.panel) {
+  align-self: start;
+}
+
+.scope :global(.review-panel-heading) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.scope :global(.review-panel-heading) > span {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.scope :global(.review-parties) :global(.term-list) {
+  gap: 0;
+}
+
+.scope :global(.review-parties) :global(.term-list) > div {
+  grid-template-columns: minmax(116px, 0.9fr) minmax(0, 1.1fr);
+  align-items: center;
+  padding: 10px 0;
+}
+
+.scope :global(.review-parties) :global(.term-list) > div:last-child {
+  padding-bottom: 2px;
+}
+
+.scope :global(.risks-overview-counts) {
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+  padding: 16px;
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--surface-muted);
+}
+
+.scope :global(.risks-overview-counts) > strong {
+  color: var(--text-primary);
+  font-size: 30px;
+  line-height: 1;
+}
+
+.scope :global(.risks-overview-counts) > span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.scope :global(.risks-overview-counts) :global(.risk-counts) {
+  margin-top: 7px;
+}
+
+.scope :global(.risk-list-register) {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.scope :global(.risk-item) {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--workspace-surface-shadow);
+}
+
+.scope :global(.risk-list-register) :global(.risk-item) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.85fr);
+  column-gap: 28px;
+  padding: 20px;
+}
+
+.scope :global(.risk-heading) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scope :global(.risk-list-register) :global(.risk-heading),
+.scope :global(.risk-list-register) :global(.risk-item) h2,
+.scope :global(.risk-list-register) :global(.risk-item) > p {
+  grid-column: 1;
+}
+
+.scope :global(.risk-list-register) :global(.risk-item) h2 {
+  margin: 10px 0 0;
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.scope :global(.risk-item) p {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.scope :global(.risk-item) p {
+  margin-top: 10px;
+}
+
+.scope :global(.risk-evidence) {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  align-self: start;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-height: 28px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.scope :global(.risk-evidence-label),
+.scope :global(.risk-confidence) {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.scope :global(.risk-confidence) {
+  margin-left: auto;
+}
+
+.scope :global(.risk-evidence-citation) {
+  display: inline-flex;
+}
+
+.scope :global(.risk-evidence-trigger)[data-slot="badge"] {
+  margin-left: 0;
+  border-color: var(--border);
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.scope :global(.risk-evidence-trigger)[data-slot="badge"]:hover {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.scope :global(.risk-evidence-card) {
+  width: min(320px, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--menu-shadow) !important;
+}
+
+.scope :global(.risk-evidence-card-meta) {
+  padding: 10px 12px 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.scope :global(.risk-evidence-quote) {
+  display: block;
+  margin: 0;
+  padding: 0 12px 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.55;
+}
+
+.scope :global(.risk-recommendation) {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 5px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.scope :global(.risk-recommendation) strong {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.scope :global(.document-panel) {
+  height: min(72vh, 780px);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--workspace-surface-shadow);
+}
+
+.scope :global(.document-viewer) {
+  overflow: auto;
+  padding: 24px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.scope :global(.document-pages) {
+  display: grid;
+  justify-items: center;
+  gap: 20px;
+  min-width: max-content;
+}
+
+.scope :global(.document-pages) canvas {
+  display: block;
+  max-width: 100%;
+  height: auto !important;
+  background: #fff;
+  box-shadow: 0 2px 12px rgb(15 23 42 / 16%);
+}
+
+.scope :global(.document-render-error) {
+  margin: 0;
+  color: var(--danger);
+}
+
+.scope :global(.document-download) {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.scope :global(.drop-zone) {
+  position: relative;
+  display: grid;
+  min-height: 126px;
+  cursor: pointer;
+  place-content: center;
+  place-items: center;
+  gap: 8px;
+  border: 1px dashed var(--control-border-hover);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.scope :global(.drop-zone):hover,
+.scope :global(.drop-zone):focus-within {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.scope :global(.drop-zone):global(.is-disabled) {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.scope :global(.drop-zone) > span {
+  max-width: 100%;
+  padding-inline: 16px;
+  overflow-wrap: anywhere;
+}
+
+.scope :global(.upload-progress) {
+  display: grid;
+  gap: 6px;
+}
+
+.scope :global(.upload-progress-label) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.scope :global(.upload-progress-label) span:last-child {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.scope :global(.upload-success) {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--success-border);
+  border-radius: var(--radius);
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.scope :global(.upload-success-icon) {
+  display: grid;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.scope :global(.upload-success) > div {
+  min-width: 0;
+}
+
+.scope :global(.upload-success) strong {
+  display: block;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.scope :global(.upload-success) p,
+.scope :global(.upload-success) small {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.scope :global(.upload-success) p {
+  color: var(--text-secondary);
+}
+
+.scope :global(.upload-success) small {
+  color: var(--success);
+}
+
+.scope :global(.delete-contract-warning) {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  color: var(--text);
+}
+
+.scope :global(.delete-contract-icon) {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--danger-border);
+  border-radius: 7px;
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.scope :global(.delete-contract-warning) strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.scope :global(.delete-contract-warning) p {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.scope :global(.contract-mention-composer-anchor) {
+  position: relative;
+  display: grid;
+  width: min(720px, 100%);
+  order: 2;
+  margin: auto auto 0;
+  isolation: isolate;
+}
+
+.scope :global(.contract-mention-composer-anchor--picker-open) {
+  z-index: 20;
+}
+
+.scope :global(.contract-mention-composer--new-chat-idle) {
+  opacity: 0.65;
+  transition: opacity 180ms ease, border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.scope :global(.contract-mention-main) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.scope :global(.contract-mention-add) {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.scope :global(.contract-mention-add):hover:not(:disabled),
+.scope :global(.contract-mention-add):focus-visible {
+  border-color: var(--focus-border);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+  outline: 0;
+}
+
+.scope :global(.contract-mention-add):disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.scope :global(.contract-mention-editor-shell) {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 34px;
+}
+
+.scope :global(.contract-mention-editor) {
+  flex: 1;
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px 4px;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.scope :global(.contract-mention-editor-paragraph) {
+  margin: 0;
+}
+
+.scope :global(.contract-mention-placeholder) {
+  position: absolute;
+  top: 10px;
+  left: 4px;
+  color: var(--text-muted);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.scope :global(.contract-mention-editor-shell--scoped) :global(.contract-mention-placeholder) {
+  display: none;
+}
+
+.scope :global(.contract-mention-placeholder) kbd {
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font: inherit;
+}
+
+.scope :global(.contract-mention-scope) {
+  display: inline-flex;
+  max-width: min(48%, 330px);
+  align-items: center;
+  gap: 5px;
+  margin: 2px 0 0;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.scope :global(.contract-mention-scope) span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope :global(.contract-mention-scope) button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.scope :global(.contract-mention-scope) button {
+  padding: 0;
+}
+
+.scope :global(.contract-mention-footer) {
+  align-self: center;
+  justify-content: flex-end;
+}
+
+.scope :global(.contract-picker-overlay) {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  border-radius: 14px;
+  background: transparent;
+  pointer-events: none;
+}
+
+.scope :global(.contract-picker-drawer) {
+  position: absolute;
+  z-index: 61;
+  inset-inline: -1px;
+  bottom: calc(100% + 10px);
+  max-height: min(58vh, 520px);
+  overflow: hidden;
+  border: 0.5px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--surface);
+  outline: none;
+}
+
+.scope :global(.contract-mention-composer-anchor--new-chat) :global(.contract-picker-drawer) {
+  top: calc(100% + 10px);
+  bottom: auto;
+}
+
+.scope :global(.contract-picker-drawer)[data-vaul-drawer],
+.scope :global(.contract-picker-overlay)[data-vaul-overlay] {
+  animation: none !important;
+  transition: none !important;
+}
+
+.scope :global(.contract-picker-drawer)[data-vaul-drawer] {
+  touch-action: auto;
+  transform: none !important;
+  will-change: auto;
+}
+
+.scope :global(.contract-picker-content) {
+  display: grid;
+  width: 100%;
+  gap: 12px;
+  padding: 14px;
+}
+
+.scope :global(.contract-picker-intro) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.scope :global(.contract-picker-intro-icon) {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+
+.scope :global(.contract-picker-intro) h2 {
+  margin: 0 0 2px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.scope :global(.contract-picker-intro) p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+
+.scope :global(.contract-picker-search) input {
+  width: 100%;
+  min-height: 38px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.scope :global(.contract-picker-list) {
+  display: grid;
+  max-height: min(32vh, 270px);
+  overflow-y: auto;
+  scroll-behavior: auto;
+  overscroll-behavior: contain;
+}
+
+.scope :global(.contract-picker-list) button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 1px 0;
+  padding: 6px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.scope :global(.contract-picker-list) button:hover,
+.scope :global(.contract-picker-list) button:focus-visible,
+.scope :global(.contract-picker-list) button:global(.contract-picker-option--highlighted) {
+  background: var(--accent-soft);
+  outline: 0;
+}
+
+.scope :global(.contract-picker-list) p {
+  margin: 8px 4px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 960px) {
+
+  .scope :global(.risk-list) {
+    grid-template-columns: 1fr;
+  }
+
+  .scope :global(.review-overview-meta) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .scope :global(.risk-list-register) :global(.risk-evidence) {
+    grid-column: 1;
+    grid-row: auto;
+    margin-top: 14px;
+  }
+}
+
+@media (max-width: 720px) {
+
+  .scope :global(.document-panel) {
+    height: 64vh;
+  }
+}
+
+@media (max-width: 520px) {
+
+  .scope :global(.document-download) {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@keyframes auth-route-loading-pulse {
+  0%, 100% {
+    opacity: 0.62;
+    transform: scale(0.96);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.scope :global(.document-panel-loading) {
+  display: grid;
+  min-height: 420px;
+  place-items: center;
+  color: var(--muted);
+}

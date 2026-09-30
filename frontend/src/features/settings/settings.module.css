@@ -1,0 +1,546 @@
+
+
+@keyframes sidebar-menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes tooltip-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-4px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes tooltip-exit {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(-2px) scale(0.98);
+  }
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.scope :global(.integrations-page) {
+  max-width: 920px;
+}
+
+.scope :global(.settings-page) {
+  min-height: calc(100vh - 18px);
+  background: #fff;
+}
+
+.scope :global(.app-shell)[data-theme="dark"] :global(.settings-page) {
+  background: var(--app-bg);
+}
+
+.scope :global(.settings-page-content) {
+  display: grid;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  grid-template-columns: 140px minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+  padding-top: 40px;
+  font-family: "Instrument Sans", "Geist Sans", system-ui, sans-serif;
+  font-size: 13px;
+}
+
+.scope :global(.settings-nav) {
+  position: sticky;
+  top: 40px;
+  width: 140px;
+}
+
+.scope :global(.settings-nav) h1,
+.scope :global(.settings-content-header) h1 {
+  font-family: "GeistPixelSans", "Geist Pixel Square", ui-monospace, monospace;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+.scope :global(.settings-nav) h1 {
+  margin: 0 0 14px 20px;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.scope :global(.settings-nav) nav {
+  display: grid;
+  gap: 6px;
+}
+
+.scope :global(.settings-nav-item) {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: "Instrument Sans", "Geist Sans", system-ui, sans-serif;
+  font-size: 13px;
+  text-align: left;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.scope :global(.settings-nav-item):hover {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.scope :global(.settings-nav-item)[data-active="true"] {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+
+.scope :global(.settings-content-panel) {
+  min-width: 0;
+  max-width: 560px;
+  padding-top: 2px;
+}
+
+.scope :global(.settings-content-header) {
+  margin-bottom: 28px;
+}
+
+.scope :global(.settings-content-header) h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.scope :global(.settings-content-header) p {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.scope :global(.settings-profile-card),
+.scope :global(.settings-account-card) {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.scope :global(.settings-profile-card) {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+
+.scope :global(.settings-profile-card) strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.scope :global(.settings-profile-card) :global(.secondary) {
+  min-height: 30px;
+  margin-left: auto;
+  padding-inline: 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.scope :global(.settings-avatar) {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  place-items: center;
+  border: 4px solid var(--surface);
+  border-radius: 50%;
+  outline: 1px solid var(--border);
+  background: var(--accent);
+  color: #fff;
+  font-size: 15px;
+}
+
+.scope :global(.settings-account-card) {
+  margin-top: 12px;
+  overflow: hidden;
+}
+
+.scope :global(.settings-account-card) h2 {
+  padding: 14px 16px 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.scope :global(.settings-account-row) {
+  display: flex;
+  min-height: 60px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.scope :global(.settings-account-row) span:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.scope :global(.settings-account-row) small {
+  color: var(--text-secondary);
+  font-family: "GeistPixelSans", "Geist Pixel Square", ui-monospace, monospace;
+  font-size: 13px;
+}
+
+.scope :global(.settings-account-row) strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.scope :global(.settings-verified) {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--success-bg);
+  color: var(--success);
+  font-size: 13px;
+}
+
+.scope :global(.settings-account-row) :global(.secondary) {
+  min-height: 30px;
+  padding-inline: 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.scope :global(.settings-empty-card) {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.scope :global(.integration-card) {
+  display: grid;
+  gap: 20px;
+}
+
+.scope :global(.settings-content-panel) :global(.integration-card) {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.scope :global(.integration-heading) {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.scope :global(.integration-heading) h2,
+.scope :global(.integration-heading) p,
+.scope :global(.integration-state),
+.scope :global(.integration-error),
+.scope :global(.integration-privacy) {
+  margin: 0;
+}
+
+.scope :global(.integration-heading) h2 {
+  font-size: 13px;
+}
+
+.scope :global(.integration-heading) p,
+.scope :global(.integration-state),
+.scope :global(.integration-privacy) {
+  color: var(--text-muted);
+}
+
+.scope :global(.integration-icon) {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border: 0.5px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-muted);
+}
+
+.scope :global(.integration-icon) img {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.scope :global(.integration-title-row) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.scope :global(.integration-status) {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--neutral-bg);
+  color: var(--neutral);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.scope :global(.integration-status):global(.is-connected) {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.scope :global(.integration-list) {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scope :global(.integration-list) li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  border: 0.5px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.scope :global(.integration-list) li > span {
+  display: grid;
+  gap: 3px;
+}
+
+.scope :global(.integration-list) small {
+  color: var(--text-muted);
+}
+
+.scope :global(.integration-connect) {
+  width: fit-content;
+}
+
+.scope :global(.integration-connect-icon) {
+  display: inline-grid;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  place-items: center;
+}
+
+.scope :global(.integration-connect-icon) > svg {
+  grid-area: 1 / 1;
+  transition: opacity 180ms ease, transform 220ms ease;
+}
+
+.scope :global(.integration-connect-plus) {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+
+.scope :global(.integration-connect-spinner) {
+  opacity: 0;
+  transform: rotate(-90deg) scale(0.55);
+}
+
+.scope :global(.integration-connect-icon):global(.is-loading) :global(.integration-connect-plus) {
+  opacity: 0;
+  transform: rotate(90deg) scale(0.55);
+}
+
+.scope :global(.integration-connect-icon):global(.is-loading) :global(.integration-connect-spinner) {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+  animation: spin 800ms linear infinite;
+}
+
+.scope :global(.integration-empty-state) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.scope :global(.integration-notice) {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.scope :global(.integration-notice) > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.scope :global(.integration-notice) strong {
+  color: currentColor;
+  font-weight: 600;
+}
+
+.scope :global(.integration-notice):global(.is-warning) {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.scope :global(.integration-notice):global(.is-error) {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.scope :global(.integration-state),
+.scope :global(.integration-error),
+.scope :global(.integration-connect),
+.scope :global(.integration-list) button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.scope :global(.integration-error) {
+  color: var(--danger);
+}
+
+.scope :global(.integration-privacy) {
+  padding-top: 14px;
+  border-top: 0.5px solid var(--border);
+  font-size: 11px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scope :global(.sidebar-menu-popover),
+.scope :global(.sidebar-view-indicator),
+.scope :global(.auth-route-loading-logo),
+.scope :global(.skeleton),
+.scope :global(.spin),
+.scope :global(.integration-connect-spinner) {
+    animation: none;
+  }
+}
+
+@media (max-width: 960px) {
+  .scope :global(.settings-page-content) {
+    grid-template-columns: 140px minmax(0, 1fr);
+    gap: 20px;
+  }
+
+  .scope :global(.settings-profile-card) {
+    gap: 12px;
+    padding-inline: 12px;
+  }
+
+  .scope :global(.settings-profile-card) strong {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 720px) {
+  .scope :global(.settings-page-content) {
+    display: block;
+    padding-top: 24px;
+  }
+
+  .scope :global(.settings-nav) h1 {
+    margin-left: 0;
+    font-size: 16px;
+  }
+
+  .scope :global(.settings-nav-item) {
+    min-height: 36px;
+    justify-content: center;
+    gap: 8px;
+    padding-inline: 8px;
+    font-size: 13px;
+  }
+
+  .scope :global(.settings-content-header) h1 {
+    font-size: 16px;
+  }
+
+  .scope :global(.settings-profile-card) {
+    min-height: 92px;
+    padding: 14px;
+  }
+
+  .scope :global(.settings-profile-card) :global(.secondary) {
+    min-height: 30px;
+    font-size: 13px;
+  }
+
+  .scope :global(.settings-account-row) {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@keyframes auth-route-loading-pulse {
+  0%, 100% {
+    opacity: 0.62;
+    transform: scale(0.96);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

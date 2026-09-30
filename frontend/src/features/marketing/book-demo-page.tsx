@@ -5,6 +5,7 @@ import React, { FormEvent, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { Link } from "@/lib/navigation";
+import styles from "./book-demo.module.css";
 
 type WorkflowStage = "Production" | "Pilot" | "Prototyping / Exploring";
 type CalendarStatus = "loading" | "ready" | "error";
@@ -63,7 +64,7 @@ export function BookDemoPage() {
   };
 
   return (
-    <main className="book-demo-page">
+    <main className={`${styles.scope} book-demo-page`}>
       <section className="book-demo-story" aria-labelledby="demo-story-title">
         <Link to="/" className="book-demo-back">
           <ArrowLeft size={16} aria-hidden="true" />
