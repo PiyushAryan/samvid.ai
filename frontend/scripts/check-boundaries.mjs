@@ -14,7 +14,7 @@ const legacyRoots = [
   "api.ts",
   "types.ts"
 ];
-const legacyImport = /(?:from\s+["'](?:\.{1,2}\/)*(?:App|Admin|AuthPage|AuthProvider|AuthRoute|Home|Settings|Integrations|api|types)["']|from\s+["']@\/(?:App|Admin|AuthPage|AuthProvider|AuthRoute|Home|Settings|Integrations|api|types)["'])/;
+const legacyImport = /from\s+["']@\/(?:App|Admin|AuthPage|AuthProvider|AuthRoute|Home|Settings|Integrations|api|types)["']/;
 
 function walk(directory) {
   return readdirSync(directory).flatMap((entry) => {

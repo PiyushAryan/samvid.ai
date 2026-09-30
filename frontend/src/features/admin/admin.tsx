@@ -31,7 +31,8 @@ import {
   listAdminUsers
 } from "@/features/admin/api";
 import type { CollectionResponse } from "@/lib/api-client";
-import { PdfDocumentView, ReviewTab, RisksTab } from "@/features/contracts/review-components";
+import { ReviewTab, RisksTab } from "@/features/contracts/review-components";
+import { PdfDocumentView } from "@/features/contracts/document-viewer";
 import { Timeline } from "@/features/signing/timeline";
 import { useAuth } from "@/features/auth/auth-provider";
 import { Skeleton } from "@/components/ui/skeleton";

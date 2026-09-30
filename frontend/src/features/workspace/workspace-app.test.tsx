@@ -2,14 +2,21 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactNode } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { AppShell, ChatsPage, ContractDetailPage, ContractsPage, ContractsTableSkeleton, ContractTable, ReviewTab, RisksTab, Timeline } from "./workspace-app";
+import { AppShell, ChatsPage } from "./workspace-app";
+import { ContractDetailPage } from "@/features/contracts/contract-detail-page";
+import { ContractsPage, ContractsTableSkeleton, ContractTable } from "@/features/contracts/contracts-page";
+import { ReviewTab, RisksTab } from "@/features/contracts/review-components";
+import { Timeline } from "@/features/signing/timeline";
 import { LandingPage } from "@/features/marketing/landing-page";
 import { IntegrationsPage } from "@/features/settings/integrations";
 import { SettingsPage } from "@/features/settings/settings-page";
 import * as api from "@/lib/api-client";
+import * as contractApi from "@/features/contracts/api";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { setTestUrl } from "@/test/mocks/next-navigation";
-import type { ChatSession, ChatSessionSummary, ContractDetail, ContractListItem, ContractReview, SigningRequest } from "@/lib/domain-types";
+import type { ChatSession, ChatSessionSummary } from "@/lib/domain-types";
+import type { ContractDetail, ContractListItem, ContractReview } from "@/features/contracts/types";
+import type { SigningRequest } from "@/features/signing/types";
 
 vi.mock("@/lib/api-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api-client")>();
@@ -27,6 +34,18 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
     beginSlackInstallation: vi.fn(),
     disconnectSlackInstallation: vi.fn(),
     streamChatMessage: vi.fn()
+  };
+});
+
+vi.mock("@/features/contracts/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/contracts/api")>();
+  return {
+    ...actual,
+    listContracts: vi.fn(),
+    getContract: vi.fn(),
+    getContractDocument: vi.fn(),
+    deleteContract: vi.fn(),
+    uploadContract: vi.fn()
   };
 });
 
@@ -160,11 +179,11 @@ beforeEach(() => {
     updated_at: "2026-07-20T10:00:00Z",
     messages: []
   });
-  vi.mocked(api.listContracts).mockResolvedValue([]);
-  vi.mocked(api.getContract).mockResolvedValue(contractDetail);
-  vi.mocked(api.getContractDocument).mockResolvedValue(new Blob());
-  vi.mocked(api.deleteContract).mockResolvedValue(undefined);
-  vi.mocked(api.uploadContract).mockResolvedValue({
+  vi.mocked(contractApi.listContracts).mockResolvedValue([]);
+  vi.mocked(contractApi.getContract).mockResolvedValue(contractDetail);
+  vi.mocked(contractApi.getContractDocument).mockResolvedValue(new Blob());
+  vi.mocked(contractApi.deleteContract).mockResolvedValue(undefined);
+  vi.mocked(contractApi.uploadContract).mockResolvedValue({
     contract_id: "contract-uploaded",
     contract_version_id: "version-uploaded",
     status: "queued",
@@ -246,14 +265,14 @@ test("contract refresh rotates until updated API data arrives", async () => {
   await waitFor(() => expect(refreshButton).not.toBeDisabled());
 
   let resolveRefresh!: (contracts: ContractListItem[]) => void;
-  vi.mocked(api.listContracts).mockReturnValueOnce(new Promise((resolve) => {
+  vi.mocked(contractApi.listContracts).mockReturnValueOnce(new Promise((resolve) => {
     resolveRefresh = resolve;
   }));
 
   fireEvent.click(refreshButton);
 
   await waitFor(() => {
-    expect(api.listContracts).toHaveBeenLastCalledWith({ search: "", reviewStatus: "", signingStatus: "" });
+    expect(contractApi.listContracts).toHaveBeenLastCalledWith({ search: "", reviewStatus: "", signingStatus: "" });
     expect(refreshButton).toBeDisabled();
     expect(refreshButton).toHaveAttribute("aria-busy", "true");
     expect(refreshButton.firstElementChild).toHaveClass("spin");
@@ -289,7 +308,7 @@ test("contract refresh rotates until updated API data arrives", async () => {
 
 test("contract upload distinguishes transfer from review startup and confirms success", async () => {
   let finishUpload!: (result: api.ContractUploadResult) => void;
-  vi.mocked(api.uploadContract).mockImplementationOnce((_file, onProgress) => {
+  vi.mocked(contractApi.uploadContract).mockImplementationOnce((_file, onProgress) => {
     onProgress({ percentage: 100, stage: "starting_review" });
     return new Promise((resolve) => {
       finishUpload = resolve;
@@ -308,7 +327,7 @@ test("contract upload distinguishes transfer from review startup and confirms su
   expect(await within(dialog).findByText("Upload complete. Starting contract review…")).toBeInTheDocument();
   expect(within(dialog).getByRole("progressbar")).not.toHaveAttribute("value");
   expect(within(dialog).getByRole("button", { name: "Starting review" })).toBeDisabled();
-  expect(api.uploadContract).toHaveBeenCalledWith(file, expect.any(Function), expect.any(AbortSignal));
+  expect(contractApi.uploadContract).toHaveBeenCalledWith(file, expect.any(Function), expect.any(AbortSignal));
 
   finishUpload({
     contract_id: "contract-uploaded",
@@ -325,7 +344,7 @@ test("contract upload distinguishes transfer from review startup and confirms su
 });
 
 test("contract upload exits loading state after a timeout and remains retryable", async () => {
-  vi.mocked(api.uploadContract).mockRejectedValueOnce(new api.ApiError(408, {
+  vi.mocked(contractApi.uploadContract).mockRejectedValueOnce(new api.ApiError(408, {
     code: "upload_timeout",
     message: "The file was uploaded, but starting its review took too long. Refresh Contracts before trying again."
   }));
@@ -347,7 +366,7 @@ test("contract upload exits loading state after a timeout and remains retryable"
 
 test("closing the upload dialog aborts the in-flight upload", async () => {
   let uploadSignal: AbortSignal | undefined;
-  vi.mocked(api.uploadContract).mockImplementationOnce((_file, _onProgress, signal) => {
+  vi.mocked(contractApi.uploadContract).mockImplementationOnce((_file, _onProgress, signal) => {
     uploadSignal = signal;
     return new Promise(() => undefined);
   });
@@ -411,7 +430,7 @@ test("contract owner confirms permanent deletion and returns to the list", async
   expect(within(dialog).getByText(/original document, review, extracted knowledge/i)).toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole("button", { name: "Permanently delete" }));
 
-  await waitFor(() => expect(api.deleteContract).toHaveBeenCalledWith("contract-delete"));
+  await waitFor(() => expect(contractApi.deleteContract).toHaveBeenCalledWith("contract-delete"));
   expect(window.location.pathname).toBe("/contracts");
 });
 
@@ -795,3 +814,4 @@ test("timeline renders immutable events in chronological order", () => {
   const notes = within(timeline).getAllByText(/Sent|Viewed/, { selector: "p" }).map((node) => node.textContent);
   expect(notes).toEqual(["Sent", "Viewed"]);
 });
+
