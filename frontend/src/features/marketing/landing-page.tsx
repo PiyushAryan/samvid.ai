@@ -18,6 +18,10 @@ import {
   X
 } from "lucide-react";
 import { SubFooter } from "./components/sub-footer";
+import shellStyles from "./landing-shell.module.css";
+import simulatorStyles from "./landing-simulator.module.css";
+import contentStyles from "./landing-content.module.css";
+import responsiveStyles from "./landing-responsive.module.css";
 
 type PreviewStepId = "intake" | "review" | "track";
 const MotionLink = motion.create(Link);
@@ -230,7 +234,7 @@ export function LandingPage() {
   };
 
   return (
-    <div className="landing-body">
+    <div className={`${shellStyles.scope} ${simulatorStyles.scope} ${contentStyles.scope} ${responsiveStyles.scope} landing-body`}>
       <div className="landing-grid-bg"></div>
       <div className="landing-glow-mask"></div>
 

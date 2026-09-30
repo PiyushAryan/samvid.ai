@@ -22,6 +22,7 @@ import {
   safeInternalPath
 } from "./auth";
 import { setFaviconTheme } from "@/lib/favicon";
+import styles from "./auth.module.css";
 
 export type AuthView = "sign-in" | "sign-up" | "forgot-password" | "reset-password" | "verify-email";
 type AuthTheme = "light" | "dark";
@@ -343,7 +344,7 @@ export function AuthPage({ initialView = "sign-in", initialEmail = "", redirectT
   };
 
   return (
-    <main className="auth-page" data-theme={theme}>
+    <main className={`${styles.scope} auth-page`} data-theme={theme}>
       <div className="auth-backdrop" aria-hidden="true" />
       <div className="auth-scrim" aria-hidden="true" />
 

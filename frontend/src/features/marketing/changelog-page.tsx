@@ -1,5 +1,6 @@
 import { ArrowLeft, ArrowRight, Check, Mail, ShieldCheck, Sparkles } from "lucide-react";
 import Link from "next/link";
+import styles from "./changelog.module.css";
 
 const releases = [
   {
@@ -48,7 +49,7 @@ const releases = [
 
 export function ChangelogPage() {
   return (
-    <div className="changelog-page">
+    <div className={`${styles.scope} changelog-page`}>
       <header className="changelog-navbar">
         <div className="changelog-navbar-inner">
           <Link href="/" className="changelog-brand" aria-label="Samvid home">

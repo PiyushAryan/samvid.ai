@@ -1,0 +1,271 @@
+
+
+.scope :global(.contract-detail-page),
+.scope :global(.signing-page) {
+  min-height: calc(100vh - 19px);
+  background: var(--workspace-page);
+}
+
+.scope :global(.contract-detail-page-review) :global(.panel),
+.scope :global(.contract-detail-page-risks) :global(.panel),
+.scope :global(.contract-detail-page-risks) :global(.risk-item),
+.scope :global(.signing-page) :global(.panel),
+.scope :global(.signing-page) :global(.notice) {
+  box-shadow: none;
+}
+
+.scope :global(.contract-detail-page-review) *,
+.scope :global(.contract-detail-page-risks) *,
+.scope :global(.signing-page) * {
+  box-shadow: none !important;
+}
+
+.scope :global(.contract-detail-page-review) :global(.panel),
+.scope :global(.contract-detail-page-risks) :global(.panel),
+.scope :global(.contract-detail-page-risks) :global(.risk-item),
+.scope :global(.signing-page) :global(.panel),
+.scope :global(.signing-page) :global(.table-wrap) {
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.scope :global(.contract-detail-page-review) :global(.panel):hover,
+.scope :global(.contract-detail-page-risks) :global(.panel):hover,
+.scope :global(.contract-detail-page-risks) :global(.risk-item):hover,
+.scope :global(.signing-page) :global(.panel):hover,
+.scope :global(.signing-page) :global(.table-wrap):hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+  box-shadow: var(--workspace-surface-shadow) !important;
+}
+
+@keyframes sidebar-menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes tooltip-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-4px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes tooltip-exit {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(-2px) scale(0.98);
+  }
+}
+
+.scope :global(.skeleton-signing) {
+  width: 86px;
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.scope :global(.signing-cell) {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.scope :global(.request-list) {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--workspace-surface-shadow);
+}
+
+.scope :global(.request-row) {
+  display: flex;
+  min-height: 66px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  transition: background-color 150ms ease;
+}
+
+.scope :global(.request-row):last-child {
+  border-bottom: 0;
+}
+
+.scope :global(.request-row):hover {
+  background: var(--row-hover);
+}
+
+.scope :global(.request-meta) {
+  display: grid;
+  gap: 4px;
+}
+
+.scope :global(.request-meta) strong {
+  font-size: 13px;
+}
+
+.scope :global(.request-status) {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: #9aa29f;
+}
+
+.scope :global(.detail-grid),
+.scope :global(.signing-layout) {
+  display: grid;
+  column-gap: 24px;
+}
+
+.scope :global(.signing-layout) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.scope :global(.panel):global(.wide),
+.scope :global(.signing-layout) > :global(.notice) {
+  grid-column: 1 / -1;
+}
+
+.scope :global(.timeline) {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.scope :global(.timeline) > article {
+  position: relative;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 12px;
+  padding-bottom: 16px;
+}
+
+.scope :global(.timeline) > article::before {
+  position: absolute;
+  top: 16px;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: var(--border-strong);
+  content: "";
+}
+
+.scope :global(.timeline) > article:last-child::before {
+  display: none;
+}
+
+.scope :global(.timeline-dot) {
+  z-index: 1;
+  width: 8px;
+  height: 8px;
+  margin-top: 7px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.scope :global(.timeline-event) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.scope :global(.timeline-event) strong {
+  font-size: 13px;
+}
+
+.scope :global(.timeline-event) p {
+  flex-basis: 100%;
+  color: var(--text-secondary);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.scope :global(.signer-editor),
+.scope :global(.upload-form) {
+  display: grid;
+  gap: 12px;
+}
+
+.scope :global(.signer-draft) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.scope :global(.signer-fields) {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+  gap: 10px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 720px) {
+
+  .scope :global(.signing-layout) {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+
+  .scope :global(.term-list) > div,
+.scope :global(.signer-fields) {
+    grid-template-columns: 1fr;
+  }
+}
+
+@keyframes auth-route-loading-pulse {
+  0%, 100% {
+    opacity: 0.62;
+    transform: scale(0.96);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
