@@ -1,30 +1,19 @@
-import { createAuthClient } from "@neondatabase/neon-js/auth";
+import {
+  setCurrentAccount,
+  type SamvidAccount
+} from "@/lib/auth-session";
 
-const neonAuthUrl = process.env.NEXT_PUBLIC_NEON_AUTH_URL?.trim();
-
-export const PENDING_AUTH_EMAIL_KEY = "samvid-pending-auth-email";
-
-export const isNeonAuthConfigured = Boolean(neonAuthUrl);
-
-export const authClient = neonAuthUrl ? createAuthClient(neonAuthUrl) : null;
-
-export type SamvidAuthUser = {
-  id: string;
-  email: string;
-  emailVerified: boolean;
-  name: string;
-  image?: string | null;
-};
-
-export type SamvidAccountRole = "user" | "super_admin";
-export type SamvidAccountState = "active" | "unclaimed";
-
-export type SamvidAccount = {
-  id: string;
-  role: SamvidAccountRole;
-  state: SamvidAccountState;
-  workspace_id: string | null;
-};
+export {
+  authClient,
+  getAccessToken,
+  getAuthClient,
+  getAuthSession,
+  getCurrentAccount,
+  isNeonAuthConfigured,
+  PENDING_AUTH_EMAIL_KEY,
+  setCurrentAccount
+} from "@/lib/auth-session";
+export type { SamvidAccount, SamvidAccountRole, SamvidAccountState, SamvidAuthUser } from "@/lib/auth-session";
 
 export type AuthMeResponse = {
   user: {
@@ -35,16 +24,6 @@ export type AuthMeResponse = {
   };
   account: SamvidAccount;
 };
-
-let currentAccount: SamvidAccount | null = null;
-
-export function setCurrentAccount(account: SamvidAccount | null) {
-  currentAccount = account;
-}
-
-export function getCurrentAccount() {
-  return currentAccount;
-}
 
 export function defaultRouteForAccount(account: SamvidAccount | null | undefined) {
   return account?.role === "super_admin" ? "/admin" : "/contracts";
@@ -72,27 +51,6 @@ export function safeInternalPath(value: string | null | undefined, fallback = "/
   } catch {
     return fallback;
   }
-}
-
-export function getAuthClient() {
-  if (!authClient) {
-    throw new Error("Neon Auth is not configured. Add NEXT_PUBLIC_NEON_AUTH_URL to the frontend environment.");
-  }
-
-  return authClient;
-}
-
-export async function getAuthSession() {
-  const result = await getAuthClient().getSession();
-  if (result.error) throw result.error;
-  return result.data;
-}
-
-export async function getAccessToken(): Promise<string> {
-  const session = await getAuthSession();
-  const token = session?.session?.token;
-  if (!token) throw new Error("Authentication required");
-  return token;
 }
 
 export async function checkWorkspaceAccess(token: string): Promise<WorkspaceAccessResult> {
