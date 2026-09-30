@@ -1,0 +1,797 @@
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ReactNode } from "react";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { AppShell, ChatsPage, ContractDetailPage, ContractsPage, ContractsTableSkeleton, ContractTable, ReviewTab, RisksTab, Timeline } from "./workspace-app";
+import { LandingPage } from "@/features/marketing/landing-page";
+import { IntegrationsPage } from "@/features/settings/integrations";
+import { SettingsPage } from "@/features/settings/settings-page";
+import * as api from "@/lib/api-client";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { setTestUrl } from "@/test/mocks/next-navigation";
+import type { ChatSession, ChatSessionSummary, ContractDetail, ContractListItem, ContractReview, SigningRequest } from "@/lib/domain-types";
+
+vi.mock("@/lib/api-client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api-client")>();
+  return {
+    ...actual,
+    listChatSessions: vi.fn(),
+    createChatSession: vi.fn(),
+    getChatSession: vi.fn(),
+    listContracts: vi.fn(),
+    getContract: vi.fn(),
+    getContractDocument: vi.fn(),
+    deleteContract: vi.fn(),
+    uploadContract: vi.fn(),
+    getSlackIntegration: vi.fn(),
+    beginSlackInstallation: vi.fn(),
+    disconnectSlackInstallation: vi.fn(),
+    streamChatMessage: vi.fn()
+  };
+});
+
+vi.mock("@/features/auth/auth-provider", () => ({
+  useAuth: () => ({
+    user: {
+      id: "user_123",
+      name: "Piyush Aryan",
+      email: "piyusharyan81@gmail.com",
+      emailVerified: true
+    },
+    isLoading: false,
+    refreshSession: vi.fn(),
+    signOut: vi.fn()
+  })
+}));
+
+vi.mock("@/features/chat/contract-mention-composer", async () => {
+  const React = await import("react");
+  return {
+    ContractMentionComposer: (props: any) => {
+      const [value, setValue] = React.useState("");
+      React.useEffect(() => {
+        const insertSuggestion = (event: Event) => setValue((event as CustomEvent<string>).detail);
+        window.addEventListener("samvid:chat-suggestion", insertSuggestion);
+        const reset = () => setValue("");
+        window.addEventListener("samvid:new-chat", reset);
+        return () => {
+          window.removeEventListener("samvid:chat-suggestion", insertSuggestion);
+          window.removeEventListener("samvid:new-chat", reset);
+        };
+      }, []);
+      return React.createElement(
+        "form",
+        { onSubmit: (event: any) => { event.preventDefault(); void props.onSubmit({ content: value, contractId: null }); } },
+        React.createElement("textarea", {
+          "aria-label": "Ask about a contract",
+          disabled: props.disabled || props.isSending,
+          onChange: (event: any) => setValue(event.currentTarget.value),
+          value
+        }),
+        React.createElement("button", { disabled: !value || props.disabled || props.isSending, type: "submit" }, "Send message"),
+        props.error ? React.createElement("p", { role: "alert" }, props.error) : null
+      );
+    }
+  };
+});
+
+const chatSessions: ChatSessionSummary[] = [
+  {
+    id: "chat-1",
+    title: "Vendor renewal terms",
+    contract_id: "contract-1",
+    contract_title: "Vendor agreement",
+    message_count: 2,
+    created_at: "2026-07-20T09:00:00Z",
+    updated_at: "2026-07-20T09:05:00Z"
+  },
+  {
+    id: "chat-2",
+    title: "Indemnity exposure",
+    contract_id: null,
+    contract_title: null,
+    message_count: 4,
+    created_at: "2026-07-19T09:00:00Z",
+    updated_at: "2026-07-19T09:05:00Z"
+  }
+];
+
+const chatSession: ChatSession = {
+  ...chatSessions[0],
+  messages: [
+    {
+      id: "message-1",
+      role: "user",
+      content: "When does the vendor agreement renew?",
+      sources: [],
+      created_at: "2026-07-20T09:00:00Z"
+    },
+    {
+      id: "message-2",
+      role: "assistant",
+      content: "The agreement renews automatically for another 12 months.",
+      sources: [
+        {
+          id: "source-1",
+          contract_id: "contract-1",
+          contract_title: "Vendor agreement",
+          page_number: 7,
+          excerpt: "The term automatically renews for successive twelve-month periods."
+        }
+      ],
+      created_at: "2026-07-20T09:00:03Z"
+    }
+  ]
+};
+
+const contractDetail: ContractDetail = {
+  id: "contract-delete",
+  title: "Vendor agreement",
+  review_status: "review_ready",
+  created_by: "user@example.com",
+  created_at: "2026-07-20T09:00:00Z",
+  updated_at: "2026-07-20T09:05:00Z",
+  current_version_id: null,
+  current_version: null,
+  original_filename: "vendor-agreement.pdf",
+  mime_type: "application/pdf",
+  risk_counts: { critical: 0, high: 1, medium: 0, low: 0 },
+  signing_summary: {
+    active_request_id: null,
+    status: "not_started",
+    required_signed: 0,
+    required_total: 0,
+    signer_total: 0
+  },
+  review: null,
+  signing_requests: []
+};
+
+beforeEach(() => {
+  vi.mocked(api.listChatSessions).mockResolvedValue(chatSessions);
+  vi.mocked(api.getChatSession).mockResolvedValue(chatSession);
+  vi.mocked(api.createChatSession).mockResolvedValue({
+    id: "chat-new",
+    title: "Termination notice",
+    contract_id: null,
+    contract_title: null,
+    message_count: 0,
+    created_at: "2026-07-20T10:00:00Z",
+    updated_at: "2026-07-20T10:00:00Z",
+    messages: []
+  });
+  vi.mocked(api.listContracts).mockResolvedValue([]);
+  vi.mocked(api.getContract).mockResolvedValue(contractDetail);
+  vi.mocked(api.getContractDocument).mockResolvedValue(new Blob());
+  vi.mocked(api.deleteContract).mockResolvedValue(undefined);
+  vi.mocked(api.uploadContract).mockResolvedValue({
+    contract_id: "contract-uploaded",
+    contract_version_id: "version-uploaded",
+    status: "queued",
+    message: "Contract accepted and queued for review."
+  });
+  vi.mocked(api.streamChatMessage).mockResolvedValue(undefined);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+function QueryProvider({ children }: { children: ReactNode }) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
+  });
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
+
+function enterChatText(textbox: HTMLElement, value: string) {
+  if (textbox instanceof HTMLTextAreaElement) {
+    fireEvent.change(textbox, { target: { value } });
+    return;
+  }
+  textbox.textContent = value;
+  fireEvent.input(textbox, { inputType: "insertText", data: value });
+}
+
+test("landing simulator switches between customer workflow previews", async () => {
+  vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+
+  render(<LandingPage />);
+
+  [
+    "hero-pink-file",
+    "hero-stamp-paper",
+    "hero-policy-paper",
+    "hero-contract-paper",
+    "hero-nda-paper",
+    "hero-rubber-stamp"
+  ].forEach((testId) => expect(screen.getByTestId(testId)).toBeInTheDocument());
+
+  expect(screen.getByRole("heading", { name: "Every contract your business touches." })).toBeInTheDocument();
+  expect(screen.getByText("Re: Acme vendor agreement")).toBeInTheDocument();
+
+  const inboxTab = screen.getByRole("tab", { name: "Inbox" });
+  const reviewTab = screen.getByRole("tab", { name: "Review" });
+  expect(inboxTab).toHaveAttribute("aria-controls", "preview-panel-intake");
+  expect(screen.getByRole("tabpanel")).toHaveAttribute("id", "preview-panel-intake");
+
+  inboxTab.focus();
+  fireEvent.keyDown(inboxTab, { key: "ArrowRight" });
+  expect(await screen.findByText("Review complete")).toBeInTheDocument();
+  expect(reviewTab).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("tabpanel")).toHaveAttribute("id", "preview-panel-review");
+
+  fireEvent.click(screen.getByRole("tab", { name: "Signature" }));
+  expect(await screen.findByText("Follow-up scheduled")).toBeInTheDocument();
+});
+
+test("landing hero uses the static collage when reduced motion is requested", async () => {
+  vi.stubGlobal("matchMedia", vi.fn().mockImplementation((query: string) => ({
+    matches: query === "(prefers-reduced-motion: reduce)" || query === "(max-width: 960px)",
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn()
+  })));
+
+  const { container } = render(<LandingPage />);
+  const pinkFile = container.querySelector('[data-testid="hero-pink-file"]');
+  await waitFor(() => expect(pinkFile).toHaveStyle({ opacity: "1" }));
+});
+
+test("contract refresh rotates until updated API data arrives", async () => {
+  setTestUrl("/contracts");
+  render(<QueryProvider><ContractsPage /></QueryProvider>);
+
+  const refreshButton = screen.getByRole("button", { name: "Refresh contracts" });
+  await waitFor(() => expect(refreshButton).not.toBeDisabled());
+
+  let resolveRefresh!: (contracts: ContractListItem[]) => void;
+  vi.mocked(api.listContracts).mockReturnValueOnce(new Promise((resolve) => {
+    resolveRefresh = resolve;
+  }));
+
+  fireEvent.click(refreshButton);
+
+  await waitFor(() => {
+    expect(api.listContracts).toHaveBeenLastCalledWith({ search: "", reviewStatus: "", signingStatus: "" });
+    expect(refreshButton).toBeDisabled();
+    expect(refreshButton).toHaveAttribute("aria-busy", "true");
+    expect(refreshButton.firstElementChild).toHaveClass("spin");
+  });
+
+  resolveRefresh([
+    {
+      id: "c-refreshed",
+      title: "Refreshed services agreement",
+      review_status: "review_ready",
+      created_by: "legal@example.com",
+      created_at: "2026-07-31T00:00:00Z",
+      updated_at: "2026-07-31T00:05:00Z",
+      current_version_id: "v-refreshed",
+      original_filename: "services-agreement.pdf",
+      mime_type: "application/pdf",
+      risk_counts: { critical: 0, high: 0, medium: 1, low: 0 },
+      signing_summary: {
+        active_request_id: null,
+        status: "not_started",
+        required_signed: 0,
+        required_total: 0,
+        signer_total: 0
+      }
+    }
+  ]);
+
+  expect(await screen.findByRole("link", { name: "Refreshed services agreement" })).toBeInTheDocument();
+  expect(refreshButton).not.toBeDisabled();
+  expect(refreshButton).toHaveAttribute("aria-busy", "false");
+  expect(refreshButton.firstElementChild).not.toHaveClass("spin");
+});
+
+test("contract upload distinguishes transfer from review startup and confirms success", async () => {
+  let finishUpload!: (result: api.ContractUploadResult) => void;
+  vi.mocked(api.uploadContract).mockImplementationOnce((_file, onProgress) => {
+    onProgress({ percentage: 100, stage: "starting_review" });
+    return new Promise((resolve) => {
+      finishUpload = resolve;
+    });
+  });
+
+  setTestUrl("/contracts");
+  render(<QueryProvider><ContractsPage /></QueryProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+
+  const dialog = screen.getByRole("dialog", { name: "Upload contract" });
+  const file = new File(["contract"], "Dawnify agreement.pdf", { type: "application/pdf" });
+  fireEvent.change(within(dialog).getByLabelText("Choose contract file"), { target: { files: [file] } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Process" }));
+
+  expect(await within(dialog).findByText("Upload complete. Starting contract review…")).toBeInTheDocument();
+  expect(within(dialog).getByRole("progressbar")).not.toHaveAttribute("value");
+  expect(within(dialog).getByRole("button", { name: "Starting review" })).toBeDisabled();
+  expect(api.uploadContract).toHaveBeenCalledWith(file, expect.any(Function), expect.any(AbortSignal));
+
+  finishUpload({
+    contract_id: "contract-uploaded",
+    contract_version_id: "version-uploaded",
+    status: "queued",
+    message: "Contract accepted and queued for review."
+  });
+
+  expect(await within(dialog).findByText("Contract received")).toBeInTheDocument();
+  expect(within(dialog).getByText("Contract accepted and queued for review.")).toBeInTheDocument();
+  expect(within(dialog).getByText("Dawnify agreement.pdf")).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+  expect(screen.queryByRole("dialog", { name: "Upload contract" })).not.toBeInTheDocument();
+});
+
+test("contract upload exits loading state after a timeout and remains retryable", async () => {
+  vi.mocked(api.uploadContract).mockRejectedValueOnce(new api.ApiError(408, {
+    code: "upload_timeout",
+    message: "The file was uploaded, but starting its review took too long. Refresh Contracts before trying again."
+  }));
+
+  setTestUrl("/contracts");
+  render(<QueryProvider><ContractsPage /></QueryProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+
+  const dialog = screen.getByRole("dialog", { name: "Upload contract" });
+  const file = new File(["contract"], "agreement.pdf", { type: "application/pdf" });
+  fireEvent.change(within(dialog).getByLabelText("Choose contract file"), { target: { files: [file] } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Process" }));
+
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent("starting its review took too long");
+  expect(within(dialog).queryByRole("progressbar")).not.toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: "Try again" })).toBeEnabled();
+  expect(within(dialog).getByText("agreement.pdf")).toBeInTheDocument();
+});
+
+test("closing the upload dialog aborts the in-flight upload", async () => {
+  let uploadSignal: AbortSignal | undefined;
+  vi.mocked(api.uploadContract).mockImplementationOnce((_file, _onProgress, signal) => {
+    uploadSignal = signal;
+    return new Promise(() => undefined);
+  });
+
+  setTestUrl("/contracts");
+  render(<QueryProvider><ContractsPage /></QueryProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+
+  const dialog = screen.getByRole("dialog", { name: "Upload contract" });
+  const file = new File(["contract"], "agreement.pdf", { type: "application/pdf" });
+  fireEvent.change(within(dialog).getByLabelText("Choose contract file"), { target: { files: [file] } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Process" }));
+
+  await waitFor(() => expect(uploadSignal).toBeInstanceOf(AbortSignal));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+  expect(uploadSignal?.aborted).toBe(true);
+  expect(screen.queryByRole("dialog", { name: "Upload contract" })).not.toBeInTheDocument();
+});
+
+test("contract listing renders signing counters and risk counts", () => {
+  render(
+    <ContractTable
+      contracts={[
+          {
+            id: "c1",
+            title: "Vendor agreement",
+            review_status: "review_ready",
+            created_by: "legal@example.com",
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-02T00:00:00Z",
+            current_version_id: "v1",
+            original_filename: "vendor.txt",
+            mime_type: "text/plain",
+            risk_counts: { critical: 0, high: 1, medium: 2, low: 0 },
+            signing_summary: {
+              active_request_id: "sr1",
+              status: "in_progress",
+              required_signed: 1,
+              required_total: 2,
+              signer_total: 3
+            }
+          } satisfies ContractListItem
+      ]}
+    />
+  );
+
+  expect(screen.getByRole("link", { name: "Vendor agreement" })).toBeInTheDocument();
+  expect(screen.getByText("In Progress")).toBeInTheDocument();
+  expect(screen.getByText("1/2 required")).toBeInTheDocument();
+});
+
+test("contract owner confirms permanent deletion and returns to the list", async () => {
+  setTestUrl("/contracts/contract-delete");
+  render(<QueryProvider><ContractDetailPage /></QueryProvider>);
+
+  expect(await screen.findByRole("heading", { name: "Vendor agreement" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+  const dialog = screen.getByRole("dialog", { name: "Delete contract" });
+  expect(within(dialog).getByText(/original document, review, extracted knowledge/i)).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Permanently delete" }));
+
+  await waitFor(() => expect(api.deleteContract).toHaveBeenCalledWith("contract-delete"));
+  expect(window.location.pathname).toBe("/contracts");
+});
+
+test("sidebar control toggles its collapsed state", () => {
+  setTestUrl("/contracts");
+  render(<TooltipProvider><AppShell><div>Contracts page</div></AppShell></TooltipProvider>);
+
+  const toggle = screen.getByRole("button", { name: "Collapse sidebar" });
+  fireEvent.click(toggle);
+
+  expect(screen.getByRole("button", { name: "Expand sidebar" })).toHaveAttribute("aria-pressed", "true");
+});
+
+test("workspace view slider switches between console and loads chat history", async () => {
+  setTestUrl("/contracts");
+  const { container } = render(
+    <QueryProvider>
+      <TooltipProvider><AppShell><ChatsPage /></AppShell></TooltipProvider>
+    </QueryProvider>
+  );
+
+  const consoleOption = within(container).getByRole("button", { name: /console/i });
+  const chatsOption = within(container).getByRole("button", { name: /chats/i });
+  expect(consoleOption).toHaveAttribute("aria-pressed", "true");
+
+  fireEvent.click(chatsOption);
+
+  expect(chatsOption).toHaveAttribute("aria-pressed", "true");
+  expect(consoleOption).toHaveAttribute("aria-pressed", "false");
+  expect(within(container).getByRole("heading", { name: /Piyush/ })).toBeInTheDocument();
+  expect(within(container).getByText("find anything about your contracts")).toBeInTheDocument();
+  fireEvent.click(within(container).getByRole("button", { name: "What changed in my latest contract?" }));
+  expect(within(container).getByRole("textbox", { name: "Ask about a contract" })).toHaveTextContent(
+    "What changed in my latest contract?"
+  );
+  const chatHistory = await within(container).findByRole("region", { name: "Chat history" });
+  expect(within(chatHistory).getByRole("button", { name: "New chat" })).toBeInTheDocument();
+  expect(await within(chatHistory).findByRole("button", { name: "Vendor renewal terms" })).toBeInTheDocument();
+  expect(within(chatHistory).getByRole("button", { name: "Indemnity exposure" })).toBeInTheDocument();
+  expect(within(container).queryByRole("link", { name: "Contracts" })).not.toBeInTheDocument();
+  expect(within(container).queryByRole("link", { name: "Signing" })).not.toBeInTheDocument();
+});
+
+test("chat session renders persisted history without visible source citations", async () => {
+  setTestUrl("/chats?chat=chat-1");
+  const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
+
+  expect(within(container).getByText("Loading conversation")).toBeInTheDocument();
+  expect(await within(container).findByText("The agreement renews automatically for another 12 months.")).toBeInTheDocument();
+  expect(within(container).queryByRole("link", { name: /Vendor agreement/i })).not.toBeInTheDocument();
+  expect(within(container).queryByText("Page 7")).not.toBeInTheDocument();
+});
+
+test("assistant replies render Markdown headings and lists", async () => {
+  vi.mocked(api.getChatSession).mockResolvedValueOnce({
+    ...chatSession,
+    messages: [{
+      id: "message-markdown",
+      role: "assistant",
+      content: "## Summary\n\n- **Notice period:** Thirty days [S1]\n- **Renewal:** Annual [S2]",
+      sources: [],
+      created_at: "2026-07-20T10:00:00Z"
+    }]
+  });
+  setTestUrl("/chats?chat=chat-markdown");
+  const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
+
+  expect(await within(container).findByRole("heading", { name: "Summary" })).toBeInTheDocument();
+  expect(within(container).getByRole("list")).toHaveTextContent("Notice period: Thirty days");
+  expect(within(container).getByRole("list")).toHaveTextContent("Renewal: Annual");
+  expect(within(container).getByRole("list")).not.toHaveTextContent("[S1]");
+  expect(within(container).getByRole("list")).not.toHaveTextContent("[S2]");
+});
+
+test("assistant citations remain internal to the rendered response", async () => {
+  vi.mocked(api.getChatSession).mockResolvedValueOnce({
+    ...chatSession,
+    messages: [{
+      id: "message-citation",
+      role: "assistant",
+      content: "The notice period is thirty days. [S1]",
+      sources: [{
+        id: "S1",
+        contract_id: "contract-1",
+        contract_title: "Services agreement",
+        page_number: 11,
+        excerpt: "Either party may terminate on thirty days' notice."
+      }],
+      created_at: "2026-07-20T10:00:00Z"
+    }]
+  });
+  setTestUrl("/chats?chat=chat-citation");
+  const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
+
+  expect(await within(container).findByText("The notice period is thirty days.")).toBeInTheDocument();
+  expect(within(container).queryByRole("button", { name: /view source/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole("blockquote")).not.toBeInTheDocument();
+});
+
+test("chat session exposes a recoverable history error", async () => {
+  vi.mocked(api.getChatSession).mockRejectedValue(new Error("Knowledge index unavailable"));
+  setTestUrl("/chats?chat=chat-missing");
+  const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
+
+  const alert = await within(container).findByRole("alert");
+  expect(alert).toHaveTextContent("Conversation unavailable");
+  expect(alert).toHaveTextContent("Knowledge index unavailable");
+  expect(within(alert).getByRole("button", { name: "Retry" })).toBeEnabled();
+});
+
+test("new chat streams an answer and exposes its sources", async () => {
+  vi.mocked(api.streamChatMessage).mockImplementation(async (_sessionId, _content, handlers) => {
+    handlers.onDelta?.("The termination notice is ");
+    handlers.onDelta?.("30 days.");
+    handlers.onSources?.([
+      {
+        contract_id: "contract-2",
+        contract_title: "Services agreement",
+        page_number: 11,
+        excerpt: "Either party may terminate on thirty days' notice."
+      }
+    ]);
+  });
+
+  setTestUrl("/chats");
+  const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
+
+  const textbox = within(container).getByRole("textbox");
+  enterChatText(textbox, "What is the termination notice?");
+  fireEvent.click(within(container).getByRole("button", { name: "Send message" }));
+
+  expect(within(container).queryByRole("heading", { name: /Piyush/ })).not.toBeInTheDocument();
+  expect(container.querySelector(".ai-chat-page")).toHaveAttribute("data-conversation", "true");
+  await waitFor(() => expect(api.createChatSession).toHaveBeenCalledWith("What is the termination notice?"));
+  expect(api.streamChatMessage).toHaveBeenCalledWith(
+    "chat-new",
+    "What is the termination notice?",
+    expect.any(Object),
+    expect.any(AbortSignal)
+  );
+  expect(await within(container).findByText("The termination notice is 30 days.")).toBeInTheDocument();
+  expect(within(container).queryByRole("link", { name: /Services agreement/i })).not.toBeInTheDocument();
+});
+
+test("new chats show the first message in the sidebar while the response is streaming", async () => {
+  const prompt = "What is the termination notice?";
+  let streamSignal: AbortSignal | undefined;
+  vi.mocked(api.createChatSession).mockResolvedValueOnce({
+    id: "chat-new",
+    title: prompt,
+    contract_id: null,
+    contract_title: null,
+    message_count: 0,
+    created_at: "2026-07-20T10:00:00Z",
+    updated_at: "2026-07-20T10:00:00Z",
+    messages: []
+  });
+  vi.mocked(api.streamChatMessage).mockImplementationOnce((_sessionId, _content, handlers, signal) => {
+    streamSignal = signal;
+    handlers.onStatus?.("Reading relevant contract evidence...");
+    return new Promise(() => undefined);
+  });
+
+  setTestUrl("/chats");
+  const { container } = render(
+    <QueryProvider>
+      <TooltipProvider><AppShell><ChatsPage /></AppShell></TooltipProvider>
+    </QueryProvider>
+  );
+  await within(container).findByRole("button", { name: "Vendor renewal terms" });
+
+  enterChatText(within(container).getByRole("textbox"), prompt);
+  fireEvent.click(within(container).getByRole("button", { name: "Send message" }));
+
+  expect(await within(container).findByRole("button", { name: prompt })).toBeInTheDocument();
+  expect(api.streamChatMessage).toHaveBeenCalledWith(
+    "chat-new",
+    prompt,
+    expect.any(Object),
+    expect.any(AbortSignal)
+  );
+  expect(streamSignal?.aborted).toBe(false);
+  expect(within(container).queryByRole("heading", { name: /Piyush/ })).not.toBeInTheDocument();
+  expect(within(container).getByText("Reading relevant contract evidence...")).toBeInTheDocument();
+  expect(container.querySelector(".ai-chat-page")).toHaveAttribute("data-conversation", "true");
+
+  fireEvent.click(within(container).getByRole("button", { name: "New chat" }));
+
+  expect(streamSignal?.aborted).toBe(true);
+  expect(await within(container).findByRole("heading", { name: /Piyush/ })).toBeInTheDocument();
+  expect(within(container).getByRole("textbox", { name: "Ask about a contract" })).toHaveValue("");
+  expect(window.location.pathname).toBe("/chats");
+  expect(window.location.search).toBe("");
+});
+
+test("new chat titles preserve normalized input up to the backend limit", async () => {
+  const prompt = `  ${"a".repeat(181)}  `;
+  const expectedTitle = `${"a".repeat(177)}...`;
+
+  setTestUrl("/chats");
+  const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
+  enterChatText(within(container).getByRole("textbox"), prompt);
+  fireEvent.click(within(container).getByRole("button", { name: "Send message" }));
+
+  await waitFor(() => expect(api.createChatSession).toHaveBeenCalledWith(expectedTitle));
+});
+
+test("a failed new chat returns to the welcome state and restores the draft", async () => {
+  vi.mocked(api.createChatSession).mockRejectedValueOnce(new Error("Chat service unavailable"));
+
+  setTestUrl("/chats");
+  const { container } = render(<QueryProvider><ChatsPage /></QueryProvider>);
+  const textbox = within(container).getByRole("textbox");
+  enterChatText(textbox, "Find my renewal date");
+  fireEvent.click(within(container).getByRole("button", { name: "Send message" }));
+
+  expect(within(container).queryByRole("heading", { name: /Piyush/ })).not.toBeInTheDocument();
+  expect(await within(container).findByRole("alert")).toHaveTextContent("Chat service unavailable");
+  expect(within(container).getByRole("heading", { name: /Piyush/ })).toBeInTheDocument();
+  expect(textbox).toHaveValue("Find my renewal date");
+  expect(container.querySelector(".ai-chat-page")).toHaveAttribute("data-conversation", "false");
+});
+
+test("sidebar actions menu opens and switches theme", () => {
+  window.localStorage.setItem("samvid-theme", "light");
+
+  setTestUrl("/contracts");
+  const { container } = render(
+    <TooltipProvider><AppShell><div>Contracts page</div></AppShell></TooltipProvider>
+  );
+
+  const menuTrigger = within(container).getByRole("button", { name: /open (?:sidebar actions|account menu)/i });
+  fireEvent.click(menuTrigger);
+
+  expect(menuTrigger).toHaveAttribute("aria-expanded", "true");
+  const menu = within(container).getByRole("menu", { name: /sidebar actions|account/i });
+  expect(within(menu).getByRole("menuitem", { name: "Account: Piyush Aryan" })).toBeInTheDocument();
+  expect(within(menu).getByText("piyusharyan81@gmail.com")).toBeInTheDocument();
+  expect(within(menu).getByRole("menuitem", { name: "Settings" })).toBeEnabled();
+  expect(within(menu).getByRole("menuitem", { name: /log ?out/i })).toBeEnabled();
+
+  fireEvent.click(within(menu).getByRole("menuitemcheckbox", { name: /dark mode/i }));
+
+  expect(container.querySelector(".app-shell")).toHaveAttribute("data-theme", "dark");
+  expect(window.localStorage.getItem("samvid-theme")).toBe("dark");
+  expect(within(container).queryByRole("menu", { name: /sidebar actions|account/i })).not.toBeInTheDocument();
+});
+
+test("integrations page lists and disconnects a Slack workspace", async () => {
+  vi.mocked(api.getSlackIntegration).mockResolvedValue({
+    enabled: true,
+    installations: [{ id: "install-1", team_id: "T123", team_name: "Legal Ops", status: "active" }]
+  });
+  vi.mocked(api.disconnectSlackInstallation).mockResolvedValue(undefined);
+
+  render(<QueryProvider><IntegrationsPage /></QueryProvider>);
+
+  expect(await screen.findByText("Legal Ops")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Connect" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /disconnect/i }));
+  await waitFor(() => expect(api.disconnectSlackInstallation).toHaveBeenCalled());
+  expect(vi.mocked(api.disconnectSlackInstallation).mock.calls[0][0]).toBe("install-1");
+  await waitFor(() => expect(screen.queryByText("Legal Ops")).not.toBeInTheDocument());
+  expect(screen.getByRole("button", { name: "Connect" })).toBeInTheDocument();
+});
+
+test("Slack OAuth return opens Integrations without a redundant success banner", async () => {
+  vi.mocked(api.getSlackIntegration).mockClear();
+  vi.mocked(api.getSlackIntegration).mockResolvedValue({
+    enabled: true,
+    installations: [{ id: "install-1", team_id: "T123", team_name: "Legal Ops", status: "active" }]
+  });
+  setTestUrl("/settings?slack=connected");
+
+  render(<QueryProvider><SettingsPage /></QueryProvider>);
+
+  expect(screen.getByRole("heading", { name: "Integrations" })).toBeInTheDocument();
+  expect(await screen.findByText("Legal Ops")).toBeInTheDocument();
+  expect(screen.queryByText("Slack workspace connected.")).not.toBeInTheDocument();
+  expect(screen.queryByText("Samvid is ready to receive contracts from Slack.")).not.toBeInTheDocument();
+  expect(api.getSlackIntegration).toHaveBeenCalled();
+});
+
+test("Slack OAuth return explains when the workspace was not saved", async () => {
+  vi.mocked(api.getSlackIntegration).mockClear();
+  vi.mocked(api.getSlackIntegration).mockResolvedValue({ enabled: true, installations: [] });
+  setTestUrl("/settings?slack=connected");
+
+  render(<QueryProvider><SettingsPage /></QueryProvider>);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("workspace was not saved");
+  expect(screen.getByRole("button", { name: "Connect" })).toBeEnabled();
+});
+
+test("contract loading state exposes one accessible status and hides its placeholders", () => {
+  const { container } = render(<ContractsTableSkeleton />);
+
+  expect(within(container).getByRole("status")).toHaveTextContent("Loading contracts");
+  expect(container.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(32);
+  expect(container.querySelector(".contracts-skeleton")).toHaveAttribute("aria-hidden", "true");
+});
+
+test("risks tab renders evidence-grounded risks", () => {
+  const review: ContractReview = {
+    contract_id: "c1",
+    contract_type: "Services agreement",
+    parties: [],
+    key_terms: [{ name: "Term", value: "12 months", confidence: 0.9 }],
+    risks: [
+      {
+        title: "Unlimited liability",
+        severity: "high",
+        clause_type: "Liability",
+        explanation: "The cap is missing.",
+        recommendation: "Add a liability cap.",
+        evidence: { page_number: 2, exact_text: "liability shall be unlimited" },
+        confidence: 0.95
+      }
+    ],
+    recommended_next_action: "Request revisions.",
+    limitations: ["Not legal advice."]
+  };
+
+  render(<RisksTab review={review} />);
+
+  expect(screen.queryByText("Risk register")).not.toBeInTheDocument();
+  expect(screen.getByText("Unlimited liability")).toBeInTheDocument();
+  expect(screen.getByText("Page 2")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "View evidence from page 2: liability shall be unlimited" })).toBeInTheDocument();
+  expect(screen.getByText("95% confidence")).toBeInTheDocument();
+});
+
+test("timeline renders immutable events in chronological order", () => {
+  const request: SigningRequest = {
+    id: "sr1",
+    workspace_id: "W1",
+    contract_id: "c1",
+    contract_version_id: "v1",
+    status: "in_progress",
+    active: true,
+    created_by: "actor@example.com",
+    created_at: "2026-01-01T00:00:00Z",
+    closed_at: null,
+    signers: [
+      {
+        id: "s1",
+        name: "Asha",
+        email: "asha@example.com",
+        role: "Buyer",
+        required: true,
+        display_order: 0,
+        latest_status: "viewed",
+        created_at: "2026-01-01T00:00:00Z",
+        events: [
+          {
+            id: "e2",
+            signer_id: "s1",
+            status: "viewed",
+            note: "Viewed",
+            actor_email: "actor@example.com",
+            actor_name: "Actor",
+            created_at: "2026-01-01T10:00:00Z"
+          },
+          {
+            id: "e1",
+            signer_id: "s1",
+            status: "sent",
+            note: "Sent",
+            actor_email: "actor@example.com",
+            actor_name: "Actor",
+            created_at: "2026-01-01T09:00:00Z"
+          }
+        ]
+      }
+    ]
+  };
+
+  render(<Timeline request={request} />);
+
+  const timeline = screen.getByLabelText("Immutable signer event timeline");
+  const notes = within(timeline).getAllByText(/Sent|Viewed/, { selector: "p" }).map((node) => node.textContent);
+  expect(notes).toEqual(["Sent", "Viewed"]);
+});

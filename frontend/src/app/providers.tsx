@@ -3,8 +3,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { AuthProvider } from "../AuthProvider";
-import { TooltipProvider } from "../components/ui/tooltip";
+import { AuthProvider } from "@/features/auth/auth-provider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({

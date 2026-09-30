@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { BookDemoClient } from "./BookDemoClient";
+import { BookDemoClient } from "@/features/marketing/book-demo-client";
 
 export const metadata: Metadata = {
   title: "Book a contract workflow demo",

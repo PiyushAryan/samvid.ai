@@ -7,12 +7,7 @@ import "@fontsource/caveat/600.css";
 import "@fontsource/caveat/700.css";
 import "@fontsource/cabin-sketch/400.css";
 import "@fontsource/cabin-sketch/700.css";
-import "../ai-elements.css";
-import "../styles.css";
-import "../auth.css";
-import "../home.css";
-import "../changelog.css";
-import "../book-demo.css";
+import "@/styles/globals.css";
 
 const siteUrl = new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://samvid.online");
 

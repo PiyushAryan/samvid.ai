@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { Suspense, type ReactNode } from "react";
 
-import { AppShell } from "../../App";
-import { RequireUser } from "../../AuthProvider";
+import "@/components/ai-elements/styles.css";
+
+import { AppShell } from "@/features/workspace/app-shell";
+import { RequireUser } from "@/features/auth/auth-provider";
 import { AppProviders } from "../providers";
 
 export const metadata: Metadata = {
